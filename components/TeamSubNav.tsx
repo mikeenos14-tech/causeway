@@ -14,6 +14,7 @@ const TABS = [
   { label: "League", path: "/league" },
   { label: "Records", path: "/records" },
   { label: "Series", path: "/series" },
+  { label: "Playoffs", path: "/playoffs" },
 ];
 
 export function TeamSubNav({ abbrev }: { abbrev: string }) {
