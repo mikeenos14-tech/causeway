@@ -21,6 +21,9 @@ export function Masthead({ scoreline }: { scoreline?: React.ReactNode }) {
             <Link href="/standings" style={{ color: "#d8d6cc", textDecoration: "none" }}>
               Standings
             </Link>
+            <Link href="/headlines" style={{ color: "#d8d6cc", textDecoration: "none" }}>
+              Headlines
+            </Link>
           </nav>
           <Link
             href="/ask"
