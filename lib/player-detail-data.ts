@@ -44,7 +44,8 @@ export async function getSkaterSeasonSplits(playerId: number) {
     `select g.season_id, t.abbrev as team_abbrev,
             count(*)::int as games,
             sum(sgs.goals)::int as goals, sum(sgs.assists)::int as assists, sum(sgs.points)::int as points,
-            sum(sgs.plus_minus)::int as plus_minus, sum(sgs.penalty_minutes)::int as pim, sum(sgs.shots)::int as shots
+            sum(sgs.plus_minus)::int as plus_minus, sum(sgs.penalty_minutes)::int as pim, sum(sgs.shots)::int as shots,
+            sum(sgs.toi_seconds)::int as toi_seconds_total
      from skater_game_stats sgs
      join games g on g.id = sgs.game_id
      join teams t on t.id = sgs.team_id
@@ -53,7 +54,11 @@ export async function getSkaterSeasonSplits(playerId: number) {
      order by g.season_id asc, t.abbrev asc`,
     [playerId],
   );
-  return rows;
+  return rows.map((r) => ({
+    ...r,
+    toiSecondsPerGame: r.games > 0 ? Math.round(r.toi_seconds_total / r.games) : 0,
+    shootingPct: r.shots > 0 ? r.goals / r.shots : null,
+  }));
 }
 
 export async function getGoalieSeasonSplits(playerId: number) {
@@ -102,7 +107,7 @@ export async function getRecentGameLog(playerId: number, isGoalie: boolean, limi
     `select g.id as game_id, g.game_date, t.abbrev as team_abbrev,
             (g.home_team_id = s.team_id) as is_home,
             case when g.home_team_id = s.team_id then at.abbrev else ht.abbrev end as opp_abbrev,
-            s.goals, s.assists, s.points
+            s.goals, s.assists, s.points, s.shots, s.toi_seconds
      from skater_game_stats s
      join games g on g.id = s.game_id
      join teams t on t.id = s.team_id

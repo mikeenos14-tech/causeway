@@ -6,6 +6,12 @@ import type { SkaterRosterRow, GoalieRosterRow } from "@/lib/roster-data";
 
 type SortDir = "asc" | "desc";
 
+function toi(seconds: number) {
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
 function SortableHead<Row>({
   label,
   field,
@@ -50,18 +56,20 @@ export function SkaterRosterTable({ rows }: { rows: SkaterRosterRow[] }) {
 
   return (
     <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", overflowX: "auto" }}>
-      <table className="box-score-table" style={{ minWidth: 720, padding: "0 18px" }}>
+      <table className="box-score-table" style={{ minWidth: 860, padding: "0 18px" }}>
         <thead>
           <tr>
             <th style={{ textAlign: "left" }}>Player</th>
             <SortableHead label="Pos" field="position" sort={sort} setSort={setSort} />
             <SortableHead label="GP" field="games" sort={sort} setSort={setSort} />
+            <SortableHead label="TOI/GP" field="toiSecondsPerGame" sort={sort} setSort={setSort} />
             <SortableHead label="G" field="goals" sort={sort} setSort={setSort} />
             <SortableHead label="A" field="assists" sort={sort} setSort={setSort} />
             <SortableHead label="P" field="points" sort={sort} setSort={setSort} />
             <SortableHead label="+/-" field="plus_minus" sort={sort} setSort={setSort} />
             <SortableHead label="PIM" field="pim" sort={sort} setSort={setSort} />
             <SortableHead label="S" field="shots" sort={sort} setSort={setSort} />
+            <SortableHead label="S%" field="shootingPct" sort={sort} setSort={setSort} />
             <SortableHead label="HIT" field="hits" sort={sort} setSort={setSort} />
             <SortableHead label="BLK" field="blocks" sort={sort} setSort={setSort} />
             <SortableHead label="PPG" field="pp_goals" sort={sort} setSort={setSort} />
@@ -77,12 +85,14 @@ export function SkaterRosterTable({ rows }: { rows: SkaterRosterRow[] }) {
               </td>
               <td>{r.position ?? "—"}</td>
               <td>{r.games}</td>
+              <td>{toi(r.toiSecondsPerGame)}</td>
               <td>{r.goals}</td>
               <td>{r.assists}</td>
               <td style={{ fontWeight: 700, color: "var(--gold)" }}>{r.points}</td>
               <td>{r.plus_minus > 0 ? `+${r.plus_minus}` : r.plus_minus}</td>
               <td>{r.pim}</td>
               <td>{r.shots}</td>
+              <td>{r.shootingPct != null ? `${(r.shootingPct * 100).toFixed(1)}%` : "—"}</td>
               <td>{r.hits}</td>
               <td>{r.blocks}</td>
               <td>{r.pp_goals}</td>

@@ -120,7 +120,7 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
               )}
             </div>
             <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", overflowX: "auto" }}>
-              <table className="box-score-table" style={{ minWidth: isGoalie ? 480 : 560, padding: "0 18px" }}>
+              <table className="box-score-table" style={{ minWidth: isGoalie ? 480 : 680, padding: "0 18px" }}>
                 <thead>
                   <tr>
                     <th style={{ textAlign: "left" }}>Season</th>
@@ -141,6 +141,8 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
                         <th>P</th>
                         <th>+/-</th>
                         <th>PIM</th>
+                        <th>S%</th>
+                        <th>TOI/GP</th>
                       </>
                     )}
                   </tr>
@@ -166,6 +168,8 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
                           <td style={{ fontWeight: 700, color: "var(--gold)" }}>{s.points}</td>
                           <td>{s.plus_minus > 0 ? `+${s.plus_minus}` : s.plus_minus}</td>
                           <td>{s.pim}</td>
+                          <td>{s.shootingPct != null ? `${(s.shootingPct * 100).toFixed(1)}%` : "—"}</td>
+                          <td>{toi(s.toiSecondsPerGame)}</td>
                         </>
                       )}
                     </tr>
@@ -181,7 +185,7 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
             Recent Games
           </h2>
           <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".85rem", fontVariantNumeric: "tabular-nums", minWidth: 480 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".85rem", fontVariantNumeric: "tabular-nums", minWidth: 540 }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid var(--border)" }}>
                   <th style={thStyle("left")}>Date</th>
@@ -198,6 +202,7 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
                       <th style={thStyle()}>G</th>
                       <th style={thStyle()}>A</th>
                       <th style={thStyle()}>P</th>
+                      <th style={thStyle()}>TOI</th>
                     </>
                   )}
                 </tr>
@@ -223,6 +228,7 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
                         <td style={tdStyle()}>{g.goals}</td>
                         <td style={tdStyle()}>{g.assists}</td>
                         <td style={{ ...tdStyle(), fontWeight: 700, color: "var(--gold)" }}>{g.points}</td>
+                        <td style={tdStyle()}>{g.toi_seconds != null ? toi(g.toi_seconds) : "—"}</td>
                       </>
                     )}
                   </tr>
@@ -236,6 +242,12 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
       <Footer />
     </>
   );
+}
+
+function toi(seconds: number) {
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
 function thStyle(align: "left" | "right" = "right"): React.CSSProperties {

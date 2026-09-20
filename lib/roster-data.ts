@@ -15,6 +15,8 @@ export type SkaterRosterRow = {
   hits: number;
   blocks: number;
   pp_goals: number;
+  toiSecondsPerGame: number;
+  shootingPct: number | null;
 };
 
 export type GoalieRosterRow = {
@@ -60,7 +62,8 @@ export async function getSkaterRosterStats(teamAbbrev: string, seasonId: string)
             coalesce(sum(sgs.shots),0)::int as shots,
             coalesce(sum(sgs.hits),0)::int as hits,
             coalesce(sum(sgs.blocked_shots),0)::int as blocks,
-            coalesce(sum(sgs.pp_goals),0)::int as pp_goals
+            coalesce(sum(sgs.pp_goals),0)::int as pp_goals,
+            coalesce(sum(sgs.toi_seconds),0)::int as toi_seconds_total
      from skater_game_stats sgs
      join games g on g.id = sgs.game_id
      join teams t on t.id = sgs.team_id
@@ -70,7 +73,11 @@ export async function getSkaterRosterStats(teamAbbrev: string, seasonId: string)
      order by points desc, goals desc`,
     [teamAbbrev, seasonId],
   );
-  return rows;
+  return rows.map((r) => ({
+    ...r,
+    toiSecondsPerGame: r.games > 0 ? Math.round(r.toi_seconds_total / r.games) : 0,
+    shootingPct: r.shots > 0 ? r.goals / r.shots : null,
+  }));
 }
 
 export async function getGoalieRosterStats(teamAbbrev: string, seasonId: string): Promise<GoalieRosterRow[]> {
