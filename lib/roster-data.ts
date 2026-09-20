@@ -80,6 +80,50 @@ export async function getSkaterRosterStats(teamAbbrev: string, seasonId: string)
   }));
 }
 
+export type AdvancedRosterRow = {
+  id: number;
+  full_name: string;
+  position: string | null;
+  games: number;
+  goals: number;
+  ixg: number;
+  goalsVsExpected: number;
+  icorsi: number;
+  onIceXgPct: number | null;
+  onIceCorsiPct: number | null;
+};
+
+// Individual xG/Corsi from MoneyPuck (backfill-moneypuck-players.ts) — a
+// player with no rows yet (older seasons still backfilling, or a call-up
+// MoneyPuck hasn't covered) is simply left out rather than shown with a
+// misleading zero, since NULL genuinely means "not loaded," not "zero."
+export async function getAdvancedRosterStats(teamAbbrev: string, seasonId: string): Promise<AdvancedRosterRow[]> {
+  const { rows } = await pool.query(
+    `select p.id, p.full_name, p.position,
+            count(*) filter (where sgs.ixg is not null)::int as games,
+            coalesce(sum(sgs.goals),0)::int as goals,
+            round(sum(sgs.ixg)::numeric, 1) as ixg,
+            round(sum(sgs.icorsi)::numeric, 0)::int as icorsi,
+            avg(sgs.on_ice_xg_pct) as on_ice_xg_pct,
+            avg(sgs.on_ice_corsi_pct) as on_ice_corsi_pct
+     from skater_game_stats sgs
+     join games g on g.id = sgs.game_id
+     join teams t on t.id = sgs.team_id
+     join players p on p.id = sgs.player_id
+     where t.abbrev = $1 and g.season_id = $2 and g.game_type = 'regular' and sgs.ixg is not null
+     group by p.id, p.full_name, p.position
+     order by sum(sgs.goals) - sum(sgs.ixg) desc`,
+    [teamAbbrev, seasonId],
+  );
+  return rows.map((r) => ({
+    ...r,
+    ixg: Number(r.ixg),
+    goalsVsExpected: Number((r.goals - r.ixg).toFixed(1)),
+    onIceXgPct: r.on_ice_xg_pct != null ? Number(r.on_ice_xg_pct) : null,
+    onIceCorsiPct: r.on_ice_corsi_pct != null ? Number(r.on_ice_corsi_pct) : null,
+  }));
+}
+
 export async function getGoalieRosterStats(teamAbbrev: string, seasonId: string): Promise<GoalieRosterRow[]> {
   const { rows } = await pool.query(
     `select p.id, p.full_name,
