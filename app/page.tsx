@@ -75,7 +75,16 @@ export default async function Home() {
                 top: "-40%",
                 width: "55%",
                 height: "180%",
-                background: "radial-gradient(circle, rgba(255,184,28,0.09) 0%, rgba(255,184,28,0) 68%)",
+                // "circle" alone sizes to the farthest corner, which on a
+                // narrow-but-tall mobile hero (headline wraps to 3 lines,
+                // pushing section height way up) makes the radius so much
+                // bigger than the div's own width that the gradient barely
+                // fades within it — it hits the div's rectangular edge
+                // still near full opacity, reading as an abrupt hard cutoff
+                // instead of a glow. closest-side sizes the circle to the
+                // nearest edge instead, so the fade always completes before
+                // the box boundary, on any aspect ratio.
+                background: "radial-gradient(circle closest-side, rgba(255,184,28,0.09) 0%, rgba(255,184,28,0) 100%)",
                 pointerEvents: "none",
               }}
             />
