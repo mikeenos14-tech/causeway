@@ -23,6 +23,11 @@ const plexSans = IBM_Plex_Sans({
 export const metadata: Metadata = {
   title: "Causeway",
   description: "A stats-first Boston Bruins fan hub.",
+  appleWebApp: {
+    capable: true,
+    title: "Causeway",
+    statusBarStyle: "black-translucent",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
