@@ -144,6 +144,19 @@ async function writeGameStats(
 
 async function backfillOnce() {
   const client = new Client({ connectionString: process.env.DATABASE_URL });
+  // pg's Client emits 'error' on the raw connection (e.g. Neon closing an
+  // idle/long-lived connection) as an EventEmitter event, not a rejected
+  // promise — with no listener attached, Node treats that as fatal and
+  // kills the whole process instantly, skipping every try/catch and the
+  // CONNECTION_ERROR_PATTERN retry loop below entirely. Confirmed live:
+  // this crashed the process outright at 6,202/24,233 games in, with
+  // "Connection terminated unexpectedly" and no chance to retry. Attaching
+  // a listener here doesn't fix the drop, but it stops the crash — the
+  // next client.query() call fails normally instead, which the retry loop
+  // already knows how to handle.
+  client.on("error", (err) => {
+    console.error(`pg client error (connection likely dropped, next query will surface it): ${err.message}`);
+  });
   await client.connect();
 
   try {
@@ -222,8 +235,13 @@ async function backfillOnce() {
         await writeGameStats(client, f.rows);
         done++;
       } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        // Same reasoning as generate-highlights.ts: a dead connection would
+        // otherwise silently mislabel every remaining write in this run as
+        // a per-game failure instead of triggering main()'s reconnect.
+        if (CONNECTION_ERROR_PATTERN.test(message)) throw err;
         failed++;
-        failures.push({ gameId: f.gameId, error: err instanceof Error ? err.message : String(err) });
+        failures.push({ gameId: f.gameId, error: message });
       }
     }
 

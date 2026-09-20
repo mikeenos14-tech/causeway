@@ -119,6 +119,15 @@ function gameEndType(periodType: string | undefined): string {
 // rather than a single attempt with no recovery.
 async function backfillOnce(teamAbbrev: string, seasonId: string) {
   const client = new Client({ connectionString: process.env.DATABASE_URL });
+  // pg's Client emits 'error' on the raw connection as an EventEmitter
+  // event; with no listener, an unexpected drop crashes the whole process
+  // instantly instead of surfacing as a normal rejected query — which
+  // means it skips this exact retry loop entirely. Confirmed live
+  // elsewhere (generate-highlights.ts, backfill-team-game-stats.ts) before
+  // patching all three the same way.
+  client.on("error", (err) => {
+    console.error(`pg client error (connection likely dropped, next query will surface it): ${err.message}`);
+  });
   await client.connect();
 
   console.log(`Backfilling ${teamAbbrev} / ${seasonId}...`);
