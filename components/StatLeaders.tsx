@@ -43,11 +43,14 @@ export function StatLeaders({ abbrev, statLeaders }: { abbrev: string; statLeade
 
   return (
     <section>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "1rem" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "1rem", flexWrap: "wrap", gap: "6px 14px" }}>
         <h2 style={{ margin: 0, fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "1.5rem", textTransform: "uppercase", letterSpacing: ".02em" }}>Stat Leaders</h2>
-        <div style={{ display: "flex", gap: 14 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px" }}>
           <Link href={`/teams/${abbrev}/roster`} style={{ fontSize: ".82rem", fontWeight: 600, color: "var(--gold)", textDecoration: "none" }}>
             Full roster &amp; stats →
+          </Link>
+          <Link href={`/teams/${abbrev}/league`} style={{ fontSize: ".82rem", fontWeight: 600, color: "var(--gold)", textDecoration: "none" }}>
+            League comparison →
           </Link>
           <Link href={`/teams/${abbrev}/records`} style={{ fontSize: ".82rem", fontWeight: 600, color: "var(--gold)", textDecoration: "none" }}>
             Records &amp; streaks →

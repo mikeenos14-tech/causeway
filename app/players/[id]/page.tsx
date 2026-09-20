@@ -11,6 +11,7 @@ import {
 import { hasFullCareerLoaded } from "@/lib/significance-checks";
 import { formatGameDate, formatSeasonLabel } from "@/lib/format-date";
 import { Masthead, Footer } from "@/components/Masthead";
+import { Sparkline } from "@/components/Sparkline";
 
 export default async function PlayerDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -31,6 +32,22 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
   // is only an honest claim if we can verify we have this player's whole
   // career loaded, not just what happens to be in this database.
   const fullCareer = hasFullCareerLoaded(player.birth_date);
+
+  // One value per season for the career-trajectory sparkline — a mid-season
+  // trade already gets its own row per team in the table above, but a trend
+  // line reads as one point per season, so trade years get combined back
+  // into a single season total here (points summed; save% properly
+  // re-weighted by shots against, not just averaged team to team).
+  const seasonIds = [...new Set(seasonSplits.map((s) => s.season_id))];
+  const careerTrend = seasonIds.map((seasonId) => {
+    const rowsThisSeason = seasonSplits.filter((s) => s.season_id === seasonId);
+    if (isGoalie) {
+      const saves = rowsThisSeason.reduce((sum, r) => sum + (r as { saves: number }).saves, 0);
+      const shotsAgainst = rowsThisSeason.reduce((sum, r) => sum + (r as { shots_against: number }).shots_against, 0);
+      return shotsAgainst > 0 ? saves / shotsAgainst : 0;
+    }
+    return rowsThisSeason.reduce((sum, r) => sum + (r as { points: number }).points, 0);
+  });
 
   return (
     <>
@@ -89,9 +106,19 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
 
         {seasonSplits.length > 0 && (
           <section style={{ marginBottom: "2.5rem" }}>
-            <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".02em", fontSize: "1.4rem", marginBottom: "1rem" }}>
-              Season by Season
-            </h2>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: 12 }}>
+              <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".02em", fontSize: "1.4rem", margin: 0 }}>
+                Season by Season
+              </h2>
+              {careerTrend.length > 1 && (
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontSize: ".7rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".04em" }}>
+                    {isGoalie ? "SV% by season" : "Points by season"}
+                  </span>
+                  <Sparkline values={careerTrend} />
+                </div>
+              )}
+            </div>
             <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", overflowX: "auto" }}>
               <table className="box-score-table" style={{ minWidth: isGoalie ? 480 : 560, padding: "0 18px" }}>
                 <thead>

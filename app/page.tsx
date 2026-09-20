@@ -10,6 +10,7 @@ import { getNextGame, nextGameFlavor } from "@/lib/next-game";
 import { formatGameDate } from "@/lib/format-date";
 import { Masthead, Footer } from "@/components/Masthead";
 import { StatLeaders } from "@/components/StatLeaders";
+import { FormBars } from "@/components/Sparkline";
 
 export const revalidate = 300;
 
@@ -142,6 +143,11 @@ export default async function Home() {
                   <span style={{ fontSize: "1.1rem", fontFamily: "var(--font-body)", color: "var(--text-secondary)", marginLeft: 8 }}>stop us</span>
                 )}
               </div>
+              {form.length > 0 && (
+                <div style={{ marginTop: 10 }}>
+                  <FormBars results={form as ("W" | "L")[]} />
+                </div>
+              )}
             </div>
             <div style={{ padding: "1.75rem 2rem" }}>
               <div style={{ fontSize: ".78rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 8 }}>Next Up</div>

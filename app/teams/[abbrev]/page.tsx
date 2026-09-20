@@ -11,6 +11,7 @@ import {
 import { formatGameDate } from "@/lib/format-date";
 import { Masthead, Footer } from "@/components/Masthead";
 import { StatLeaders } from "@/components/StatLeaders";
+import { FormBars } from "@/components/Sparkline";
 
 export const revalidate = 300;
 
@@ -109,6 +110,11 @@ export default async function TeamDetail({ params }: { params: Promise<{ abbrev:
               <div style={{ fontFamily: "var(--font-display)", fontSize: "2.2rem" }}>
                 {streakLen ? `${streakLen.result}${streakLen.n}` : "—"}
               </div>
+              {form.length > 0 && (
+                <div style={{ marginTop: 10 }}>
+                  <FormBars results={form as ("W" | "L")[]} />
+                </div>
+              )}
             </div>
             <div style={{ padding: "1.5rem 1.75rem" }}>
               <div style={{ fontSize: ".78rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8 }}>Ask About {abbrev}</div>
