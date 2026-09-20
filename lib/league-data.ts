@@ -15,6 +15,9 @@ export type LeagueTeamStats = {
   pkPct: number | null;
   faceoffWinPct: number | null;
   specialTeamsCoverage: number; // fraction of this team's games with team_game_stats loaded — lets the UI hide PP/PK until it's trustworthy
+  xgForPerGame: number | null;
+  xgAgainstPerGame: number | null;
+  xgCoverage: number; // fraction of this team's games with a MoneyPuck xG row loaded
 };
 
 // Same "whatever's actually loaded" pattern as everywhere else on the
@@ -59,6 +62,16 @@ export async function getLeagueTeamStats(seasonId: string): Promise<LeagueTeamSt
        where g.season_id = $1 and g.game_type = 'regular'
        group by tgs.team_id
      ),
+     xg as (
+       select tgs.team_id,
+              count(*) as games_with_xg,
+              sum(tgs.xg_for) as xg_for,
+              sum(tgs.xg_against) as xg_against
+       from team_game_stats tgs
+       join games g on g.id = tgs.game_id
+       where g.season_id = $1 and g.game_type = 'regular' and tgs.xg_for is not null
+       group by tgs.team_id
+     ),
      latest_standings as (
        select distinct on (team_id) team_id, points, points_pct
        from standings_snapshots
@@ -67,10 +80,12 @@ export async function getLeagueTeamStats(seasonId: string): Promise<LeagueTeamSt
      )
      select tg.team_id, tg.abbrev, tg.name, tg.games_played, tg.goals_for, tg.goals_against,
             ls.points, ls.points_pct,
-            st.games_with_stats, st.pp_goals, st.pp_opportunities, st.pk_goals_against, st.pk_times_shorthanded, st.faceoff_win_pct
+            st.games_with_stats, st.pp_goals, st.pp_opportunities, st.pk_goals_against, st.pk_times_shorthanded, st.faceoff_win_pct,
+            xg.games_with_xg, xg.xg_for, xg.xg_against
      from team_games tg
      left join latest_standings ls on ls.team_id = tg.team_id
      left join special_teams st on st.team_id = tg.team_id
+     left join xg on xg.team_id = tg.team_id
      order by tg.abbrev asc`,
     [seasonId],
   );
@@ -80,6 +95,7 @@ export async function getLeagueTeamStats(seasonId: string): Promise<LeagueTeamSt
     const gamesWithStats = Number(r.games_with_stats ?? 0);
     const ppOpportunities = Number(r.pp_opportunities ?? 0);
     const pkTimesShorthanded = Number(r.pk_times_shorthanded ?? 0);
+    const gamesWithXg = Number(r.games_with_xg ?? 0);
     return {
       teamId: r.team_id,
       abbrev: r.abbrev,
@@ -95,6 +111,9 @@ export async function getLeagueTeamStats(seasonId: string): Promise<LeagueTeamSt
       pkPct: pkTimesShorthanded > 0 ? 1 - Number(r.pk_goals_against) / pkTimesShorthanded : null,
       faceoffWinPct: r.faceoff_win_pct != null ? Number(r.faceoff_win_pct) : null,
       specialTeamsCoverage: gamesPlayed > 0 ? gamesWithStats / gamesPlayed : 0,
+      xgForPerGame: gamesWithXg > 0 ? Number(r.xg_for) / gamesWithXg : null,
+      xgAgainstPerGame: gamesWithXg > 0 ? Number(r.xg_against) / gamesWithXg : null,
+      xgCoverage: gamesPlayed > 0 ? gamesWithXg / gamesPlayed : 0,
     };
   });
 }

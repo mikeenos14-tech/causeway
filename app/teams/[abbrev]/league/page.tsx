@@ -111,6 +111,11 @@ export default async function TeamLeagueComparison({ params }: { params: Promise
   // simply appears on its own once the backfill catches up to it, no
   // code change needed.
   const specialTeamsReady = (own?.specialTeamsCoverage ?? 0) >= 0.99;
+  // MoneyPuck's own game-by-game coverage genuinely starts at the 2008-09
+  // season league-wide (confirmed against their real file) — irrelevant
+  // here in practice since this page always shows the current season, but
+  // the same >=0.99 bar as special teams is still the right one to use.
+  const xgReady = (own?.xgCoverage ?? 0) >= 0.99;
 
   const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
   const perGame = (v: number) => v.toFixed(2);
@@ -138,7 +143,7 @@ export default async function TeamLeagueComparison({ params }: { params: Promise
             </div>
 
             {specialTeamsReady ? (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14, marginBottom: xgReady ? 14 : 0 }}>
                 <RankCard label="Power Play %" teams={teams} abbrev={abbrev} metric={(t) => t.ppPct} higherIsBetter format={pct} />
                 <RankCard label="Penalty Kill %" teams={teams} abbrev={abbrev} metric={(t) => t.pkPct} higherIsBetter format={pct} />
                 <RankCard label="Faceoff Win %" teams={teams} abbrev={abbrev} metric={(t) => t.faceoffWinPct} higherIsBetter format={pct} />
@@ -147,6 +152,21 @@ export default async function TeamLeagueComparison({ params }: { params: Promise
               <p style={{ fontSize: ".82rem", color: "var(--text-secondary)", marginTop: 14 }}>
                 Power play, penalty kill, and faceoff comparisons appear once this season&apos;s special-teams data finishes loading
                 {own.specialTeamsCoverage > 0 ? ` (${Math.round(own.specialTeamsCoverage * 100)}% loaded)` : ""}.
+              </p>
+            )}
+
+            {xgReady ? (
+              <>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14 }}>
+                  <RankCard label="Expected Goals For / Game" teams={teams} abbrev={abbrev} metric={(t) => t.xgForPerGame} higherIsBetter format={perGame} />
+                  <RankCard label="Expected Goals Against / Game" teams={teams} abbrev={abbrev} metric={(t) => t.xgAgainstPerGame} higherIsBetter={false} format={perGame} />
+                </div>
+                <p style={{ fontSize: ".72rem", color: "var(--text-secondary)", marginTop: 10 }}>Expected goals (xG) data via MoneyPuck.com.</p>
+              </>
+            ) : (
+              <p style={{ fontSize: ".82rem", color: "var(--text-secondary)", marginTop: 14 }}>
+                Expected goals (xG) comparisons appear once this season&apos;s data finishes loading from MoneyPuck.com
+                {own.xgCoverage > 0 ? ` (${Math.round(own.xgCoverage * 100)}% loaded)` : ""}.
               </p>
             )}
           </>

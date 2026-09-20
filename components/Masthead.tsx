@@ -59,7 +59,7 @@ export function Footer() {
   return (
     <footer style={{ background: "var(--ink)", color: "#b7b5ad" }}>
       <div style={{ maxWidth: 1160, margin: "0 auto", padding: "1.1rem 24px", fontSize: ".8rem" }}>
-        Data: NHL API. Causeway is an independent fan project, not affiliated with the NHL or the Boston Bruins Hockey Club.
+        Data: NHL API, MoneyPuck.com. Causeway is an independent fan project, not affiliated with the NHL or the Boston Bruins Hockey Club.
       </div>
     </footer>
   );
