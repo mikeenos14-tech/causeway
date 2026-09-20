@@ -124,11 +124,29 @@ async function backfillOnce(candidateGameIds: number[]) {
       // retry loop, which reconnects and re-checks what's still missing.
       if (connectionDead || CONNECTION_ERROR_PATTERN.test(message)) throw err;
       // A failed or rejected narration for one game must not take down the
-      // rest of an unattended batch — log it and keep going. Nothing gets
-      // stored for this game, which is the correct outcome for a rejected
-      // (contradictory) narration: no highlight beats a wrong one.
+      // rest of an unattended batch — log it and keep going. No narrative
+      // row is the correct outcome for a rejected (contradictory)
+      // narration: no highlight beats a wrong one. But a 'rejected'
+      // marker still gets stored (distinct from 'highlights'/'recap',
+      // never read by any page) — otherwise this game has no narratives
+      // row at all, looks identical to "never attempted" to the "no game
+      // IDs given" query below, and gets retried every single run
+      // forever. Confirmed live: the same ~31 games, same deterministic
+      // rejection (the game's facts don't change), retried on every
+      // hourly cron run — real, recurring cost for something that will
+      // never succeed differently.
       console.error(`FAILED game ${gameId}: ${message}`);
       failures.push({ gameId, error: message });
+      try {
+        await client.query(
+          `insert into narratives (game_id, kind, headline, body, source)
+           values ($1, 'rejected', null, $2, 'ai_generated')
+           on conflict (game_id, kind) do update set body = excluded.body, generated_at = now()`,
+          [gameId, message.slice(0, 2000)],
+        );
+      } catch (markErr) {
+        console.error(`  (also failed to record the rejection marker for ${gameId}: ${markErr instanceof Error ? markErr.message : markErr})`);
+      }
     }
   }
 

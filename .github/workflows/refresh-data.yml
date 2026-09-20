@@ -1,0 +1,69 @@
+name: Refresh Bruins Data
+
+# Two schedules sharing one workflow file, split by job via
+# github.event.schedule — GitHub Actions triggers schedules at the
+# workflow level, not the job level, so this is the standard way to run
+# different jobs on different cadences from one file.
+#
+# Hourly: games, standings, special-teams stats, narratives — all now
+# cheap to re-run since backfill-season.ts skips games it already has.
+# NHL box scores are typically available within well under an hour of a
+# game ending, so hourly keeps the site current without hammering the
+# NHL API on a tighter schedule for no real benefit.
+#
+# Daily (14:00 UTC / ~9-10am ET, comfortably after even a late West Coast
+# game and MoneyPuck's own overnight update): xG/Corsi from MoneyPuck.
+# MoneyPuck's own site says their data updates nightly, so running this
+# more than once a day would just re-process the same numbers.
+on:
+  schedule:
+    - cron: "0 * * * *"
+    - cron: "0 14 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  refresh-current-season:
+    if: github.event.schedule == '0 * * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci
+      - name: Refresh games, standings, special teams, narratives
+        run: |
+          chmod +x scripts/refresh-current-season.sh
+          scripts/refresh-current-season.sh
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+  refresh-moneypuck:
+    if: github.event.schedule == '0 14 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci
+      - name: Compute current NHL season's start year
+        id: season
+        run: |
+          YEAR=$(node -e '
+            const now = new Date();
+            const y = now.getUTCFullYear();
+            console.log(now.getUTCMonth() >= 8 ? y : y - 1);
+          ')
+          echo "year=$YEAR" >> "$GITHUB_OUTPUT"
+      - name: Team-level xG/Corsi (MoneyPuck)
+        run: npx tsx scripts/backfill-moneypuck.ts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - name: Player-level xG/Corsi (MoneyPuck), current season only
+        run: npx tsx scripts/backfill-moneypuck-players.ts ${{ steps.season.outputs.year }} ${{ steps.season.outputs.year }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}

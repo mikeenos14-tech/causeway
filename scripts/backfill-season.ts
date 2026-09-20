@@ -359,9 +359,26 @@ async function backfillOnce(teamAbbrev: string, seasonId: string) {
   // per player (the actual per-row DB round trip was the bottleneck, not
   // the API fetch). Same ON CONFLICT semantics as before, per row — this
   // only changes how many round trips it costs to write them.
+  //
+  // Only fetch games NOT already loaded — this script was originally
+  // built to re-fetch every completed game unconditionally every run,
+  // which is fine for a one-time historical backfill but not for a cron
+  // job re-running this hourly during the season: by mid-season that
+  // would mean re-fetching dozens of already-loaded games per team, every
+  // run, for no reason. A game already having a row in our own `games`
+  // table (inserted alongside its boxscore in this same loop, previous
+  // run) is the signal that its stats are already in.
+  const { rows: alreadyLoaded } = await client.query(
+    `select id from games where id = any($1::int[])`,
+    [games.map((g) => g.id)],
+  );
+  const loadedIds = new Set(alreadyLoaded.map((r) => r.id));
+  const gamesToFetch = games.filter((g) => !loadedIds.has(g.id));
+  console.log(`${gamesToFetch.length} of ${games.length} completed games need fetching (${loadedIds.size} already loaded).`);
+
   let count = 0;
-  for (let i = 0; i < games.length; i += BOXSCORE_BATCH_SIZE) {
-    const batch = games.slice(i, i + BOXSCORE_BATCH_SIZE);
+  for (let i = 0; i < gamesToFetch.length; i += BOXSCORE_BATCH_SIZE) {
+    const batch = gamesToFetch.slice(i, i + BOXSCORE_BATCH_SIZE);
     const boxscores = await Promise.all(
       batch.map((g) => fetchJson<any>(`${API}/gamecenter/${g.id}/boxscore`)),
     );
@@ -440,7 +457,7 @@ async function backfillOnce(teamAbbrev: string, seasonId: string) {
       }
 
       count++;
-      if (count % 10 === 0) console.log(`  ${count}/${games.length} games loaded`);
+      if (count % 10 === 0) console.log(`  ${count}/${gamesToFetch.length} games loaded`);
     }
 
     const gamesInsert = buildMultiRowInsert(
@@ -535,7 +552,7 @@ async function backfillOnce(teamAbbrev: string, seasonId: string) {
   }
 
   console.log(
-    `Done. ${games.length} games, ${seenPlayers.size} players, ${standingsWritten} standings rows loaded.`,
+    `Done. ${gamesToFetch.length} new games fetched (${games.length} completed total), ${seenPlayers.size} players touched, ${standingsWritten} standings rows loaded.`,
   );
   } finally {
     // Always release the connection, success or failure — the missing
