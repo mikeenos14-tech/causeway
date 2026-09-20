@@ -59,6 +59,13 @@ export function TeamSubNav({ abbrev }: { abbrev: string }) {
           minWidth: 0,
           maxWidth: "100%",
           overflowX: "auto",
+          overflowY: "hidden",
+          // Without this, a swipe that's even slightly diagonal gets
+          // grabbed by the page's own vertical scroll instead of this
+          // element's horizontal one — pan-x tells the browser this
+          // element only ever pans sideways, so touch gestures on it
+          // don't fight with scrolling the rest of the page.
+          touchAction: "pan-x",
           borderBottom: "1px solid var(--border)",
         }}
       >
