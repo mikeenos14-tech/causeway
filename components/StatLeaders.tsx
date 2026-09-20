@@ -37,28 +37,14 @@ function LeaderCard({ label, leader, value }: { label: string; leader: Leader; v
   );
 }
 
-export function StatLeaders({ abbrev, statLeaders }: { abbrev: string; statLeaders: StatLeadersData }) {
+export function StatLeaders({ statLeaders }: { statLeaders: StatLeadersData }) {
   const anyLeader =
     statLeaders.points || statLeaders.goals || statLeaders.assists || statLeaders.plusMinus || statLeaders.hits || statLeaders.blocks || statLeaders.goalie;
 
   return (
     <section>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "1rem", flexWrap: "wrap", gap: "6px 14px" }}>
+      <div style={{ marginBottom: "1rem" }}>
         <h2 style={{ margin: 0, fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "1.5rem", textTransform: "uppercase", letterSpacing: ".02em" }}>Stat Leaders</h2>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px" }}>
-          <Link href={`/teams/${abbrev}/roster`} style={{ fontSize: ".82rem", fontWeight: 600, color: "var(--gold)", textDecoration: "none" }}>
-            Full roster &amp; stats →
-          </Link>
-          <Link href={`/teams/${abbrev}/league`} style={{ fontSize: ".82rem", fontWeight: 600, color: "var(--gold)", textDecoration: "none" }}>
-            League comparison →
-          </Link>
-          <Link href={`/teams/${abbrev}/records`} style={{ fontSize: ".82rem", fontWeight: 600, color: "var(--gold)", textDecoration: "none" }}>
-            Records &amp; streaks →
-          </Link>
-          <Link href={`/teams/${abbrev}/series`} style={{ fontSize: ".82rem", fontWeight: 600, color: "var(--gold)", textDecoration: "none" }}>
-            Season series →
-          </Link>
-        </div>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
         {statLeaders.points && <LeaderCard label="Points" leader={statLeaders.points} value={statLeaders.points.points as number} />}

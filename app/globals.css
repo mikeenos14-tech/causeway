@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+/* Set directly on html, not just body — overflow set on body alone only
+   propagates to the viewport when html's own overflow is left at its
+   initial value, and that propagation didn't reliably suppress the real
+   scrollWidth in testing. html is the element that actually establishes
+   the viewport's scrolling box, so this is the unambiguous place for it. */
+html {
+  overflow-x: hidden;
+}
+
 /* Causeway's committed brand identity is dark — black and gold, always, not
    a light site with an optional dark mode. Matches the Sofascore/Opta/
    Statmuse-inspired direction the homepage mockup validated: a sports
@@ -32,6 +41,17 @@ body {
   color: var(--text-primary);
   font-family: var(--font-body);
   line-height: 1.6;
+  /* Defensive backstop, not the primary fix — see the html rule above for
+     why this alone isn't enough. body previously used flex/flex-col for a
+     sticky footer, which (via <main>'s own margin: 0 auto — an auto
+     cross-axis margin, which flexbox spec says overrides stretch/align-self
+     entirely) let unwrapped content anywhere inside <main> grow the whole
+     page horizontally instead of scrolling inside its own container
+     (found live: TeamSubNav's tabs on a narrow screen). Removed flex from
+     body in layout.tsx instead of restructuring every page's <main> to
+     avoid that interaction — every page here has enough content that a
+     naturally-flowing footer is a non-issue. */
+  overflow-x: hidden;
 }
 
 .stat-strip {

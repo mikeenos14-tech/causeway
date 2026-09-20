@@ -9,6 +9,7 @@ import {
 import { getNextGame, nextGameFlavor } from "@/lib/next-game";
 import { formatGameDate } from "@/lib/format-date";
 import { Masthead, Footer } from "@/components/Masthead";
+import { TeamSubNav } from "@/components/TeamSubNav";
 import { StatLeaders } from "@/components/StatLeaders";
 import { FormBars } from "@/components/Sparkline";
 
@@ -54,6 +55,9 @@ export default async function Home() {
       <Masthead />
 
       <main style={{ maxWidth: 1160, margin: "0 auto", padding: "0 24px 3.5rem" }}>
+        <div style={{ paddingTop: "1.25rem" }}>
+          <TeamSubNav abbrev="BOS" />
+        </div>
         {/* HERO */}
         {game && (
           <section style={{ padding: "4rem 0 3rem", borderBottom: "1px solid var(--border)", position: "relative", overflow: "hidden" }}>
@@ -284,7 +288,7 @@ export default async function Home() {
             </section>
           )}
 
-          {statLeaders && <StatLeaders abbrev="BOS" statLeaders={statLeaders} />}
+          {statLeaders && <StatLeaders statLeaders={statLeaders} />}
         </div>
       </main>
 

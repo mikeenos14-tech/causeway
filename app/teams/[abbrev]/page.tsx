@@ -10,6 +10,7 @@ import {
 } from "@/lib/homepage-data";
 import { formatGameDate } from "@/lib/format-date";
 import { Masthead, Footer } from "@/components/Masthead";
+import { TeamSubNav } from "@/components/TeamSubNav";
 import { StatLeaders } from "@/components/StatLeaders";
 import { FormBars } from "@/components/Sparkline";
 
@@ -65,7 +66,8 @@ export default async function TeamDetail({ params }: { params: Promise<{ abbrev:
     <>
       <Masthead />
 
-      <main style={{ maxWidth: 1160, margin: "0 auto", padding: "3rem 24px 3.5rem" }}>
+      <main style={{ maxWidth: 1160, margin: "0 auto", padding: "1.5rem 24px 3.5rem" }}>
+        <TeamSubNav abbrev={abbrev} />
         <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "clamp(2.4rem,5.5vw,4rem)", lineHeight: 0.98, textTransform: "uppercase", letterSpacing: ".01em", margin: "0 0 2rem" }}>
           {team.name}
         </h1>
@@ -189,7 +191,7 @@ export default async function TeamDetail({ params }: { params: Promise<{ abbrev:
             </section>
           )}
 
-          {statLeaders && <StatLeaders abbrev={abbrev} statLeaders={statLeaders} />}
+          {statLeaders && <StatLeaders statLeaders={statLeaders} />}
         </div>
       </main>
 

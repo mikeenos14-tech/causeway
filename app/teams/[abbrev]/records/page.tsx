@@ -1,9 +1,9 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTeam } from "@/lib/homepage-data";
 import { getAllRegularSeasonResults, longestWinStreak, longestPointStreak, biggestWin, worstLoss, bestAndWorstMonth } from "@/lib/records-data";
 import { formatGameDate } from "@/lib/format-date";
 import { Masthead, Footer } from "@/components/Masthead";
+import { TeamSubNav } from "@/components/TeamSubNav";
 
 export const revalidate = 300;
 
@@ -34,11 +34,9 @@ export default async function TeamRecords({ params }: { params: Promise<{ abbrev
   return (
     <>
       <Masthead />
-      <main style={{ maxWidth: 1160, margin: "0 auto", padding: "3rem 24px 3.5rem" }}>
-        <Link href={`/teams/${abbrev}`} style={{ fontSize: ".82rem", fontWeight: 600, color: "var(--gold)", textDecoration: "none" }}>
-          ← {team.name}
-        </Link>
-        <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "clamp(2.2rem,4.5vw,3rem)", textTransform: "uppercase", letterSpacing: ".01em", margin: ".4rem 0 .4rem" }}>
+      <main style={{ maxWidth: 1160, margin: "0 auto", padding: "1.5rem 24px 3.5rem" }}>
+        <TeamSubNav abbrev={abbrev} />
+        <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "clamp(2.2rem,4.5vw,3rem)", textTransform: "uppercase", letterSpacing: ".01em", margin: "0 0 .4rem" }}>
           Records &amp; Streaks
         </h1>
         <p style={{ color: "var(--text-secondary)", fontSize: ".9rem", marginBottom: "2rem" }}>
