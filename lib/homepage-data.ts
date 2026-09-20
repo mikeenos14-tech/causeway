@@ -236,3 +236,31 @@ export async function getStatLeaders(teamAbbrev: string) {
     goalie: goalieRows[0] ? { ...goalieRows[0], savePct: Number(goalieRows[0].saves) / Number(goalieRows[0].shots_against) } : null,
   };
 }
+
+export type HomeRoadSplit = { wins: number; losses: number; otl: number; points: number; games: number };
+
+// "Bruins are a different team at home" is a real, common storyline that
+// the site had no way to actually check — this is the same games table
+// already used everywhere else, just grouped by home/away instead of
+// aggregated across both.
+export async function getHomeRoadSplit(teamAbbrev: string, seasonId: string): Promise<{ home: HomeRoadSplit; away: HomeRoadSplit }> {
+  const { rows } = await pool.query(
+    `select (g.home_team_id = t.id) as is_home,
+            sum(case when (g.home_team_id = t.id and g.home_score > g.away_score) or (g.away_team_id = t.id and g.away_score > g.home_score) then 1 else 0 end)::int as wins,
+            sum(case when ((g.home_team_id = t.id and g.home_score < g.away_score) or (g.away_team_id = t.id and g.away_score < g.home_score)) and g.game_end_type = 'regulation' then 1 else 0 end)::int as losses,
+            sum(case when ((g.home_team_id = t.id and g.home_score < g.away_score) or (g.away_team_id = t.id and g.away_score < g.home_score)) and g.game_end_type != 'regulation' then 1 else 0 end)::int as otl,
+            count(*)::int as games
+     from games g
+     join teams t on t.id = g.home_team_id or t.id = g.away_team_id
+     where t.abbrev = $1 and g.season_id = $2 and g.game_type = 'regular'
+       and g.home_score is not null and g.away_score is not null
+     group by is_home`,
+    [teamAbbrev, seasonId],
+  );
+  const toSplit = (r: { wins: number; losses: number; otl: number; games: number } | undefined): HomeRoadSplit =>
+    r ? { wins: r.wins, losses: r.losses, otl: r.otl, points: r.wins * 2 + r.otl, games: r.games } : { wins: 0, losses: 0, otl: 0, points: 0, games: 0 };
+  return {
+    home: toSplit(rows.find((r) => r.is_home)),
+    away: toSplit(rows.find((r) => !r.is_home)),
+  };
+}

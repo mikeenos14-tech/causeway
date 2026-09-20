@@ -5,7 +5,9 @@ import {
   getRecentResults,
   getDivisionStandings,
   getStatLeaders,
+  getHomeRoadSplit,
 } from "@/lib/homepage-data";
+import { getLatestSeasonId } from "@/lib/schedule-data";
 import { getNextGame, nextGameFlavor } from "@/lib/next-game";
 import { formatGameDate } from "@/lib/format-date";
 import { Masthead, Footer } from "@/components/Masthead";
@@ -25,14 +27,16 @@ function resultLabel(teamScore: number, oppScore: number, gameEndType: string) {
 }
 
 export default async function Home() {
-  const [game, form, recentResults, standings, statLeaders, nextGame] = await Promise.all([
+  const [game, form, recentResults, standings, statLeaders, nextGame, seasonId] = await Promise.all([
     getLatestGame("BOS"),
     getRecentForm("BOS"),
     getRecentResults("BOS"),
     getDivisionStandings("BOS"),
     getStatLeaders("BOS"),
     getNextGame("BOS"),
+    getLatestSeasonId("BOS"),
   ]);
+  const homeRoadSplit = seasonId ? await getHomeRoadSplit("BOS", seasonId) : null;
 
   const isHome = game?.home_abbrev === "BOS";
   const bosScore = isHome ? game?.home_score : game?.away_score;
@@ -246,6 +250,28 @@ export default async function Home() {
                   </div>
                 </Link>
               ))}
+            </div>
+          </section>
+        )}
+
+        {homeRoadSplit && (homeRoadSplit.home.games > 0 || homeRoadSplit.away.games > 0) && (
+          <section style={{ marginBottom: "2.5rem" }}>
+            <h2 style={{ margin: "0 0 1rem", fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "1.5rem", textTransform: "uppercase", letterSpacing: ".02em" }}>Home / Road</h2>
+            <div className="card-row">
+              <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 10, padding: "1.1rem 1.2rem" }}>
+                <div style={{ fontSize: ".72rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: ".4rem" }}>At Home</div>
+                <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "2rem", color: "var(--gold)", fontVariantNumeric: "tabular-nums" }}>
+                  {homeRoadSplit.home.wins}-{homeRoadSplit.home.losses}-{homeRoadSplit.home.otl}
+                </div>
+                <div style={{ fontSize: ".78rem", color: "var(--text-secondary)", marginTop: 4 }}>{homeRoadSplit.home.points} pts in {homeRoadSplit.home.games} games</div>
+              </div>
+              <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 10, padding: "1.1rem 1.2rem" }}>
+                <div style={{ fontSize: ".72rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: ".4rem" }}>On the Road</div>
+                <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "2rem", color: "var(--gold)", fontVariantNumeric: "tabular-nums" }}>
+                  {homeRoadSplit.away.wins}-{homeRoadSplit.away.losses}-{homeRoadSplit.away.otl}
+                </div>
+                <div style={{ fontSize: ".78rem", color: "var(--text-secondary)", marginTop: 4 }}>{homeRoadSplit.away.points} pts in {homeRoadSplit.away.games} games</div>
+              </div>
             </div>
           </section>
         )}
