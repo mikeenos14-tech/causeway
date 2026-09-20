@@ -23,8 +23,20 @@ export function TeamSubNav({ abbrev }: { abbrev: string }) {
   const pathname = usePathname();
   const base = `/teams/${abbrev}`;
   const scrollerRef = useRef<HTMLElement>(null);
+  const activeRef = useRef<HTMLAnchorElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
+
+  // Each team sub-page renders its own <TeamSubNav>, not a shared layout,
+  // so clicking a tab remounts this component fresh on a scrolled-to-the-
+  // start nav — you'd land on e.g. Advanced and have to re-scroll right
+  // every single time just to see which tab you're actually on. Centering
+  // the active tab on mount keeps your place visible without you doing
+  // anything; instant (no animation) since this is a page load settling
+  // into place, not a scroll the user asked for.
+  useEffect(() => {
+    activeRef.current?.scrollIntoView({ behavior: "instant", inline: "center", block: "nearest" });
+  }, []);
 
   // A real user found this the hard way: on a narrow screen only 4 of 7
   // tabs fit, and the only hint the rest existed was a 2px-tall scrollbar
@@ -79,6 +91,7 @@ export function TeamSubNav({ abbrev }: { abbrev: string }) {
             <Link
               key={tab.label}
               href={href}
+              ref={active ? activeRef : undefined}
               style={{
                 padding: "10px 16px",
                 fontSize: ".85rem",
