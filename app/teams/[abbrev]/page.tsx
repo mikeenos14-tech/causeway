@@ -10,6 +10,7 @@ import {
   getHomeRoadSplit,
 } from "@/lib/homepage-data";
 import { getLatestSeasonId } from "@/lib/schedule-data";
+import { getUpcomingMilestones, milestoneText } from "@/lib/milestones-data";
 import { formatGameDate } from "@/lib/format-date";
 import { Masthead, Footer } from "@/components/Masthead";
 import { TeamSubNav } from "@/components/TeamSubNav";
@@ -49,6 +50,7 @@ export default async function TeamDetail({ params }: { params: Promise<{ abbrev:
     getLatestSeasonId(abbrev),
   ]);
   const homeRoadSplit = seasonId ? await getHomeRoadSplit(abbrev, seasonId) : null;
+  const milestones = seasonId ? await getUpcomingMilestones(abbrev, seasonId) : [];
 
   const isHome = game?.home_abbrev === abbrev;
   const bosScore = isHome ? game?.home_score : game?.away_score;
@@ -152,6 +154,37 @@ export default async function TeamDetail({ params }: { params: Promise<{ abbrev:
                     <span style={{ fontSize: ".88rem", color: "var(--text-secondary)" }}>{r.opp_abbrev}</span>
                     <span style={{ fontSize: ".88rem", color: "var(--text-secondary)" }}>{r.opp_score}</span>
                   </div>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {milestones.length > 0 && (
+          <section style={{ marginBottom: "2.5rem" }}>
+            <h2 style={{ margin: "0 0 1rem", fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "1.5rem", textTransform: "uppercase", letterSpacing: ".02em" }}>Milestone Watch</h2>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {milestones.slice(0, 4).map((m) => (
+                <Link
+                  key={`${m.playerId}-${m.category}`}
+                  href={`/players/${m.playerId}`}
+                  style={{
+                    background: "var(--surface-1)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 10,
+                    padding: "12px 18px",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    textDecoration: "none",
+                    color: "var(--text-primary)",
+                    fontSize: ".9rem",
+                  }}
+                >
+                  <span>
+                    <strong>{m.playerName}</strong> {milestoneText(m)}
+                  </span>
+                  <span style={{ color: "var(--gold)", fontWeight: 700, fontFamily: "var(--font-display)", fontSize: "1.1rem" }}>{m.current}/{m.target}</span>
                 </Link>
               ))}
             </div>
