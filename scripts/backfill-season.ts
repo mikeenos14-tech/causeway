@@ -338,13 +338,28 @@ async function backfillOnce(teamAbbrev: string, seasonId: string) {
     const winnerTeamId =
       targetWins >= neededToWin ? targetTeamId : opponentWins >= neededToWin ? opponentId : null;
 
+    // team_a_id/team_b_id must be assigned the SAME way no matter which of
+    // the two teams' backfill run creates this row — the two teams in a
+    // series each run this exact insert independently (this team as
+    // "target", the other as "opponent"), so if team_a/b just meant
+    // "target, opponent" the ON CONFLICT target wouldn't match between the
+    // two runs and every playoff series would get inserted twice: one row
+    // per team, the second one silently orphaned (no games ever attach to
+    // it, since the games insert below always points at whichever row
+    // THIS run's own gameSeriesInfo resolved). Found live: BOS/BUF round 1
+    // 2025-26 showing twice on the playoff history page, one stuck at 0-0.
+    // Ordering by id instead of by "target vs. opponent" makes the pair
+    // symmetric, so both runs resolve to the same row.
+    const teamAId = Math.min(targetTeamId, opponentId);
+    const teamBId = Math.max(targetTeamId, opponentId);
+
     const res = await client.query(
       `insert into playoff_series (season_id, round, team_a_id, team_b_id, winner_team_id, games_played)
        values ($1, $2, $3, $4, $5, $6)
        on conflict (season_id, round, team_a_id, team_b_id) do update set
          winner_team_id = excluded.winner_team_id, games_played = excluded.games_played
        returning id`,
-      [seasonId, round, targetTeamId, opponentId, winnerTeamId, seriesGames.length],
+      [seasonId, round, teamAId, teamBId, winnerTeamId, seriesGames.length],
     );
     const seriesId = res.rows[0].id;
     for (const g of seriesGames) {
