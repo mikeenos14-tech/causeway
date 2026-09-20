@@ -55,6 +55,9 @@ export function StatLeaders({ abbrev, statLeaders }: { abbrev: string; statLeade
           <Link href={`/teams/${abbrev}/records`} style={{ fontSize: ".82rem", fontWeight: 600, color: "var(--gold)", textDecoration: "none" }}>
             Records &amp; streaks →
           </Link>
+          <Link href={`/teams/${abbrev}/series`} style={{ fontSize: ".82rem", fontWeight: 600, color: "var(--gold)", textDecoration: "none" }}>
+            Season series →
+          </Link>
         </div>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>

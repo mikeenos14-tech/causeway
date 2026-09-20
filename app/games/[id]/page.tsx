@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getGameDetail, getGameSkaters, getGameGoalies } from "@/lib/game-detail-data";
+import { getAllSeasonSeriesForTeam, getPlayoffSeriesForGame } from "@/lib/season-series-data";
+import { TARGET_TEAM_ABBREV } from "@/lib/significance-checks";
 import { formatGameDate } from "@/lib/format-date";
 import { Masthead, Footer } from "@/components/Masthead";
 
@@ -19,7 +21,20 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
   const game = await getGameDetail(gameId);
   if (!game) notFound();
 
-  const [skaters, goalies] = await Promise.all([getGameSkaters(gameId), getGameGoalies(gameId)]);
+  // Only shown when the Bruins are actually one of the two teams — this
+  // page is a generic /games/[id] route that can show any league game,
+  // but season/playoff series tracking (like the significance checks) is
+  // only meaningful relative to one team's perspective.
+  const bosInGame = game.home_abbrev === TARGET_TEAM_ABBREV || game.away_abbrev === TARGET_TEAM_ABBREV;
+
+  const [skaters, goalies, seasonSeries, playoffSeries] = await Promise.all([
+    getGameSkaters(gameId),
+    getGameGoalies(gameId),
+    bosInGame && game.game_type === "regular" ? getAllSeasonSeriesForTeam(TARGET_TEAM_ABBREV, game.season_id) : Promise.resolve(null),
+    bosInGame && game.game_type === "playoff" ? getPlayoffSeriesForGame(gameId, TARGET_TEAM_ABBREV) : Promise.resolve(null),
+  ]);
+  const opponentAbbrev = game.home_abbrev === TARGET_TEAM_ABBREV ? game.away_abbrev : game.home_abbrev;
+  const thisSeries = seasonSeries?.find((s) => s.opp_abbrev === opponentAbbrev) ?? null;
 
   // Real bug found live (2026-09-19): the old fallback headline used
   // `won = home_score !== away_score` (meaning only "not a tie") and then
@@ -76,6 +91,55 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
           </div>
         </section>
 
+        {thisSeries && (
+          <section style={{ marginBottom: "2.5rem", background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, padding: "1.25rem 1.5rem" }}>
+            <div style={{ fontSize: ".78rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 6 }}>Season Series</div>
+            <div style={{ fontSize: "1rem" }}>
+              {thisSeries.wins === thisSeries.losses + thisSeries.otl
+                ? `Series tied ${thisSeries.wins}-${thisSeries.losses}-${thisSeries.otl}`
+                : `${TARGET_TEAM_ABBREV} ${thisSeries.wins > thisSeries.losses + thisSeries.otl ? "leads" : "trails"} ${thisSeries.wins}-${thisSeries.losses}-${thisSeries.otl}`}
+              {" "}vs {opponentAbbrev} this season ({thisSeries.games} meeting{thisSeries.games === 1 ? "" : "s"})
+            </div>
+            <Link href={`/teams/${TARGET_TEAM_ABBREV}/series`} style={{ fontSize: ".8rem", fontWeight: 600, color: "var(--gold)", textDecoration: "none", display: "inline-block", marginTop: 8 }}>
+              Full season series →
+            </Link>
+          </section>
+        )}
+
+        {playoffSeries && (
+          <section style={{ marginBottom: "2.5rem", background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, padding: "1.25rem 1.5rem" }}>
+            <div style={{ fontSize: ".78rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 6 }}>
+              Playoff Series · Round {playoffSeries.round}{playoffSeries.gameNumber ? ` · Game ${playoffSeries.gameNumber}` : ""}
+            </div>
+            <div style={{ fontSize: "1rem", marginBottom: 10 }}>
+              {playoffSeries.teamWins === playoffSeries.opponentWins
+                ? `Series tied ${playoffSeries.teamWins}-${playoffSeries.opponentWins}`
+                : `${TARGET_TEAM_ABBREV} ${playoffSeries.teamWins > playoffSeries.opponentWins ? "leads" : "trails"} ${playoffSeries.teamWins}-${playoffSeries.opponentWins}`}
+              {" "}vs {playoffSeries.opponentAbbrev}
+            </div>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              {playoffSeries.games.map((g) => (
+                <Link
+                  key={g.id}
+                  href={`/games/${g.id}`}
+                  style={{
+                    fontSize: ".78rem",
+                    fontWeight: g.id === gameId ? 700 : 400,
+                    color: g.id === gameId ? "var(--gold)" : "var(--text-secondary)",
+                    textDecoration: "none",
+                    border: "1px solid var(--border)",
+                    borderRadius: 6,
+                    padding: "4px 10px",
+                  }}
+                >
+                  G{g.gameNumber} {g.teamScore != null ? `${g.teamScore}-${g.opponentScore}` : "—"}
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
+
+        <div id="box-score" />
         {["away", "home"].map((side) => {
           const abbrev = side === "away" ? game.away_abbrev : game.home_abbrev;
           const teamSkaters = skaters.filter((s) => s.team_abbrev === abbrev);

@@ -6,7 +6,7 @@ export async function getGameDetail(gameId: number) {
   // enough for a real highlight), and this used to show only the bare
   // fallback headline for those, never a stored narrative at all.
   const { rows } = await pool.query(
-    `select g.id, g.game_date, g.game_type, g.game_end_type,
+    `select g.id, g.game_date, g.game_type, g.game_end_type, g.season_id,
             ht.abbrev as home_abbrev, at.abbrev as away_abbrev,
             g.home_score, g.away_score, g.venue,
             coalesce(nh.headline, nr.headline) as headline,

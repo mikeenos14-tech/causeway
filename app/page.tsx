@@ -95,7 +95,7 @@ export default async function Home() {
                     Full Recap
                   </Link>
                   <Link
-                    href={`/games/${game.id}`}
+                    href={`/games/${game.id}#box-score`}
                     style={{ background: "transparent", color: "var(--text-primary)", fontWeight: 600, fontSize: ".9rem", padding: "14px 26px", borderRadius: 8, border: "1px solid var(--border)", textDecoration: "none" }}
                   >
                     See the box score
