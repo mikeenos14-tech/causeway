@@ -82,10 +82,15 @@ export async function getGoalieSeasonSplits(playerId: number) {
 export async function getRecentGameLog(playerId: number, isGoalie: boolean, limit = 10) {
   if (isGoalie) {
     const { rows } = await pool.query(
-      `select g.id as game_id, g.game_date, t.abbrev as team_abbrev, s.decision, s.saves, s.shots_against, s.goals_against
+      `select g.id as game_id, g.game_date, t.abbrev as team_abbrev,
+              (g.home_team_id = s.team_id) as is_home,
+              case when g.home_team_id = s.team_id then at.abbrev else ht.abbrev end as opp_abbrev,
+              s.decision, s.saves, s.shots_against, s.goals_against
        from goalie_game_stats s
        join games g on g.id = s.game_id
        join teams t on t.id = s.team_id
+       join teams ht on ht.id = g.home_team_id
+       join teams at on at.id = g.away_team_id
        where s.player_id = $1
        order by g.game_date desc
        limit $2`,
@@ -94,10 +99,15 @@ export async function getRecentGameLog(playerId: number, isGoalie: boolean, limi
     return rows;
   }
   const { rows } = await pool.query(
-    `select g.id as game_id, g.game_date, t.abbrev as team_abbrev, s.goals, s.assists, s.points
+    `select g.id as game_id, g.game_date, t.abbrev as team_abbrev,
+            (g.home_team_id = s.team_id) as is_home,
+            case when g.home_team_id = s.team_id then at.abbrev else ht.abbrev end as opp_abbrev,
+            s.goals, s.assists, s.points
      from skater_game_stats s
      join games g on g.id = s.game_id
      join teams t on t.id = s.team_id
+     join teams ht on ht.id = g.home_team_id
+     join teams at on at.id = g.away_team_id
      where s.player_id = $1
      order by g.game_date desc
      limit $2`,

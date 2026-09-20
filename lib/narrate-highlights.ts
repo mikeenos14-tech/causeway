@@ -5,7 +5,7 @@
 // them up the way a knowledgeable friend would text it to you.
 
 import Anthropic from "@anthropic-ai/sdk";
-import type { SignificanceFact } from "./significance-checks";
+import { TARGET_TEAM_ABBREV, type SignificanceFact } from "./significance-checks";
 
 export type HighlightResult = {
   headline: string;
@@ -188,6 +188,28 @@ Write the blurb now, as JSON only.`;
     if (allowedTeamWords.includes(lower)) continue;
     if (GENERIC_ALLOWED_WORDS.includes(lower)) continue;
     throw new Error(`Narration mentions "${name}" who is not named in the facts, the teams, or the allowed word list.`);
+  }
+
+  // Fifth hallucination pattern: every player named in `facts` is
+  // guaranteed to be on TARGET_TEAM_ABBREV for this game (that's what
+  // significance-checks.ts scopes its candidates to) — but a model that
+  // also knows a player's real-world history can still mislabel him as
+  // playing for whichever team he used to be on, especially when that old
+  // team happens to be tonight's opponent. Found live: a Morgan Geekie
+  // (Bruins) streak-snapped blurb for a CAR @ BOS game called him "the
+  // Hurricanes forward" — Carolina is where he played years before Boston,
+  // and the opponent that night, so both cues pointed the model the wrong
+  // way at once. No fact here is ever about an opposing player, so there's
+  // no legitimate reason for "the <opponent nickname> <position>" to appear.
+  const opponentAbbrev = gameContext.homeAbbrev === TARGET_TEAM_ABBREV ? gameContext.awayAbbrev : gameContext.homeAbbrev;
+  const opponentWords = TEAM_WORDS[opponentAbbrev] ?? [];
+  if (opponentWords.length > 0) {
+    const positionWords = "forwards?|defensemen|defenseman|d-man|d-men|wingers?|wing|centers?|centres?|goalies|goaltenders?|blueliners?";
+    const misattribution = new RegExp(`\\b(?:the\\s+)?(?:${opponentWords.join("|")})['’]?\\s+(?:${positionWords})\\b`, "i");
+    const hit = misattribution.exec(combinedText);
+    if (hit) {
+      throw new Error(`Narration attributes a named player to the opponent's team ("${hit[0]}") — every fact here is about a ${TARGET_TEAM_ABBREV} player: ${combinedText.slice(0, 200)}`);
+    }
   }
 
   return { headline: parsed.headline, body: parsed.body, modelVersion: MODEL };

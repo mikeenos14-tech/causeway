@@ -154,11 +154,12 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
             Recent Games
           </h2>
           <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".85rem", fontVariantNumeric: "tabular-nums", minWidth: 420 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".85rem", fontVariantNumeric: "tabular-nums", minWidth: 480 }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid var(--border)" }}>
                   <th style={thStyle("left")}>Date</th>
                   <th style={thStyle("left")}>Team</th>
+                  <th style={thStyle("left")}>Opp</th>
                   {isGoalie ? (
                     <>
                       <th style={thStyle()}>Dec</th>
@@ -183,6 +184,7 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
                       </Link>
                     </td>
                     <td style={tdStyle("left")}>{g.team_abbrev}</td>
+                    <td style={tdStyle("left")}>{g.is_home ? "vs" : "@"} {g.opp_abbrev}</td>
                     {isGoalie ? (
                       <>
                         <td style={tdStyle()}>{g.decision ?? "—"}</td>
