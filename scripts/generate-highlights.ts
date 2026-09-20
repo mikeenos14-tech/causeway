@@ -14,14 +14,21 @@ import { TARGET_TEAM_ABBREV } from "../lib/significance-checks";
 
 async function backfillOnce(candidateGameIds: number[]) {
   const client = new Client({ connectionString: process.env.DATABASE_URL });
-  // See backfill-team-game-stats.ts's identical comment: pg's Client emits
-  // 'error' on the raw connection as an EventEmitter event, and with no
-  // listener that crashes the whole process instantly — confirmed live,
-  // this killed a real run at 1,067/1,249 games in with no chance for the
-  // retry loop below to ever run. This alone doesn't fix the drop; it just
-  // turns it into a normal rejected query the retry loop already handles.
+  // See backfill-team-game-stats.ts's identical comment (that file hit
+  // both bugs live, in order): pg's Client emits 'error' on the raw
+  // connection as an EventEmitter event, and with no listener that
+  // crashes the whole process instantly. Attaching a listener alone isn't
+  // enough either — whatever a query throws AFTER the drop doesn't
+  // reliably contain any of CONNECTION_ERROR_PATTERN's text, so a
+  // catch-and-check-the-message approach can silently swallow a dead
+  // connection as hundreds of ordinary per-game failures. connectionDead
+  // is the definitive signal instead: the client already told us it's
+  // broken, so check that directly rather than re-deriving it from
+  // whatever error text a doomed query happens to produce.
+  let connectionDead = false;
   client.on("error", (err) => {
-    console.error(`pg client error (connection likely dropped, next query will surface it): ${err.message}`);
+    connectionDead = true;
+    console.error(`pg client error (connection dropped): ${err.message}`);
   });
   await client.connect();
 
@@ -43,6 +50,9 @@ async function backfillOnce(candidateGameIds: number[]) {
   const failures: { gameId: number; error: string }[] = [];
 
   for (const gameId of gameIds) {
+    // See connectionDead's comment above — checked before every game, not
+    // inferred from whatever error text a doomed query happens to throw.
+    if (connectionDead) throw new Error("Connection terminated unexpectedly (flagged by client error listener)");
     console.log(`\n=== game ${gameId} ===`);
     try {
       const facts = await runSignificanceChecks(client, gameId);
@@ -112,7 +122,7 @@ async function backfillOnce(candidateGameIds: number[]) {
       // silently mislabeling the rest of the batch as "bad narrations"
       // instead of "the connection died." Let it propagate to main()'s
       // retry loop, which reconnects and re-checks what's still missing.
-      if (CONNECTION_ERROR_PATTERN.test(message)) throw err;
+      if (connectionDead || CONNECTION_ERROR_PATTERN.test(message)) throw err;
       // A failed or rejected narration for one game must not take down the
       // rest of an unattended batch — log it and keep going. Nothing gets
       // stored for this game, which is the correct outcome for a rejected

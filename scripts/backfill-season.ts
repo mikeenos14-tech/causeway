@@ -117,16 +117,29 @@ function gameEndType(periodType: string | undefined): string {
 // try/finally, and retrying the whole season (safe — every write here is
 // an upsert) a few times with backoff when the error is connection-shaped,
 // rather than a single attempt with no recovery.
+// Module-scoped, not local to backfillOnce, so main()'s retry check can
+// read it directly instead of trying to smuggle it out through whatever
+// error backfillOnce happens to throw. Reset at the start of each attempt.
+let connectionDead = false;
+
 async function backfillOnce(teamAbbrev: string, seasonId: string) {
+  connectionDead = false;
   const client = new Client({ connectionString: process.env.DATABASE_URL });
   // pg's Client emits 'error' on the raw connection as an EventEmitter
   // event; with no listener, an unexpected drop crashes the whole process
   // instantly instead of surfacing as a normal rejected query — which
   // means it skips this exact retry loop entirely. Confirmed live
-  // elsewhere (generate-highlights.ts, backfill-team-game-stats.ts) before
-  // patching all three the same way.
+  // elsewhere (generate-highlights.ts, backfill-team-game-stats.ts), along
+  // with a second issue: whatever a query throws AFTER the drop doesn't
+  // reliably match CONNECTION_ERROR_PATTERN's text, so main()'s retry
+  // check below could treat a genuine dropped connection as a real,
+  // non-retryable error and give up instead of reconnecting. This script
+  // has no per-item catch to swallow that mislabeling (unlike the other
+  // two when this was found), but the flag is still the more honest
+  // signal than pattern-matching arbitrary error text either way.
   client.on("error", (err) => {
-    console.error(`pg client error (connection likely dropped, next query will surface it): ${err.message}`);
+    connectionDead = true;
+    console.error(`pg client error (connection dropped): ${err.message}`);
   });
   await client.connect();
 
@@ -552,7 +565,7 @@ async function main() {
       return;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      const isConnectionError = CONNECTION_ERROR_PATTERN.test(message);
+      const isConnectionError = connectionDead || CONNECTION_ERROR_PATTERN.test(message);
       if (!isConnectionError || attempt === maxAttempts) throw err;
       const waitMs = 1000 * 2 ** attempt;
       console.log(`Connection error on attempt ${attempt}/${maxAttempts} (${message}) — retrying in ${waitMs}ms...`);

@@ -149,13 +149,22 @@ async function backfillOnce() {
   // promise — with no listener attached, Node treats that as fatal and
   // kills the whole process instantly, skipping every try/catch and the
   // CONNECTION_ERROR_PATTERN retry loop below entirely. Confirmed live:
-  // this crashed the process outright at 6,202/24,233 games in, with
-  // "Connection terminated unexpectedly" and no chance to retry. Attaching
-  // a listener here doesn't fix the drop, but it stops the crash — the
-  // next client.query() call fails normally instead, which the retry loop
-  // already knows how to handle.
+  // this crashed the process outright at 6,202/24,233 games in.
+  //
+  // A second bug found immediately after fixing that one: once the drop
+  // happens, EVERY subsequent client.query() call started rejecting with
+  // some other message (not one containing "Connection terminated" or any
+  // other CONNECTION_ERROR_PATTERN text), so the per-game catch below kept
+  // swallowing them as ordinary failures instead of re-throwing — 348
+  // real, fine games got marked "failed" in a row before this was caught.
+  // Pattern-matching arbitrary pg error text isn't reliable enough to
+  // build a recovery on. This flag is: the client already told us,
+  // definitively, that it's broken — check that directly instead of
+  // guessing from whatever error message a doomed query happens to throw.
+  let connectionDead = false;
   client.on("error", (err) => {
-    console.error(`pg client error (connection likely dropped, next query will surface it): ${err.message}`);
+    connectionDead = true;
+    console.error(`pg client error (connection dropped): ${err.message}`);
   });
   await client.connect();
 
@@ -226,6 +235,11 @@ async function backfillOnce() {
     // Write sequentially (one pg Client, not a Pool — overlapping queries
     // on it aren't safe; see fetchGameStats's comment).
     for (const f of fetched) {
+      // Checked before touching the client at all — see connectionDead's
+      // comment above. A regex on the query's own error text isn't
+      // reliable enough on its own (confirmed live: it missed a real drop
+      // and let 348 fine games get marked "failed" in a row).
+      if (connectionDead) throw new Error("Connection terminated unexpectedly (flagged by client error listener)");
       if (!f.ok) {
         failed++;
         failures.push({ gameId: f.gameId, error: f.error });
@@ -239,7 +253,7 @@ async function backfillOnce() {
         // Same reasoning as generate-highlights.ts: a dead connection would
         // otherwise silently mislabel every remaining write in this run as
         // a per-game failure instead of triggering main()'s reconnect.
-        if (CONNECTION_ERROR_PATTERN.test(message)) throw err;
+        if (connectionDead || CONNECTION_ERROR_PATTERN.test(message)) throw err;
         failed++;
         failures.push({ gameId: f.gameId, error: message });
       }
