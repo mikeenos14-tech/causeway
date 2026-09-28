@@ -165,7 +165,7 @@ export async function buildGameFacts(client: Client, gameId: number, targetAbbre
     `select t.abbrev, p.full_name, gs.saves, gs.shots_against, gs.decision, gs.toi_seconds, gs.shutout,
             count(*) over (partition by gs.team_id) as goalies_used
      from goalie_game_stats gs join players p on p.id = gs.player_id join teams t on t.id = gs.team_id
-     where gs.game_id = $1 order by gs.toi_seconds desc`,
+     where gs.game_id = $1 and coalesce(gs.toi_seconds, 0) > 0 order by gs.toi_seconds desc`,
     [gameId],
   );
   for (const abbrev of [g.away_abbrev, g.home_abbrev]) {

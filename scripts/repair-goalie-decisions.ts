@@ -218,7 +218,8 @@ async function main() {
   const shutoutRule = `
     with rule as (
       select ggs.game_id, ggs.player_id,
-             (count(*) over (partition by ggs.game_id, ggs.team_id) = 1
+             (coalesce(ggs.toi_seconds, 0) > 0
+              and count(*) filter (where coalesce(ggs.toi_seconds, 0) > 0) over (partition by ggs.game_id, ggs.team_id) = 1
               and (case when ggs.team_id = g.home_team_id then g.away_score else g.home_score end) = 0) as should_be
       from goalie_game_stats ggs join games g on g.id = ggs.game_id
     )`;
