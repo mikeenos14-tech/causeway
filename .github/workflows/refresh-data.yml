@@ -15,15 +15,22 @@ name: Refresh Bruins Data
 # game and MoneyPuck's own overnight update): xG/Corsi from MoneyPuck.
 # MoneyPuck's own site says their data updates nightly, so running this
 # more than once a day would just re-process the same numbers.
+#
+# Off the top of the hour on purpose: GitHub's docs warn scheduled runs are
+# delayed at the start of every hour under load, and some queued jobs may
+# be dropped. Monthly: a keepalive commit — GitHub disables scheduled
+# workflows in a public repo after 60 days with no repository activity,
+# which would silently stop this refresh mid-season.
 on:
   schedule:
-    - cron: "0 * * * *"
-    - cron: "0 14 * * *"
+    - cron: "17 * * * *"
+    - cron: "23 14 * * *"
+    - cron: "41 9 1 * *"
   workflow_dispatch: {}
 
 jobs:
   refresh-current-season:
-    if: github.event.schedule == '0 * * * *' || github.event_name == 'workflow_dispatch'
+    if: github.event.schedule == '17 * * * *' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -57,7 +64,7 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
   refresh-moneypuck:
-    if: github.event.schedule == '0 14 * * *' || github.event_name == 'workflow_dispatch'
+    if: github.event.schedule == '23 14 * * *' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -83,3 +90,23 @@ jobs:
         run: npx tsx scripts/backfill-moneypuck-players.ts ${{ steps.season.outputs.year }} ${{ steps.season.outputs.year }}
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+  # Repository activity once a month so GitHub never auto-disables the
+  # schedules above (60 days of inactivity in a public repo). A dated file
+  # rather than an empty commit, so the history says what it's for.
+  keepalive:
+    if: github.event.schedule == '41 9 1 * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Commit keepalive
+        run: |
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > .github/keepalive
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/keepalive
+          git commit -m "chore: monthly keepalive for scheduled workflows"
+          git push

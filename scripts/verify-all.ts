@@ -10,6 +10,7 @@
 
 import { Client } from "pg";
 import { verifyTeam } from "./verify-team";
+import { checkFreshness } from "./verify-freshness";
 
 async function main() {
   const client = new Client({ connectionString: process.env.DATABASE_URL });
@@ -26,9 +27,17 @@ async function main() {
     console.log(`FAIL  ${abbrev} — ${r.issues.length} issue(s)`);
     for (const issue of r.issues) console.log(`        - ${issue}`);
   }
+  // Current, not just correct: see verify-freshness.ts.
+  const stale = await checkFreshness(client);
   await client.end();
   console.log(`\n${teams.length - failing}/${teams.length} teams pass every invariant.`);
-  if (failing > 0) process.exit(1);
+  if (stale.length === 0) {
+    console.log("Freshness: every recently finished game is loaded (and every Bruins game narrated).");
+  } else {
+    console.log(`Freshness: ${stale.length} issue(s)`);
+    for (const s of stale) console.log(`  - ${s}`);
+  }
+  if (failing > 0 || stale.length > 0) process.exit(1);
 }
 
 main().catch((err) => {
