@@ -153,11 +153,17 @@ export function validateRecap(parsed: { headline: string; body: string }, facts:
   const leaderFor = (verb: string) => (/shot|shoot/.test(verb) ? shotsLeader : (xgLeader ?? shotsLeader));
   // Subject: "<team> outshot ...", "<team> won the shot battle", "<team> dominated".
   for (const m of combined.matchAll(/\b([A-Za-z]+)(?:['’]s)?\s+(?:\w+\s+){0,2}?(outshot\w*|outshooting|won the shot battle|dominated|out-?chanced|outplayed)\b/gi)) {
-    // Passive voice ("Boston was outshot") names the trailing side as the
-    // subject — correct, not an inversion.
-    if (/\b(was|were|got|get|getting|being|been)\b/i.test(m[0])) continue;
     const team = teamOf(m[1]);
     const lead = leaderFor(m[2].toLowerCase());
+    // Passive voice ("Boston was outshot", headline-style "Bruins outplayed
+    // in Nashville" / "outshot by Columbus") makes the subject the side
+    // that TRAILED, so the check flips rather than being skipped.
+    const passive =
+      /\b(was|were|got|get|getting|being|been)\b/i.test(m[0]) || /^\s+(in|by|at|on)\b/i.test(combined.slice(m.index! + m[0].length));
+    if (passive) {
+      if (team && lead && team === lead[1]) reject(`says ${team} was "${m[2]}", but the sheet has ${team} leading`);
+      continue;
+    }
     if (team && lead && team === lead[2]) reject(`credits ${team} with "${m[2]}", but the sheet has ${lead[1]} leading`);
   }
   // Object: "outshooting <team>", "outplayed <team>".
@@ -167,17 +173,22 @@ export function validateRecap(parsed: { headline: string; body: string }, facts:
     if (team && lead && team === lead[1]) reject(`says ${lead[1]} was "${m[1]}", but the sheet has ${lead[1]} leading`);
   }
 
-  // W-L-OTL records must match the record they're describing: the sheet
-  // has two (the team's season record and the season series), and a trial
-  // recap used one as the other. A triple near "series"/"against"/"vs"
-  // must be the series record; anywhere else, the season record.
+  // W-L-OTL records: every one must be a record on the sheet (the team's
+  // season record, or the season series vs this opponent), and the series
+  // record must not be passed off as the season record — a trial recap
+  // wrote "improve to 1-0-0 on the young season" from the series line.
+  // (A first version classified each record by nearby words like "against"
+  // and misfired whenever one sentence carried both records.)
   const seasonRec = /season record after this game: (\d+-\d+-\d+)/.exec(facts.text)?.[1];
   const seriesRec = /Season series vs \w+ after this game[^:]*: \w+ (\d+-\d+-\d+)/.exec(facts.text)?.[1];
   for (const m of lower.matchAll(/\b\d+-\d+-\d+\b/g)) {
-    const window = lower.slice(Math.max(0, m.index! - 60), m.index! + m[0].length + 40);
-    const aboutSeries = /\b(series|against|vs\.?|versus|over (the )?\w+ this season)\b/.test(window);
-    const expected = aboutSeries ? seriesRec : seasonRec;
-    if (m[0] !== expected) reject(`gives the ${aboutSeries ? "season-series" : "season"} record as ${m[0]}, but the sheet says ${expected ?? "nothing"}`);
+    if (m[0] !== seasonRec && m[0] !== seriesRec) reject(`gives a record (${m[0]}) that isn't on the sheet`);
+    const before = lower.slice(Math.max(0, m.index! - 30), m.index!);
+    const after = lower.slice(m.index! + m[0].length, m.index! + m[0].length + 30);
+    const framedAsSeason = /(improv|mov|fall|drop|sit|now|climb|slip)\w*\s+(to|at)\s*$|record (of|at)\s*$/.test(before) || /^\s*(on|for) the (young )?season/.test(after);
+    const framedAsSeries = /^\s*(against|vs\.?|versus|in the (season )?series|head-to-head)/.test(after) || /(against|vs\.?|versus|series)[^.]{0,20}$/.test(before);
+    if (m[0] === seriesRec && m[0] !== seasonRec && framedAsSeason && !framedAsSeries) reject(`presents the season-series record ${m[0]} as the season record (${seasonRec})`);
+    if (m[0] === seasonRec && m[0] !== seriesRec && framedAsSeries && !framedAsSeason) reject(`presents the season record ${m[0]} as the season-series record (${seriesRec})`);
   }
 
   // "Game 6" / "game two": only the exact game number the sheet states

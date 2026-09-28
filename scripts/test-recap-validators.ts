@@ -70,6 +70,11 @@ const cases: Case[] = [
   { name: "series record stated correctly", game: 2023020021, headline: "Bruins win", body: "Boston is 1-0-0 against Nashville this season after a 3-2 win.", expect: "pass" },
   { name: "'blown out' is about the score, not a blown lead", game: 2013020370, headline: "Bruins blown out in Detroit, 6-1", body: "Detroit beat Boston 6-1.", expect: "pass" },
   { name: "blew a lead (unknowable without play-by-play)", game: 2021020079, headline: "Bruins win", body: "Boston blew a lead but won 4-3.", expect: "reject" },
+  { name: "both records in one sentence (batch false positive)", game: 2023020021, headline: "Bruins win", body: "The win moves Boston to 2-0-0, and 1-0-0 against Nashville this season.", expect: "pass" },
+  { name: "season record next to a team name (batch false positive)", game: 2023020021, headline: "Bruins edge Preds", body: "Bruins beat Nashville 3-2 and improve to 2-0-0.", expect: "pass" },
+  { name: "record on neither line", game: 2023020021, headline: "Bruins win", body: "Bruins improve to 3-0-0.", expect: "reject" },
+  { name: "headline passive, correct (NSH led; batch false positive)", game: 2025020979, headline: "Bruins outplayed in Nashville, fall 6-3", body: "Nashville beat Boston 6-3.", expect: "pass" },
+  { name: "headline passive, inverted (CBJ led, so CBJ wasn't outplayed)", game: 2025021278, headline: "Blue Jackets outplayed in their own barn", body: "Boston won 3-2.", expect: "reject" },
   { name: "overtime claimed for a regulation game", game: 2025030116, headline: "Overtime loss", body: "Buffalo won 4-1 in overtime.", expect: "reject" },
 ];
 
