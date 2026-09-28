@@ -182,7 +182,9 @@ export function validateRecap(parsed: { headline: string; body: string }, facts:
     // as active when an object follows it: a team word, a pronoun or
     // article, or the score itself.
     const afterVerb = combined.slice(m.index! + m[0].length);
-    const objectWord = /^\s+([A-Za-z]+|\d)/.exec(afterVerb)?.[1] ?? "";
+    // \p{L}, not [A-Za-z]: "Montréal" read as "montr" wasn't a team word,
+    // so "Boston outshot Montréal 35-31" was taken as objectless headlinese.
+    const objectWord = /^\s+(\p{L}+|\d)/u.exec(afterVerb)?.[1] ?? "";
     const hasObject = /^\d/.test(objectWord) || /^(the|them|their|its|his|every|opponents?)$/i.test(objectWord) || teamOf(objectWord) !== null;
     const passive = /\b(was|were|got|get|getting|being|been)\b/i.test(m[0]) || !hasObject;
     if (passive) {
@@ -192,7 +194,7 @@ export function validateRecap(parsed: { headline: string; body: string }, facts:
     if (team && lead && team === lead[2]) reject(`credits ${team} with "${m[2]}", but the sheet has ${lead[1]} leading`);
   }
   // Object: "outshooting <team>", "outplayed <team>".
-  for (const m of combined.matchAll(/\b(outshot|outshooting|outshoots|out-?chanced|outplayed|dominated)\s+(?:the\s+)?([A-Za-z]+)/gi)) {
+  for (const m of combined.matchAll(/\b(outshot|outshooting|outshoots|out-?chanced|outplayed|dominated)\s+(?:the\s+)?(\p{L}+)/giu)) {
     const team = teamOf(m[2]);
     const lead = leaderFor(m[1].toLowerCase());
     if (team && lead && team === lead[1]) reject(`says ${lead[1]} was "${m[1]}", but the sheet has ${lead[1]} leading`);

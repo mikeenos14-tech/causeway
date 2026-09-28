@@ -61,6 +61,8 @@ const cases: Case[] = [
   { name: "shot leader inverted (published trial output; CBJ outshot BOS 35-22)", game: 2025021278, headline: "Bruins steal one", body: "The Bruins won the shot battle, outshooting Columbus 35-22, and Joonas Korpisalo made 33 saves.", expect: "reject" },
   { name: "shot leader inverted, object form", game: 2025021278, headline: "Bruins win 3-2", body: "Boston outshot the Blue Jackets 35-22 in a 3-2 win.", expect: "reject" },
   { name: "shot leader stated correctly", game: 2025021278, headline: "Korpisalo steals one", body: "Columbus outshot Boston 35-22, but Joonas Korpisalo made 33 saves in a 3-2 win.", expect: "pass" },
+  { name: "accented team name as the object (2008020045 batch false positive; BOS outshot MTL 34-28)", game: 2008020045, headline: "Bruins fall in shootout", body: "Boston actually outshot Montréal 34-28 but lost 4-3 in a shootout.", expect: "pass" },
+  { name: "accented team name as the object, inverted", game: 2008020045, headline: "Bruins fall in shootout", body: "Montréal outshot Boston 34-28 and won 4-3 in a shootout.", expect: "reject" },
   { name: "passive voice, correct direction", game: 2025021278, headline: "Bruins win anyway", body: "Boston was outshot 35-22 by Columbus but won 3-2.", expect: "pass" },
   { name: "team nickname (Philly) is not a player", game: 2025021224, headline: "Bruins fall in Philly", body: "Pavel Zacha scored, but Philly won 2-1 in overtime.", expect: "pass" },
   { name: "Game 1 called the series opener", game: 2025030111, headline: "Sabres take the series opener", body: "Buffalo won Game 1, 4-3.", expect: "pass" },
