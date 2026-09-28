@@ -455,10 +455,14 @@ async function backfillOnce(teamAbbrev: string, seasonId: string) {
         // shootout loss is correctly excluded). Found live: deriving it
         // from the goalie's own goals_against=0 credited 1,178 relief
         // appearances league-wide (e.g. a 6-minute mop-up stint).
-        const goaliesUsed = stats.goalies.filter((p: { toi: string }) => p.toi !== "00:00").length;
+        // A goalie "played" only with real ice time. Older seasons (2007-09)
+        // list the dressed backup with toi: null, which once loaded 4,848
+        // empty phantom rows and made real one-goalie shutouts look shared.
+        const played = (p: { toi?: string | null }) => !!p.toi && p.toi !== "00:00";
+        const goaliesUsed = stats.goalies.filter(played).length;
         const oppScore = side === "homeTeam" ? g.awayTeam.score : g.homeTeam.score;
         for (const p of stats.goalies) {
-          if (p.toi === "00:00") continue; // didn't play
+          if (!played(p)) continue; // dressed but didn't play
           await upsertPlayerFromBoxscore(p, teamId);
           // The API's own codes are authoritative: "O" is an OT/shootout
           // loss, "L" is always a loss. Two real bugs came from deriving

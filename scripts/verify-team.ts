@@ -151,11 +151,22 @@ export async function verifyTeam(client: Client, abbrev: string): Promise<Verify
     `select count(*) as n from goalie_game_stats ggs join games g on g.id = ggs.game_id
      where ggs.team_id = $1 and ggs.shutout
        and ((case when ggs.team_id = g.home_team_id then g.away_score else g.home_score end) > 0
-            or (select count(*) from goalie_game_stats o where o.game_id = ggs.game_id and o.team_id = ggs.team_id) > 1)`,
+            or (select count(*) from goalie_game_stats o where o.game_id = ggs.game_id and o.team_id = ggs.team_id and coalesce(o.toi_seconds, 0) > 0) > 1)`,
     [team.id],
   );
   if (Number(badShutouts[0].n) > 0) {
     issues.push(`${badShutouts[0].n} goalie rows flagged as shutouts that aren't (opponent scored, or a second goalie played).`);
+  }
+
+  // Every goalie row is a real appearance. Added 2026-09-28 after 4,848
+  // rows for dressed-but-unused backups (toi null) were found in 2007-09:
+  // they inflated goalie GP and hid 333 real shutouts.
+  const { rows: phantoms } = await client.query(
+    `select count(*) as n from goalie_game_stats where team_id = $1 and coalesce(toi_seconds, 0) = 0`,
+    [team.id],
+  );
+  if (Number(phantoms[0].n) > 0) {
+    issues.push(`${phantoms[0].n} goalie rows with no ice time (a backup who dressed but didn't play) — these inflate games played.`);
   }
 
   // Degraded names on this team's OWN roster — the exact bug this script
