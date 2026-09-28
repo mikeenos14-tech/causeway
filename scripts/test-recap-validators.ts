@@ -81,6 +81,11 @@ const cases: Case[] = [
   { name: "next game of an undecided series (batch false positive)", game: 2025030113, headline: "Sabres take Game 3", body: "Buffalo leads 2-1 heading into Game 4.", expect: "pass" },
   { name: "next game after the series ended", game: 2025030116, headline: "Season over", body: "There won't be a Game 7.", expect: "reject" },
   { name: "rounded sheet decimal (batch false positive)", game: 2025030116, headline: "Sabres win", body: "Buffalo had 3.6 expected goals to Boston's 2.3.", expect: "pass" },
+  { name: "'record' used for the season record (batch false positive)", game: 2023020021, headline: "Bruins win", body: "The win improves their record to 2-0-0.", expect: "pass" },
+  { name: "record-setting claim", game: 2023020021, headline: "Bruins win", body: "Swayman set a franchise record with 34 saves.", expect: "reject" },
+  { name: "clause between team and verb (batch false positive)", game: 2025021278, headline: "Bruins win in Columbus despite getting outplayed", body: "Boston won 3-2.", expect: "pass" },
+  { name: "first meeting called the opener (batch false positive)", game: 2023020021, headline: "Bruins take the opener vs Nashville", body: "Boston won 3-2.", expect: "pass" },
+  { name: "season opener not on the sheet", game: 2023020021, headline: "Bruins win season opener", body: "Boston won 3-2.", expect: "reject" },
   { name: "overtime claimed for a regulation game", game: 2025030116, headline: "Overtime loss", body: "Buffalo won 4-1 in overtime.", expect: "reject" },
 ];
 

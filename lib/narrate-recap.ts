@@ -45,7 +45,12 @@ Rules, no exceptions:
 // Claims that need grounding the sheet may or may not provide. Each is
 // allowed only when the sheet itself contains the supporting words.
 const CONDITIONAL_CLAIMS: { pattern: RegExp; allowedIf: (facts: string) => boolean; what: string }[] = [
-  { pattern: /\bopener\b/, allowedIf: (f) => /opener|Game 1\b/i.test(f), what: "an opener" },
+  // "Season opener" / "home opener" need the sheet to say so; a plain
+  // "opener" also fits Game 1 of a series or the first meeting of a season
+  // series ("drop the opener vs the Rangers").
+  { pattern: /\bseason opener\b/, allowedIf: (f) => /season opener/.test(f), what: "a season opener" },
+  { pattern: /\bhome opener\b/, allowedIf: (f) => /home opener/.test(f), what: "a home opener" },
+  { pattern: /\bopener\b/, allowedIf: (f) => /opener|Game 1\b|\(1 meeting so far this season\)/i.test(f), what: "an opener" },
   { pattern: /\b(finale|final (regular-season )?game|last game of the (regular )?season)\b/, allowedIf: (f) => /final regular-season game/.test(f), what: "a season finale" },
   { pattern: /\b(clinch\w*|eliminat\w*|advance[sd]?)\b/, allowedIf: (f) => /won the series/i.test(f), what: "a series result" },
 
@@ -59,7 +64,10 @@ const CONDITIONAL_CLAIMS: { pattern: RegExp; allowedIf: (facts: string) => boole
 
 // Never supportable from the sheet (no play-by-play, no rarity facts).
 const UNSUPPORTED_CLAIMS: RegExp[] = [
-  /\bstreak\b/, /\brecord\b/, /\bmilestone\b/, /\bfirst time\b/, /\bsince \d{4}\b/,
+  // "Record" alone is fine now that the sheet carries the season record
+  // (its values are checked separately); record-SETTING claims are not.
+  /\bstreak\b/, /\b(franchise|team|career|nhl|league|club|arena|all-time)[- ]record\b/, /\b(set|sets|setting|broke|breaks|tied|ties) (a|the|his|their) record\b/, /\brecord[- ](setting|breaking|tying)\b/,
+  /\bmilestone\b/, /\bfirst time\b/, /\bsince \d{4}\b/,
   ...FLOW_CLAIMS, /\bwinner\b/, /\bfirst goal\b/, /\bshorthanded\b/,
   /\b(historic|rare|rarely|unprecedented|all-time|legendary|exclusive|incredible|amazing)\b/,
 ];
@@ -157,6 +165,10 @@ export function validateRecap(parsed: { headline: string; body: string }, facts:
   const leaderFor = (verb: string) => (/shot|shoot/.test(verb) ? shotsLeader : (xgLeader ?? shotsLeader));
   // Subject: "<team> outshot ...", "<team> won the shot battle", "<team> dominated".
   for (const m of combined.matchAll(/\b([A-Za-z]+)(?:['’]s)?\s+(?:\w+\s+){0,2}?(outshot\w*|outshooting|won the shot battle|dominated|out-?chanced|outplayed)\b/gi)) {
+    // A clause word between the team and the verb means the team isn't the
+    // subject ("a win in Carolina despite getting outplayed" is about the
+    // Bruins) — too ambiguous to judge, so skip rather than misfire.
+    if (/\b(despite|while|after|but|and|as|though|although|in|at|on|over|from|with|against)\b/i.test(m[0].slice(m[1].length, m[0].length - m[2].length))) continue;
     const team = teamOf(m[1]);
     const lead = leaderFor(m[2].toLowerCase());
     // Passive voice ("Boston was outshot", headline-style "Bruins outplayed
