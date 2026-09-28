@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getGameDetail, getGameSkaters, getGameGoalies } from "@/lib/game-detail-data";
-import { getAllSeasonSeriesForTeam, getPlayoffSeriesForGame } from "@/lib/season-series-data";
+import { getGameDetail, getGameSkaters, getGameGoalies, getGameTeamLines, type TeamGameLine } from "@/lib/game-detail-data";
+import { getSeasonSeriesAsOfGame, getPlayoffSeriesForGame } from "@/lib/season-series-data";
+import { roundLabel } from "@/lib/playoff-data";
 import { TARGET_TEAM_ABBREV } from "@/lib/significance-checks";
 import { formatGameDate } from "@/lib/format-date";
 import { Masthead, Footer } from "@/components/Masthead";
@@ -27,14 +28,18 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
   // only meaningful relative to one team's perspective.
   const bosInGame = game.home_abbrev === TARGET_TEAM_ABBREV || game.away_abbrev === TARGET_TEAM_ABBREV;
 
-  const [skaters, goalies, seasonSeries, playoffSeries] = await Promise.all([
+  const [skaters, goalies, seasonSeries, playoffSeries, teamLines] = await Promise.all([
     getGameSkaters(gameId),
     getGameGoalies(gameId),
-    bosInGame && game.game_type === "regular" ? getAllSeasonSeriesForTeam(TARGET_TEAM_ABBREV, game.season_id) : Promise.resolve(null),
+    bosInGame && game.game_type === "regular" ? getSeasonSeriesAsOfGame(gameId, TARGET_TEAM_ABBREV) : Promise.resolve(null),
     bosInGame && game.game_type === "playoff" ? getPlayoffSeriesForGame(gameId, TARGET_TEAM_ABBREV) : Promise.resolve(null),
+    getGameTeamLines(gameId),
   ]);
   const opponentAbbrev = game.home_abbrev === TARGET_TEAM_ABBREV ? game.away_abbrev : game.home_abbrev;
-  const thisSeries = seasonSeries?.find((s) => s.opp_abbrev === opponentAbbrev) ?? null;
+  const thisSeries = seasonSeries;
+  // Head-to-head "leads" compares wins: the opponent's wins are this team's
+  // regulation losses plus OT/SO losses.
+  const seriesVerb = (w: number, oppW: number) => (w === oppW ? "tied" : w > oppW ? "leads" : "trails");
 
   // Real bug found live (2026-09-19): the old fallback headline used
   // `won = home_score !== away_score` (meaning only "not a tie") and then
@@ -93,12 +98,14 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
 
         {thisSeries && (
           <section style={{ marginBottom: "2.5rem", background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, padding: "1.25rem 1.5rem" }}>
-            <div style={{ fontSize: ".78rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 6 }}>Season Series</div>
+            <div style={{ fontSize: ".78rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 6 }}>
+              Season Series · after meeting {thisSeries.games}
+            </div>
             <div style={{ fontSize: "1rem" }}>
-              {thisSeries.wins === thisSeries.losses + thisSeries.otl
-                ? `Series tied ${thisSeries.wins}-${thisSeries.losses}-${thisSeries.otl}`
-                : `${TARGET_TEAM_ABBREV} ${thisSeries.wins > thisSeries.losses + thisSeries.otl ? "leads" : "trails"} ${thisSeries.wins}-${thisSeries.losses}-${thisSeries.otl}`}
-              {" "}vs {opponentAbbrev} this season ({thisSeries.games} meeting{thisSeries.games === 1 ? "" : "s"})
+              {seriesVerb(thisSeries.wins, thisSeries.losses + thisSeries.otl) === "tied"
+                ? `Series tied, ${TARGET_TEAM_ABBREV} ${thisSeries.wins}-${thisSeries.losses}-${thisSeries.otl}`
+                : `${TARGET_TEAM_ABBREV} ${seriesVerb(thisSeries.wins, thisSeries.losses + thisSeries.otl)} ${thisSeries.wins}-${thisSeries.losses}-${thisSeries.otl}`}
+              {" "}vs {opponentAbbrev}
             </div>
             <Link href={`/teams/${TARGET_TEAM_ABBREV}/series`} style={{ fontSize: ".8rem", fontWeight: 600, color: "var(--gold)", textDecoration: "none", display: "inline-block", marginTop: 8 }}>
               Full season series →
@@ -109,13 +116,18 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
         {playoffSeries && (
           <section style={{ marginBottom: "2.5rem", background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, padding: "1.25rem 1.5rem" }}>
             <div style={{ fontSize: ".78rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 6 }}>
-              Playoff Series · Round {playoffSeries.round}{playoffSeries.gameNumber ? ` · Game ${playoffSeries.gameNumber}` : ""}
+              Playoffs · {roundLabel(playoffSeries.round)}{playoffSeries.gameNumber ? ` · Game ${playoffSeries.gameNumber}` : ""}
             </div>
             <div style={{ fontSize: "1rem", marginBottom: 10 }}>
-              {playoffSeries.teamWins === playoffSeries.opponentWins
-                ? `Series tied ${playoffSeries.teamWins}-${playoffSeries.opponentWins}`
-                : `${TARGET_TEAM_ABBREV} ${playoffSeries.teamWins > playoffSeries.opponentWins ? "leads" : "trails"} ${playoffSeries.teamWins}-${playoffSeries.opponentWins}`}
-              {" "}vs {playoffSeries.opponentAbbrev}
+              {/* The series after this game: a clinching game says who won
+                  it, never "trails". */}
+              {playoffSeries.teamWinsAfter === 4
+                ? `${TARGET_TEAM_ABBREV} wins the series ${playoffSeries.teamWinsAfter}-${playoffSeries.opponentWinsAfter} over ${playoffSeries.opponentAbbrev}`
+                : playoffSeries.opponentWinsAfter === 4
+                  ? `${playoffSeries.opponentAbbrev} wins the series ${playoffSeries.opponentWinsAfter}-${playoffSeries.teamWinsAfter}`
+                  : playoffSeries.teamWinsAfter === playoffSeries.opponentWinsAfter
+                    ? `Series tied ${playoffSeries.teamWinsAfter}-${playoffSeries.opponentWinsAfter} vs ${playoffSeries.opponentAbbrev}`
+                    : `${TARGET_TEAM_ABBREV} ${playoffSeries.teamWinsAfter > playoffSeries.opponentWinsAfter ? "leads" : "trails"} ${playoffSeries.teamWinsAfter}-${playoffSeries.opponentWinsAfter} vs ${playoffSeries.opponentAbbrev}`}
             </div>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               {playoffSeries.games.map((g) => (
@@ -138,6 +150,8 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
             </div>
           </section>
         )}
+
+        {teamLines.length === 2 && <TeamStats lines={teamLines} />}
 
         <div id="box-score" />
         {["away", "home"].map((side) => {
@@ -243,4 +257,44 @@ function thStyle(align: "left" | "right" = "right"): React.CSSProperties {
 
 function tdStyle(align: "left" | "right" = "right"): React.CSSProperties {
   return { padding: "10px 14px", textAlign: align, color: "var(--text-secondary)" };
+}
+
+// Team totals side by side (away | stat | home). Only rows with data for
+// both teams render — the boxscore group isn't loaded for every season,
+// and a missing value must never show as 0.
+function TeamStats({ lines }: { lines: TeamGameLine[] }) {
+  const [away, home] = lines;
+  type StatRow = { label: string; a: number | null; h: number | null; fmt: (v: number, l: TeamGameLine) => string };
+  const all: StatRow[] = [
+    { label: "Shots on goal", a: away.shots, h: home.shots, fmt: (v) => String(v) },
+    { label: "Expected goals", a: away.xg, h: home.xg, fmt: (v) => v.toFixed(2) },
+    { label: "Power play", a: away.ppGoals, h: home.ppGoals, fmt: (v, l) => `${v}/${l.ppOpportunities ?? 0}` },
+    { label: "Faceoffs won", a: away.faceoffPct, h: home.faceoffPct, fmt: (v) => `${Math.round(v * 100)}%` },
+    { label: "Hits", a: away.hits, h: home.hits, fmt: (v) => String(v) },
+  ];
+  const rows = all.filter((r) => r.a != null && r.h != null);
+  if (rows.length === 0) return null;
+  return (
+    <section style={{ marginBottom: "2.5rem", background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, padding: "1.1rem 1.5rem" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", fontSize: ".78rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8 }}>
+        <span>{away.abbrev}</span>
+        <span>Team stats</span>
+        <span style={{ textAlign: "right" }}>{home.abbrev}</span>
+      </div>
+      {rows.map((r) => {
+        const aLead = r.a! > r.h!;
+        const hLead = r.h! > r.a!;
+        return (
+          <div key={r.label} style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", padding: "7px 0", borderTop: "1px solid var(--border)", fontSize: ".92rem", fontVariantNumeric: "tabular-nums" }}>
+            <span style={{ fontWeight: aLead ? 700 : 400, color: aLead ? "var(--text-primary)" : "var(--text-secondary)" }}>{r.fmt(r.a!, away)}</span>
+            <span style={{ fontSize: ".78rem", color: "var(--text-secondary)", textAlign: "center", padding: "0 12px" }}>{r.label}</span>
+            <span style={{ textAlign: "right", fontWeight: hLead ? 700 : 400, color: hLead ? "var(--text-primary)" : "var(--text-secondary)" }}>{r.fmt(r.h!, home)}</span>
+          </div>
+        );
+      })}
+      {rows.some((r) => r.label === "Expected goals") && (
+        <div style={{ fontSize: ".7rem", color: "var(--text-muted)", marginTop: 6 }}>Expected goals via MoneyPuck.com.</div>
+      )}
+    </section>
+  );
 }

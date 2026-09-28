@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Masthead, Footer } from "@/components/Masthead";
 
 type QueryRecord = { sql: string; rows: Record<string, unknown>[] | null; error?: string };
@@ -14,7 +14,7 @@ type QAResult = {
 const EXAMPLE_QUESTIONS = [
   "Which Bruins goalie has the best save percentage in a single season, minimum 50 games played that season?",
   "How many career hat tricks does David Pastrnak have?",
-  "Who scored the most points in a single Bruins season?",
+  "Which Bruin had the most points in a single season since 2007-08?",
   "How did the Bruins do in the 2012-13 lockout-shortened season compared to a full 82-game season?",
 ];
 
@@ -71,6 +71,15 @@ function formatColumnHeader(column: string): string {
 export default function Ask() {
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
+  // Seconds since the question was sent — an answer takes 15-30s, and a
+  // static "running…" line gave no sign anything was still happening.
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!loading) return;
+    const started = Date.now();
+    const timer = setInterval(() => setElapsed(Math.round((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, [loading]);
   const [result, setResult] = useState<QAResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showWork, setShowWork] = useState(false);
@@ -81,6 +90,7 @@ export default function Ask() {
     const trimmed = q.trim();
     if (!trimmed || loading) return;
     setLoading(true);
+    setElapsed(0);
     setError(null);
     setResult(null);
     setShowWork(false);
@@ -131,8 +141,8 @@ export default function Ask() {
           Ask Causeway
         </h1>
         <p style={{ color: "var(--text-secondary)", fontSize: ".95rem", marginBottom: "1.75rem", maxWidth: 560 }}>
-          Ask any question about Bruins history. Every answer is generated live from the real
-          database — no guessing, and every query behind it is shown below the answer.
+          Ask about any NHL team, player, or game since 2007-08 — every game for all 32 teams is in the
+          database. Every answer is generated live from it, and every query behind it is shown below the answer.
         </p>
 
         <form
@@ -222,7 +232,10 @@ export default function Ask() {
 
         {loading && (
           <p style={{ color: "var(--text-muted)", fontFamily: "var(--font-editorial)", fontStyle: "italic" }}>
-            Running queries against the real database…
+            Running queries against the real database… {elapsed}s
+            <span style={{ fontStyle: "normal", fontFamily: "var(--font-body)", fontSize: ".82rem", display: "block", marginTop: 4 }}>
+              Most answers take 15–30 seconds; multi-step questions can take longer.
+            </span>
           </p>
         )}
 

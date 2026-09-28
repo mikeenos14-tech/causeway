@@ -12,6 +12,7 @@ export const revalidate = 300;
 const STAT_DEFINITIONS = [
   { term: "ixG (Individual Expected Goals)", definition: "The expected-goal value of this player's own shots — what an average shooter would score from the same attempts." },
   { term: "G vs xG", definition: "Actual goals minus ixG. Positive means he's finishing above what his shot quality alone suggests; negative means below." },
+  { term: "ixG/60", definition: "Individual expected goals per 60 minutes of ice time — a rate, so a fourth-liner and a top-line winger can be compared fairly." },
   { term: "iCorsi (Individual Corsi)", definition: "This player's own total shot attempts — shots on goal, missed shots, and blocked shots combined." },
   { term: "On-Ice xG%", definition: "His team's share of total expected goals (for vs. against) while he's on the ice, regardless of who's shooting." },
   { term: "On-Ice Corsi%", definition: "His team's share of total shot attempts (for vs. against) while he's on the ice — the classic “possession” read." },

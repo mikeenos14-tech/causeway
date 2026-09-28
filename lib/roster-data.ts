@@ -88,6 +88,8 @@ export type AdvancedRosterRow = {
   goals: number;
   ixg: number;
   goalsVsExpected: number;
+  toiSecondsPerGame: number | null;
+  ixgPer60: number | null; // individual xG per 60 minutes — a rate, so light-minute players compare fairly
   icorsi: number;
   onIceXgPct: number | null;
   onIceCorsiPct: number | null;
@@ -104,6 +106,7 @@ export async function getAdvancedRosterStats(teamAbbrev: string, seasonId: strin
             coalesce(sum(sgs.goals),0)::int as goals,
             round(sum(sgs.ixg)::numeric, 1) as ixg,
             round(sum(sgs.icorsi)::numeric, 0)::int as icorsi,
+            sum(sgs.toi_seconds)::int as toi_seconds,
             avg(sgs.on_ice_xg_pct) as on_ice_xg_pct,
             avg(sgs.on_ice_corsi_pct) as on_ice_corsi_pct
      from skater_game_stats sgs
@@ -119,6 +122,8 @@ export async function getAdvancedRosterStats(teamAbbrev: string, seasonId: strin
     ...r,
     ixg: Number(r.ixg),
     goalsVsExpected: Number((r.goals - r.ixg).toFixed(1)),
+    toiSecondsPerGame: r.toi_seconds && r.games ? r.toi_seconds / r.games : null,
+    ixgPer60: r.toi_seconds ? Number(r.ixg) / (r.toi_seconds / 3600) : null,
     onIceXgPct: r.on_ice_xg_pct != null ? Number(r.on_ice_xg_pct) : null,
     onIceCorsiPct: r.on_ice_corsi_pct != null ? Number(r.on_ice_corsi_pct) : null,
   }));

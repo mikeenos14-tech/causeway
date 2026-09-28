@@ -41,20 +41,26 @@ function RankCard({
   if (!rank) return null;
 
   const range = rank.max - rank.min || 1;
-  // The track always reads min (left) to max (right), regardless of which
-  // direction is "good" — the fill always runs from the left edge to the
-  // team's actual position, so it's a plain "where do we sit on the
-  // range" bar. Whether that position is good or bad is what the rank
-  // number ("4th of 32") next to it says; the bar itself is just literal.
-  const teamPct = ((rank.value - rank.min) / range) * 100;
-  const avgPct = ((rank.leagueAvg - rank.min) / range) * 100;
+  // Every track runs worst (left) to best (right), so a longer gold bar
+  // always means better. It used to read min-to-max literally, which made
+  // "against" stats backwards: 30th-of-32 in expected goals against drew
+  // a nearly full gold bar that read at a glance as a strength.
+  const worst = higherIsBetter ? rank.min : rank.max;
+  const best = higherIsBetter ? rank.max : rank.min;
+  const position = (v: number) => (higherIsBetter ? (v - rank.min) / range : (rank.max - v) / range) * 100;
+  const teamPct = position(rank.value);
+  const avgPct = position(rank.leagueAvg);
+  const third = rank.rank <= rank.outOf / 3 ? "top" : rank.rank > (2 * rank.outOf) / 3 ? "bottom" : "middle";
 
   return (
     <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, padding: "1.25rem 1.5rem" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
         <span style={{ fontSize: ".78rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".04em" }}>{label}</span>
         <span style={{ fontFamily: "var(--font-display)", fontSize: "1.3rem" }}>
-          {format(rank.value)} <span style={{ fontSize: ".95rem", color: "var(--gold)" }}>{ordinal(rank.rank)} of {rank.outOf}</span>
+          {format(rank.value)}{" "}
+          <span style={{ fontSize: ".95rem", color: third === "top" ? "var(--win)" : third === "bottom" ? "var(--loss)" : "var(--gold)" }}>
+            {ordinal(rank.rank)} of {rank.outOf}
+          </span>
         </span>
       </div>
       <div style={{ position: "relative", height: 8, borderRadius: 4, background: "var(--border)" }}>
@@ -85,9 +91,9 @@ function RankCard({
         />
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: ".7rem", color: "var(--text-secondary)" }}>
-        <span>{format(rank.min)}</span>
+        <span>{format(worst)} worst</span>
         <span>league avg {format(rank.leagueAvg)}</span>
-        <span>{format(rank.max)}</span>
+        <span>best {format(best)}</span>
       </div>
     </div>
   );

@@ -49,3 +49,38 @@ export async function getGameGoalies(gameId: number) {
   );
   return rows;
 }
+
+export type TeamGameLine = {
+  abbrev: string;
+  shots: number | null;
+  ppGoals: number | null;
+  ppOpportunities: number | null;
+  faceoffPct: number | null;
+  hits: number | null;
+  xg: number | null;
+};
+
+// Team totals for one game (NHL boxscore group + MoneyPuck xG), away team
+// first. Either group can be missing for a given season — NULL, never 0 —
+// and the page shows only what's loaded.
+export async function getGameTeamLines(gameId: number): Promise<TeamGameLine[]> {
+  const { rows } = await pool.query(
+    `select t.abbrev, tgs.shots_on_goal, tgs.pp_goals, tgs.pp_opportunities, tgs.faceoff_win_pct, tgs.hits, tgs.xg_for,
+            (g.home_team_id = t.id) as is_home
+     from team_game_stats tgs
+     join teams t on t.id = tgs.team_id
+     join games g on g.id = tgs.game_id
+     where tgs.game_id = $1
+     order by is_home asc`,
+    [gameId],
+  );
+  return rows.map((r) => ({
+    abbrev: r.abbrev,
+    shots: r.shots_on_goal,
+    ppGoals: r.pp_goals,
+    ppOpportunities: r.pp_opportunities,
+    faceoffPct: r.faceoff_win_pct != null ? Number(r.faceoff_win_pct) : null,
+    hits: r.hits,
+    xg: r.xg_for != null ? Number(r.xg_for) : null,
+  }));
+}

@@ -58,6 +58,11 @@ export type PlayoffSeriesInfo = {
   opponentWins: number;
   winnerTeamId: number | null;
   gameNumber: number | null;
+  // The series as it stood right after THIS game — what the game page shows.
+  // (Whole-series totals on a Game 2 page, or "trails 2-4" on the page of
+  // the game that ended the series, both read wrong.)
+  teamWinsAfter: number;
+  opponentWinsAfter: number;
   games: { id: number; gameDate: string; teamScore: number; opponentScore: number; gameNumber: number | null }[];
 };
 
@@ -92,6 +97,7 @@ export async function getPlayoffSeriesForGame(gameId: number, teamAbbrev: string
   const teamWins = playedGames.filter((g) => g.team_score > g.opp_score).length;
   const opponentWins = playedGames.filter((g) => g.opp_score > g.team_score).length;
   const currentGame = gameRows.find((g) => g.id === gameId);
+  const throughThisGame = playedGames.filter((g) => currentGame && (g.series_game_number ?? 0) <= (currentGame.series_game_number ?? 0));
 
   return {
     round: series.round,
@@ -100,6 +106,8 @@ export async function getPlayoffSeriesForGame(gameId: number, teamAbbrev: string
     opponentWins,
     winnerTeamId: series.winner_team_id,
     gameNumber: currentGame?.series_game_number ?? null,
+    teamWinsAfter: throughThisGame.filter((g) => g.team_score > g.opp_score).length,
+    opponentWinsAfter: throughThisGame.filter((g) => g.opp_score > g.team_score).length,
     games: gameRows.map((g) => ({
       id: g.id,
       gameDate: g.game_date,
@@ -108,4 +116,35 @@ export async function getPlayoffSeriesForGame(gameId: number, teamAbbrev: string
       gameNumber: g.series_game_number,
     })),
   };
+}
+
+// The regular-season series between this game's two teams as it stood
+// right after this game — the "Boston leads the season series 2-1" a
+// broadcast means that night. The game page once showed the end-of-season
+// totals on every meeting's page (a January game read "trails 1-1-1, 3
+// meetings" when only two had been played).
+export async function getSeasonSeriesAsOfGame(gameId: number, teamAbbrev: string) {
+  const { rows } = await pool.query(
+    `with this_game as (
+       select g.season_id, g.game_date, g.home_team_id, g.away_team_id from games g where g.id = $1
+     ), meetings as (
+       select g.id, g.game_date, g.game_end_type,
+              case when ht.abbrev = $2 then g.home_score else g.away_score end as team_score,
+              case when ht.abbrev = $2 then g.away_score else g.home_score end as opp_score
+       from games g
+       join this_game tg on tg.season_id = g.season_id
+         and ((g.home_team_id = tg.home_team_id and g.away_team_id = tg.away_team_id)
+           or (g.home_team_id = tg.away_team_id and g.away_team_id = tg.home_team_id))
+       join teams ht on ht.id = g.home_team_id
+       where g.game_type = 'regular' and g.game_date <= tg.game_date and g.home_score is not null
+     )
+     select count(*)::int as games,
+            count(*) filter (where team_score > opp_score)::int as wins,
+            count(*) filter (where team_score < opp_score and game_end_type = 'regulation')::int as losses,
+            count(*) filter (where team_score < opp_score and game_end_type <> 'regulation')::int as otl
+     from meetings`,
+    [gameId, teamAbbrev],
+  );
+  const r = rows[0];
+  return r && r.games > 0 ? (r as { games: number; wins: number; losses: number; otl: number }) : null;
 }

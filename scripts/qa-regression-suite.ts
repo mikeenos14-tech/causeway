@@ -154,19 +154,41 @@ const cases: TestCase[] = [
       return { pass: declines, reason: declines ? undefined : "expected an honest decline — no draft data exists in the schema" };
     },
   },
+  // Replaced 2026-09-28: this used to require declining ANY power-play
+  // question, locking in a prompt claim ("team_game_stats is entirely
+  // empty") that had long gone stale — most of the table was loaded.
+  // Coverage is now computed live (getCoverageNotes); these three check
+  // both directions: answer where data exists, decline where it doesn't,
+  // and never read an empty table as "none exist".
   {
-    name: "declines a power-play % question since team_game_stats is empty",
-    question: "Is there a correlation between the Bruins' power play percentage and making the playoffs?",
+    name: "answers power-play % for a season with full team-stat coverage",
+    question: "What was the Bruins' power play percentage in the 2023-24 regular season?",
     check: (r) => {
-      const fabricatedPct = /power play[^.]{0,40}\d{1,3}(\.\d+)?\s*%/i.test(r.answer);
-      // Broadened after another false positive: "isn't available" and
-      // "can't calculate" are both clear declines the original pattern
-      // (only "not available", literally) missed.
-      const declines = /empty|zero rows|isn'?t (loaded|available|tracked)|not (loaded|available|tracked)|don'?t have|can'?t (calculate|test|determine)/i.test(r.answer);
+      // Ground truth: 54 PPG on 243 opportunities = 22.2%.
+      const right = /22\.2\s*%/.test(r.answer);
+      const usedTable = r.queries.some((q) => /team_game_stats/i.test(q.sql));
+      return { pass: right && usedTable, reason: !usedTable ? "never queried team_game_stats" : !right ? "expected 22.2% (54/243)" : undefined };
+    },
+  },
+  {
+    name: "declines power-play % for a season where team stats aren't loaded",
+    question: "What was the Bruins' power play percentage in 2012-13?",
+    check: (r) => {
+      const fabricatedPct = /power[- ]play[^.]{0,60}\d{1,3}\.\d\s*%/i.test(r.answer);
+      const declines = /isn'?t (loaded|available)|not (loaded|available)|don'?t have|missing|no (power[- ]play|team) (data|stats)|can'?t (calculate|give|answer)/i.test(r.answer);
       return {
         pass: !fabricatedPct && declines,
-        reason: fabricatedPct ? "answer fabricated a power-play percentage from an empty table" : !declines ? "expected an honest decline" : undefined,
+        reason: fabricatedPct ? "stated a PP% for a season with no PP data loaded" : !declines ? "expected an honest decline for 2012-13" : undefined,
       };
+    },
+  },
+  {
+    name: "never reads an empty table as 'none exist'",
+    question: "Which numbers have the Bruins retired?",
+    check: (r) => {
+      const claimsNone = /(have|has) (not|never) retired|no (retired )?numbers (have been )?retired|haven'?t retired any/i.test(r.answer);
+      const saysNotLoaded = /isn'?t (loaded|available)|not (loaded|available|in (the|this) (data|database))|don'?t have|no data|hasn'?t been loaded/i.test(r.answer);
+      return { pass: !claimsNone && saysNotLoaded, reason: claimsNone ? "treated an empty table as 'no retired numbers'" : !saysNotLoaded ? "expected 'that data isn't loaded'" : undefined };
     },
   },
   {
@@ -362,6 +384,24 @@ const cases: TestCase[] = [
     },
   },
   {
+    // Added 2026-09-28: live, this returned a 19-row table of every opener
+    // with home_score/away_score and no opponent column at all — the prose
+    // named the Rangers but the table couldn't confirm it.
+    name: "game lists carry opponent and team-perspective scores",
+    question: "How have the Bruins done against the Rangers in season openers?",
+    check: (r) => {
+      // Only columns a reader actually sees — the page hides *_id columns,
+      // so an opp_id alone would pass here while showing no opponent.
+      const cols = (r.table?.columns ?? []).filter((c) => /season_id$/i.test(c) || !/(^|_)id$/i.test(c)).join(" ").toLowerCase();
+      const hasOpponent = /opp|opponent|vs/.test(cols);
+      const rawOnly = /home_score/.test(cols) && !/team_score|bos_score|bruins_score|goals_for/.test(cols);
+      return {
+        pass: !r.table || (hasOpponent && !rawOnly),
+        reason: !hasOpponent ? `table has no opponent column (${cols})` : rawOnly ? "table shows raw home/away scores instead of the team's side" : undefined,
+      };
+    },
+  },
+  {
     name: "never invents a name for a player id it didn't resolve",
     question: "What's the longest point streak by a Bruins player, and who are the runners-up?",
     check: (r) => {
@@ -403,7 +443,7 @@ const cases: TestCase[] = [
   ...[
     "Which Bruins goalie has the best save percentage in a single season, minimum 50 games played that season?",
     "How many career hat tricks does David Pastrnak have?",
-    "Who scored the most points in a single Bruins season?",
+    "Which Bruin had the most points in a single season since 2007-08?",
     "How did the Bruins do in the 2012-13 lockout-shortened season compared to a full 82-game season?",
     "What's the longest point streak by a Bruins player?",
   ].map(

@@ -52,15 +52,23 @@ async function getTargetTeamId(client: Client): Promise<number> {
  * This checks the loaded rows themselves: if every one of them belongs to
  * the target team, there's no unseen stint to worry about.
  */
+// Whether, as of a given game, every game on file for this player was for
+// this team. Bounded to that game's date: unbounded, a player's LATER
+// stints elsewhere retroactively disqualified claims that were true that
+// night (Ryan Spooner's real 100th career point, January 2017, stopped
+// qualifying once his 2018 Rangers games were loaded).
 async function playedOnlyForTeam(
   client: Client,
   playerId: number,
   targetTeamId: number,
   table: "skater_game_stats" | "goalie_game_stats",
+  asOfGameId: number,
 ): Promise<boolean> {
   const { rows } = await client.query(
-    `select count(*) from ${table} where player_id = $1 and team_id != $2`,
-    [playerId, targetTeamId],
+    `select count(*) from ${table} s join games g on g.id = s.game_id
+     where s.player_id = $1 and s.team_id != $2
+       and g.game_date <= (select game_date from games where id = $3)`,
+    [playerId, targetTeamId, asOfGameId],
   );
   return Number(rows[0].count) === 0;
 }
@@ -148,7 +156,7 @@ export async function checkPointStreaks(client: Client, gameId: number, targetTe
 
     const fullCareer =
       hasFullCareerLoaded(skater.birth_date) &&
-      (await playedOnlyForTeam(client, skater.player_id, targetTeamId, "skater_game_stats"));
+      (await playedOnlyForTeam(client, skater.player_id, targetTeamId, "skater_game_stats", gameId));
     // The log is this team's games only, so unless his whole career is
     // verifiably here, the honest population is "with this team".
     const teamAbbrev = targetTeamId === game.home_team_id ? game.home_abbrev : game.away_abbrev;
@@ -228,7 +236,7 @@ export async function checkRookieMultiPoint(client: Client, gameId: number, targ
   const facts: SignificanceFact[] = [];
   for (const row of rows) {
     if (!hasFullCareerLoaded(row.birth_date)) continue; // can't verify rookie status — skip, don't guess
-    if (!(await playedOnlyForTeam(client, row.player_id, targetTeamId, "skater_game_stats"))) continue; // has a stint elsewhere we don't have full data for — can't trust the games-played proxy
+    if (!(await playedOnlyForTeam(client, row.player_id, targetTeamId, "skater_game_stats", gameId))) continue; // has a stint elsewhere we don't have full data for — can't trust the games-played proxy
 
     // The games-count proxy alone isn't enough: a veteran who joined this
     // team recently (played for another team we never backfilled) can look
@@ -292,7 +300,7 @@ export async function checkMilestones(client: Client, gameId: number, targetTeam
   );
   for (const skater of skaters) {
     if (!hasFullCareerLoaded(skater.birth_date)) continue;
-    if (!(await playedOnlyForTeam(client, skater.player_id, targetTeamId, "skater_game_stats"))) continue;
+    if (!(await playedOnlyForTeam(client, skater.player_id, targetTeamId, "skater_game_stats", gameId))) continue;
     const { rows: totals } = await client.query(
       `select coalesce(sum(goals),0) as goals, coalesce(sum(goals+assists),0) as points
        from skater_game_stats where player_id = $1 and game_id != $2
@@ -324,7 +332,7 @@ export async function checkMilestones(client: Client, gameId: number, targetTeam
   );
   for (const goalie of goalies) {
     if (!hasFullCareerLoaded(goalie.birth_date)) continue;
-    if (!(await playedOnlyForTeam(client, goalie.player_id, targetTeamId, "goalie_game_stats"))) continue;
+    if (!(await playedOnlyForTeam(client, goalie.player_id, targetTeamId, "goalie_game_stats", gameId))) continue;
     if (goalie.decision === "W") {
       const { rows: winTotal } = await client.query(
         `select count(*) from goalie_game_stats where player_id = $1 and decision = 'W'

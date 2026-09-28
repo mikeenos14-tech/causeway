@@ -26,7 +26,7 @@ const MAX_ROWS_RETURNED = 200;
 const QUERY_TIMEOUT_MS = 8000;
 
 const SCHEMA_DESCRIPTION = `
-Tables (NHL history 2007-08 through 2025-26; every id is the NHL's own id. This started as a Bruins-only database and is actively being expanded team by team — never assume it's still Bruins-centric, verify actual coverage per team as described in "Known gaps" below):
+Tables (exactly which seasons and columns are loaded is listed under "Data coverage" at the end, computed live from the database; every id is the NHL's own id):
 
 teams(id, franchise_id, name, abbrev, city, conference, division, is_active)
 team_identities(team_id, name, abbrev, start_date, end_date) -- a team's name/abbrev AS ACTUALLY USED at a point in time; teams.name/abbrev is only the current identity
@@ -45,9 +45,9 @@ goalie_game_stats(game_id, player_id, team_id, decision, shots_against, saves, g
   -- decision: 'W' | 'L' | 'OTL' | null (null = relief appearance, no decision awarded). 'OTL' covers both overtime and shootout losses.
   -- shutout: true only when this goalie played the whole game alone and the opponent's final score was 0 (the NHL rule). A relief appearance with 0 goals against is NOT a shutout.
 team_game_stats(game_id, team_id, shots_on_goal, xg_for, xg_against, corsi_for, corsi_against, pp_goals, pp_opportunities, pk_goals_against, pk_times_shorthanded, hits, faceoff_win_pct)
-  -- EMPTY — zero rows loaded, not just the xg/Corsi columns. Nothing in this table is usable yet (no shots_on_goal, no pp_opportunities, no faceoff_win_pct). Never query it expecting data; treat any question needing team-level per-game stats (power play/penalty kill rate, faceoff%, team shot totals, xG, Corsi) as unanswerable and say so.
+  -- Two column groups with different coverage (see "Data coverage"): the NHL boxscore group (shots_on_goal, pp_goals, pp_opportunities, pk_goals_against, pk_times_shorthanded, hits, faceoff_win_pct) and the MoneyPuck group (xg_for, xg_against, corsi_for, corsi_against). A NULL means that group isn't loaded for that game — never treat it as zero. PP% = sum(pp_goals)/sum(pp_opportunities); PK% = 1 - sum(pk_goals_against)/sum(pk_times_shorthanded).
 play_by_play(id, game_id, period, period_time_seconds, event_type, team_id, primary_player_id, secondary_player_id, description, x_coord, y_coord)
-  -- NOT YET BACKFILLED — this table is empty. Never rely on it.
+  -- see "Data coverage" for whether it has rows.
 standings_snapshots(id, team_id, season_id, snapshot_date, division, conference, games_played, wins, losses, ot_losses, points, points_pct, goals_for, goals_against, division_rank, conference_rank, league_rank)
   -- division/conference here are AS OF that snapshot date, not looked up from teams (divisions have been realigned over NHL history).
   -- points_pct = points / (games_played * 2) — use this, not raw points, whenever comparing standings across different-length seasons or eras.
@@ -57,17 +57,19 @@ awards(id, season_id, award_name, player_id, team_id)
 cap_records(id, team_id, player_id, season_id, cap_hit, contract_years_remaining, expiry_status)
 
 Known gaps, be honest about them rather than silently ignore:
-- play_by_play is empty. Any question needing play-by-play detail (exact goal timing beyond what's in games, shot locations, period-by-period score) cannot be answered yet — say so.
-- team_game_stats is entirely empty (zero rows) — not just xG/Corsi, nothing in it is loaded (power play/penalty kill rates, faceoff%, team shot totals included). Say so rather than guessing or computing from other tables as a workaround.
+- Any question needing play-by-play detail (exact goal timing beyond what's in games, shot locations, period-by-period score) can't be answered while play_by_play is empty — say so.
+- A table listed as empty under "Data coverage" means the data isn't loaded, NOT that none exists — never answer "the Bruins have no retired numbers" or "no awards" from an empty table; say that data isn't loaded yet.
+- If a question needs a season or column group that "Data coverage" lists as missing or partial, say so plainly; never average over partial coverage as if it were the full season.
 - Coverage varies by team and is actively being expanded — never assume a team only has "games against Boston" loaded. Check directly: count that team's total games (\`select count(*) from games where home_team_id = X or away_team_id = X\`) across its season range. A team with roughly a full season's worth of games per year (~80+) has its own complete schedule loaded; a team with only a handful of games per season has only faced Boston. Base any completeness claim in your answer on that check, never on an assumption — this changes over time as more teams get backfilled.
 `.trim();
 
-const SYSTEM_PROMPT = `You answer natural-language questions about NHL history using a real Postgres database, by writing and running your own SQL SELECT queries with the run_sql tool.
+const SYSTEM_PROMPT_BASE = `You answer natural-language questions about NHL history using a real Postgres database, by writing and running your own SQL SELECT queries with the run_sql tool.
 
 Rules, no exceptions:
 - Ground every claim in what your queries actually return. Never state a stat, name, date, or record from your own training knowledge — if you didn't get it from a query result in this conversation, don't say it. This applies with full force when a row in your results has an id but no resolved name (a query that returned player_id without joining to players, for example): never fill in a plausible-sounding name from your own memory of who that Bruins-era player probably was — that is exactly the training-knowledge violation this rule forbids, and it produces a confident, wrong player identity, not just a missing name. If you don't have the real name a query actually returned, either run one more query to get it, or state plainly that this row's identity isn't resolved yet — never guess a name to fill the gap.
 - Run as many queries as you need (look up a player's id first, then query their stats; check row counts before assuming completeness) — but keep it efficient, not exploratory for its own sake.
 - If a question spans different eras or season lengths, prefer rate stats (points_pct, per-game averages) over raw totals, and name the relevant rule/schedule-length shift when it matters (e.g. the 2012-13 lockout-shortened season, the shift from 70-game to 82-game seasons, the move to 84-game seasons starting in 2026-27, the introduction of the shootout in 2005-06). Never silently compare incompatible raw numbers across eras.
+- When your answer lists individual games, the query must return, for each game: the date, the opponent's abbreviation, whether the subject team was home or away, and the score from the subject team's side (name the columns like team_score and opp_score). Raw home_score/away_score columns don't say which side is which, and a reader can't check your prose against a table without the opponent.
 - If the data needed to answer doesn't exist yet (see the known gaps below) or is incomplete for the question asked, say so plainly instead of guessing or answering a different, easier question.
 - If a question hinges on a genuinely undefined basis — a subjective superlative with no stated metric ("best," "most exciting," "most clutch"), or a comparison with no stated criterion — don't silently pick one metric and answer as if it were the only reasonable reading. Ask a short, specific clarifying question instead, and suggest 1-2 concrete metrics the database could actually answer with (e.g. "By 'best season' do you mean most points, or the best plus-minus? I can pull either."). Do this before running exploratory queries, not after — if the question is undefined, no amount of querying fixes that. This is different from a question with a clear single meaning that merely has more than one matching row (e.g. two players with the same surname): that's not ambiguous, just multi-valued — answer it by returning every match with enough detail to tell them apart, the way you already do, rather than asking which one they meant.
 - If a query returns zero rows, that's a real answer ("this never happened in the loaded data") — don't reinterpret it as a query mistake unless you have a specific reason to think the query itself was wrong.
@@ -198,6 +200,39 @@ async function enrichTableWithIdNames(table: { columns: string[]; rows: Record<s
       for (const row of table.rows) row.team_name = nameById.get(row[teamIdColumn]) ?? null;
     }
   }
+
+  // Other team-id columns (opp_id, opponent_team_id, home_team_id, ...).
+  // Found live (2026-09-28): a season-openers answer selected the opponent
+  // correctly as opp_id, but ids are hidden in the UI, so the table showed
+  // no opponent at all and its prose couldn't be checked. Each gets a
+  // readable twin column ("opp_id" -> "opponent").
+  for (const col of table.columns.filter((c) => /^(opp|opponent|opp_team|opponent_team|home_team|away_team)_id$/i.test(c))) {
+    const ids = [...new Set(table.rows.map((r) => r[col]).filter((v) => v != null))];
+    if (ids.length === 0) continue;
+    const { rows } = await readonlyPool.query("select id, name from teams where id = any($1)", [ids]);
+    const nameById = new Map(rows.map((r) => [String(r.id), r.name as string]));
+    const label = /^opp/i.test(col) ? "opponent" : col.replace(/_id$/i, "");
+    if (table.columns.includes(label)) continue;
+    table.columns.push(label);
+    for (const row of table.rows) row[label] = nameById.get(String(row[col])) ?? null;
+  }
+
+  // A list of games with no opponent at all: add the matchup from game_id.
+  const gameIdColumn = table.columns.find((c) => /^game_id$/i.test(c));
+  if (gameIdColumn && !table.columns.some((c) => /opp|opponent|matchup|home_team|away_team|\bvs\b/i.test(c))) {
+    const ids = [...new Set(table.rows.map((r) => r[gameIdColumn]).filter((v) => v != null))];
+    if (ids.length > 0) {
+      const { rows } = await readonlyPool.query(
+        `select g.id, at.abbrev || ' @ ' || ht.abbrev as matchup
+         from games g join teams ht on ht.id = g.home_team_id join teams at on at.id = g.away_team_id
+         where g.id = any($1)`,
+        [ids],
+      );
+      const byId = new Map(rows.map((r) => [String(r.id), r.matchup as string]));
+      table.columns.push("matchup");
+      for (const row of table.rows) row.matchup = byId.get(String(row[gameIdColumn])) ?? null;
+    }
+  }
 }
 
 export type QueryRecord = { sql: string; rows: Record<string, unknown>[] | null; error?: string };
@@ -224,6 +259,73 @@ export type QAResult = {
   table: { columns: string[]; rows: Record<string, unknown>[] } | null;
 };
 
+// What's actually loaded, computed from the database rather than written
+// into the prompt. Every hardcoded completeness claim this prompt has had
+// went stale: "team_game_stats is entirely empty" stayed in long after
+// most of it was loaded (so answerable power-play questions were
+// declined), and the header's "2007-08 through 2025-26" would be wrong the
+// night 2026-27's first game loads. Cached an hour — coverage changes at
+// the pace of the backfills, not per question.
+const COVERAGE_TTL_MS = 60 * 60 * 1000;
+let coverageCache: { at: number; text: string } | null = null;
+
+const seasonLabel = (id: string) => `${id.slice(0, 4)}-${id.slice(6, 8)}`;
+
+// "2008-09–2015-16, 2019-20" from a sorted list of season ids.
+function seasonRanges(ids: string[], all: string[]): string {
+  const out: string[] = [];
+  let start: string | null = null;
+  let prev: string | null = null;
+  for (const id of all) {
+    const inSet = ids.includes(id);
+    if (inSet && start === null) start = id;
+    if (!inSet && start !== null) {
+      out.push(start === prev ? seasonLabel(start) : `${seasonLabel(start)}–${seasonLabel(prev!)}`);
+      start = null;
+    }
+    prev = id;
+  }
+  if (start !== null) out.push(start === prev ? seasonLabel(start) : `${seasonLabel(start)}–${seasonLabel(prev!)}`);
+  return out.join(", ") || "none";
+}
+
+export async function getCoverageNotes(): Promise<string> {
+  if (coverageCache && Date.now() - coverageCache.at < COVERAGE_TTL_MS) return coverageCache.text;
+  const { rows: seasons } = await readonlyPool.query(
+    `select g.season_id,
+            -- The join yields one row per team per game, so every
+            -- denominator counts distinct games (x2 teams per game).
+            count(distinct g.id) filter (where g.game_type = 'regular')::int as regular_games,
+            count(tgs.shots_on_goal)::float / nullif(count(distinct g.id) * 2, 0) as box_frac,
+            count(tgs.xg_for)::float / nullif(count(distinct g.id) * 2, 0) as xg_frac
+     from games g
+     left join lateral (select game_id, shots_on_goal, xg_for from team_game_stats t where t.game_id = g.id) tgs on true
+     group by g.season_id order by g.season_id`,
+  );
+  const all = seasons.map((r) => String(r.season_id));
+  const group = (col: "box_frac" | "xg_frac") => {
+    const complete = seasons.filter((r) => Number(r[col]) >= 0.98).map((r) => String(r.season_id));
+    const partial = seasons.filter((r) => Number(r[col]) >= 0.02 && Number(r[col]) < 0.98);
+    const missing = seasons.filter((r) => Number(r[col]) < 0.02).map((r) => String(r.season_id));
+    const partialText = partial.map((r) => `${seasonLabel(String(r.season_id))} (${Math.round(Number(r[col]) * 100)}% of games)`).join(", ");
+    return `complete ${seasonRanges(complete, all)}; partial ${partialText || "none"}; missing ${seasonRanges(missing, all)}`;
+  };
+  const tables = ["play_by_play", "retired_numbers", "awards", "cap_records", "narratives"];
+  const empty: string[] = [];
+  for (const t of tables) {
+    const { rows } = await readonlyPool.query(`select exists (select 1 from ${t}) as has_rows`);
+    if (!rows[0].has_rows) empty.push(t);
+  }
+  const latest = seasons[seasons.length - 1];
+  const text = `Data coverage (computed live from the database — trust this over anything else in this prompt):
+- games, skater_game_stats, goalie_game_stats, standings_snapshots: every NHL regular-season and playoff game, ${seasonLabel(all[0])} through ${seasonLabel(String(latest.season_id))} (latest season ${seasonLabel(String(latest.season_id))} has ${latest.regular_games} regular-season games loaded; nothing before ${seasonLabel(all[0])} is loaded).
+- team_game_stats, NHL boxscore group (shots_on_goal, pp_*, pk_*, hits, faceoff_win_pct): ${group("box_frac")}.
+- team_game_stats, MoneyPuck group (xg_*, corsi_*): ${group("xg_frac")}.
+- Empty tables (no rows at all — the data isn't loaded, which says nothing about whether it exists): ${empty.join(", ") || "none"}.`;
+  coverageCache = { at: Date.now(), text };
+  return text;
+}
+
 export async function answerQuestion(question: string): Promise<QAResult> {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const queries: QueryRecord[] = [];
@@ -241,6 +343,7 @@ export async function answerQuestion(question: string): Promise<QAResult> {
   ];
 
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: question }];
+  const system = `${SYSTEM_PROMPT_BASE}\n\n${await getCoverageNotes()}`;
 
   for (let step = 0; step < MAX_TOOL_STEPS; step++) {
     const response = await client.messages.create({
@@ -262,7 +365,7 @@ export async function answerQuestion(question: string): Promise<QAResult> {
       // minimum that could just as easily get outrun by the next hard
       // question.
       max_tokens: 4096,
-      system: SYSTEM_PROMPT,
+      system,
       tools,
       messages,
     });
