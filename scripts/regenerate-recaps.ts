@@ -12,6 +12,7 @@
 //   npx tsx --env-file=.env.local scripts/regenerate-recaps.ts                  (dry run: counts)
 //   npx tsx --env-file=.env.local scripts/regenerate-recaps.ts --apply --limit 10
 //   npx tsx --env-file=.env.local scripts/regenerate-recaps.ts --apply           (all)
+//   npx tsx --env-file=.env.local scripts/regenerate-recaps.ts --apply --rejected-only
 
 import { Client } from "pg";
 import { execFileSync } from "node:child_process";
@@ -19,6 +20,9 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { TARGET_TEAM_ABBREV } from "../lib/significance-checks";
 
 const APPLY = process.argv.includes("--apply");
+// Only games whose last attempt was rejected — for a retry pass after a
+// full regeneration, without redoing every recap that succeeded.
+const REJECTED_ONLY = process.argv.includes("--rejected-only");
 const limitArg = process.argv.indexOf("--limit");
 const LIMIT = limitArg > -1 ? Number(process.argv[limitArg + 1]) : null;
 
@@ -31,10 +35,10 @@ async function main() {
      join games g on g.id = n.game_id
      join teams ht on ht.id = g.home_team_id
      join teams at on at.id = g.away_team_id
-     where n.kind in ('recap', 'rejected') and (ht.abbrev = $1 or at.abbrev = $1)
+     where n.kind = any($2::text[]) and (ht.abbrev = $1 or at.abbrev = $1)
        and not exists (select 1 from narratives h where h.game_id = n.game_id and h.kind = 'highlights')
      order by g.game_date desc`,
-    [TARGET_TEAM_ABBREV],
+    [TARGET_TEAM_ABBREV, REJECTED_ONLY ? ["rejected"] : ["recap", "rejected"]],
   );
   const targets = LIMIT ? rows.slice(0, LIMIT) : rows;
   console.log(`${rows.length} ${TARGET_TEAM_ABBREV} games have a recap or rejected narration; ${targets.length} selected (newest first).`);
