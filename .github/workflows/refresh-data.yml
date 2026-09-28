@@ -33,6 +33,9 @@ jobs:
           node-version: 24
       - run: npm ci
       - name: Refresh games, standings, special teams, narratives
+        # Its own limit, under the job's, so an overrun here still leaves
+        # time for the verify step below.
+        timeout-minutes: 24
         run: |
           chmod +x scripts/refresh-current-season.sh
           scripts/refresh-current-season.sh
@@ -45,6 +48,10 @@ jobs:
       # must be real, one standings row per season, and so on. See
       # scripts/verify-all.ts.
       - name: Verify data invariants
+        # Runs even if the refresh step failed or timed out — that's exactly
+        # when the data most needs checking.
+        if: always()
+        timeout-minutes: 5
         run: npx tsx scripts/verify-all.ts
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}

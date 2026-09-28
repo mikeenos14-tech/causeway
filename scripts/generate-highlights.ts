@@ -163,6 +163,13 @@ async function backfillOnce(candidateGameIds: number[]) {
 // immediately rather than loop on something that will never succeed.
 const CONNECTION_ERROR_PATTERN = /ECONNRESET|ETIMEDOUT|Connection terminated|connect ECONNREFUSED|EPIPE|Timed out after \d+ms/i;
 
+// Unattended (hourly) runs narrate at most this many games, newest first.
+// A normal night has 1-2 new games; a backlog (e.g. every recap cleared for
+// a regeneration) once made an hourly run try ~1,000 narrations, exceed the
+// job's 30-minute limit, and get cancelled — taking the verify step with
+// it. Newest-first means tonight's game is never stuck behind old ones.
+const MAX_PER_RUN = Number(process.env.NARRATE_MAX_PER_RUN ?? 25);
+
 async function main() {
   let candidateGameIds = process.argv.slice(2).map(Number);
   if (candidateGameIds.length === 0) {
@@ -183,11 +190,12 @@ async function main() {
          join teams at on at.id = g.away_team_id
          left join narratives n on n.game_id = g.id
          where (ht.abbrev = $1 or at.abbrev = $1) and n.game_id is null
-         order by g.game_date asc`,
-        [TARGET_TEAM_ABBREV],
+         order by g.game_date desc
+         limit $2`,
+        [TARGET_TEAM_ABBREV, MAX_PER_RUN],
       );
       candidateGameIds = rows.map((r) => r.id);
-      console.log(`No game IDs given — checking all ${candidateGameIds.length} ${TARGET_TEAM_ABBREV} games without a stored narrative.`);
+      console.log(`No game IDs given — narrating the ${candidateGameIds.length} newest ${TARGET_TEAM_ABBREV} games without a stored narrative (max ${MAX_PER_RUN} per run).`);
     } finally {
       await client.end();
     }
