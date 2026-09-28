@@ -83,7 +83,7 @@ const GENERIC_ALLOWED_WORDS = [
   "season", "line", "lines", "milestone", "game", "night", "team", "goal", "goals", "shot", "shots", "power", "period",
   "overtime", "win", "loss", "road", "home", "series", "playoff", "playoffs", "offense", "defense", "depth", "net",
   "scoreboard", "crowd", "bench", "another", "still", "just", "even", "only", "next", "sunday", "monday", "tuesday",
-  "wednesday", "thursday", "friday", "saturday",
+  "wednesday", "thursday", "friday", "saturday", "year", "week", "month",
 ];
 
 // A capitalized word acting as a name (possessive, or the subject of a

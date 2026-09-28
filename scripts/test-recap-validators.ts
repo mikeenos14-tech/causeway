@@ -91,6 +91,11 @@ const cases: Case[] = [
   { name: "series record with 'against' a few words later (batch false positive)", game: 2023020021, headline: "Bruins win", body: "Boston moves to 2-0-0 overall and 1-0-0 on the season against Nashville.", expect: "pass" },
   { name: "common word starting a sentence (batch false positive)", game: 2025030116, headline: "Bruins bow out", body: "Season's over after a 4-1 loss. Line changes didn't help.", expect: "pass" },
   { name: "singular team nickname (batch false positive)", game: 2025030116, headline: "Bruins bow out", body: "Pastrnak's goal was the only one by a Bruin in a 4-1 loss. Every Bruin's season ends here.", expect: "pass" },
+  { name: "both records, 'sits at' for the series (batch false positive)", game: 2023020021, headline: "Bruins win", body: "Boston's now 2-0-0 on the year, and the season series with Nashville sits at 1-0-0.", expect: "pass" },
+  { name: "season record then a separate series claim (batch false positive)", game: 2023020021, headline: "Bruins win", body: "It puts them 2-0-0 with a season-series lead over Nashville.", expect: "pass" },
+  { name: "series record directly labeled as the season", game: 2023020021, headline: "Bruins win", body: "Boston is 1-0-0 overall after the win.", expect: "reject" },
+  { name: "season record directly labeled as the series", game: 2023020021, headline: "Bruins win", body: "Boston is 2-0-0 against Nashville this season.", expect: "reject" },
+  { name: "overtime mentioned in a shootout game (batch false positive)", game: 2025020555, headline: "Bruins lose in a shootout", body: "Overtime settled nothing and Vancouver won the shootout 5-4.", expect: "pass" },
   { name: "overtime claimed for a regulation game", game: 2025030116, headline: "Overtime loss", body: "Buffalo won 4-1 in overtime.", expect: "reject" },
 ];
 

@@ -57,7 +57,8 @@ const CONDITIONAL_CLAIMS: { pattern: RegExp; allowedIf: (facts: string) => boole
   { pattern: /\b(clinch\w*|eliminat\w*|advance[sd]? (to|past|into) (the )?(next|second|third|conference|stanley|final|round))\b/, allowedIf: (f) => /won the series/i.test(f), what: "a series result" },
 
   { pattern: /\b(dominat\w*|outplay\w*|controlled|carried the play|outshot|out-?chanced|lopsided)\b/, allowedIf: (f) => /Shots on goal|Expected goals/.test(f), what: "run-of-play" },
-  { pattern: /\b(overtime|OT)\b/i, allowedIf: (f) => /in overtime/.test(f), what: "overtime" },
+  // Every shootout comes after an overtime, so either qualifies.
+  { pattern: /\b(overtime|OT)\b/i, allowedIf: (f) => /in overtime|in a shootout/.test(f), what: "overtime" },
   { pattern: /\bshootout\b/, allowedIf: (f) => /in a shootout/.test(f), what: "a shootout" },
   { pattern: /\bpower[- ]play\b/, allowedIf: (f) => /Power play:/.test(f), what: "power play" },
   { pattern: /\bshutout\b/, allowedIf: (f) => /shutout/.test(f), what: "a shutout" },
@@ -215,10 +216,17 @@ export function validateRecap(parsed: { headline: string; body: string }, facts:
     const nextStart = i < triples.length - 1 ? triples[i + 1].index! : lower.length;
     const before = lower.slice(Math.max(prevEnd, m.index! - 30), m.index!);
     const after = lower.slice(m.index! + m[0].length, Math.min(nextStart, m.index! + m[0].length + 30));
-    const framedAsSeason = /(improv|mov|fall|drop|sit|now|climb|slip)\w*\s+(to|at)\s*$|record (of|at)\s*$/.test(before) || /^\s*(on|for) the (young )?season/.test(after);
-    const framedAsSeries = /\b(against|vs\.?|versus|series|head-to-head)\b/.test(after) || /(against|vs\.?|versus|series)[^.]{0,20}$/.test(before);
-    if (m[0] === seriesRec && m[0] !== seasonRec && framedAsSeason && !framedAsSeries) reject(`presents the season-series record ${m[0]} as the season record (${seasonRec})`);
-    if (m[0] === seasonRec && m[0] !== seriesRec && framedAsSeries && !framedAsSeason) reject(`presents the season record ${m[0]} as the season-series record (${seriesRec})`);
+    // Only a tight mislabel counts: the record directly followed by "on the
+    // season/year" or "overall", or directly by "against"/"vs"/"in the
+    // series", or directly preceded by "season record" / "season series".
+    // Looser word-window framing misfired on correct sentences ("now
+    // 18-14-4 on the year, and the season series ... sits at 1-0-1").
+    // "1-0-0 on the season against Nashville" is the series record.
+    const seasonAgainst = /^\s*(on|for) the (young )?(season|year) (against|vs\.?|versus)\b/.test(after);
+    const labeledSeason = !seasonAgainst && (/^\s*(on the (young )?(season|year)|overall)\b/.test(after) || /(season|overall) record (of |at |to |is )?$/.test(before));
+    const labeledSeries = seasonAgainst || /^\s*(against|vs\.?|versus|in the (season )?series|head-to-head)\b/.test(after) || /(season series|head-to-head)( record)?( (at|of|is|to|sits at|stands at|now))? $/.test(before);
+    if (m[0] === seriesRec && m[0] !== seasonRec && labeledSeason && !labeledSeries) reject(`presents the season-series record ${m[0]} as the season record (${seasonRec})`);
+    if (m[0] === seasonRec && m[0] !== seriesRec && labeledSeries && !labeledSeason) reject(`presents the season record ${m[0]} as the season-series record (${seriesRec})`);
   });
 
   // "Game 6" / "game two": only the exact game number the sheet states
