@@ -39,6 +39,15 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      # Last, so a failure never blocks the refresh itself — it flags the
+      # run (and emails the workflow's last editor) when any team breaks a
+      # data invariant: goalie W-L-OTL must equal the standings, shutouts
+      # must be real, one standings row per season, and so on. See
+      # scripts/verify-all.ts.
+      - name: Verify data invariants
+        run: npx tsx scripts/verify-all.ts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
   refresh-moneypuck:
     if: github.event.schedule == '0 14 * * *' || github.event_name == 'workflow_dispatch'

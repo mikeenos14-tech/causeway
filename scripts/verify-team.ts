@@ -50,9 +50,15 @@ export async function verifyTeam(client: Client, abbrev: string): Promise<Verify
      group by season_id order by season_id`,
     [team.id],
   );
+  // The newest season on file may still be in progress (a team with 3
+  // games in October is normal), so only its upper bound is checked —
+  // otherwise this fails every hourly run for the first weeks of a season.
+  const { rows: latestRows } = await client.query(`select max(season_id) as season_id from games`);
+  const latestSeason = String(latestRows[0]?.season_id ?? "");
   for (const s of bySeason) {
     const games = Number(s.games);
-    if (games < 20 || games > 110) {
+    const inProgress = String(s.season_id) === latestSeason;
+    if ((!inProgress && games < 20) || games > 110) {
       issues.push(`Season ${s.season_id} has ${games} games — outside the plausible 20-110 range.`);
     }
   }
