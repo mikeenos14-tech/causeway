@@ -38,7 +38,9 @@ function leaderFirst(away: number, home: number, awayAbbrev: string, homeAbbrev:
   const [lead, trail, leadV, trailV] = home > away ? [homeAbbrev, awayAbbrev, home, away] : [awayAbbrev, homeAbbrev, away, home];
   const share = leadV / (leadV + trailV);
   const size = share >= 0.6 ? "a large edge" : share >= 0.55 ? "a clear edge" : "a slight edge";
-  return `${lead} ${verb} ${trail}, ${f(leadV)} to ${f(trailV)} (${size})`;
+  // The difference is on the sheet too ("by 11") — a recap that said
+  // "outshot by 11" was rejected because 11 appeared nowhere.
+  return `${lead} ${verb} ${trail}, ${f(leadV)} to ${f(trailV)} (by ${f(leadV - trailV)}, ${size})`;
 }
 
 const seasonLabel = (id: string) => `${id.slice(0, 4)}-${id.slice(6, 8)}`;

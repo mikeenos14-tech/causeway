@@ -13,7 +13,25 @@ export type HighlightResult = {
   modelVersion: string;
 };
 
-const MODEL = "claude-haiku-4-5-20251001"; // this is a short, cheap, per-game task — no need for a larger model
+// Sonnet, matching the recap narrator (2026-09-28): in the full
+// regeneration Haiku kept inflating ("historic run" for a 14-game streak,
+// "exclusive club" for a 400th goal) and kept calling Pastrnak "Pasta",
+// both rejected every time. Rare facts only, so this runs on a fraction of
+// ~90 Boston games a season — the cost difference is negligible.
+const MODEL = process.env.HIGHLIGHTS_MODEL ?? "claude-sonnet-5";
+
+// Well-known nicknames mapped back to the surname they stand for. Only
+// applied when that surname is actually in the facts, so this can never
+// introduce a player — it just undoes a formatting habit the prompt rule
+// against nicknames couldn't stop (the same deterministic-backstop pattern
+// as the Q&A engine's markdown stripping).
+const NICKNAMES: Record<string, string> = { Pasta: "Pastrnak", Marchy: "Marchand", Bergy: "Bergeron", Z: "Chara", Sway: "Swayman" };
+export function replaceNicknames(text: string, groundingText: string): string {
+  return text.replace(/\b([A-Z][a-z]*)('s)?\b/g, (whole, word: string, poss: string | undefined) => {
+    const surname = NICKNAMES[word];
+    return surname && groundingText.includes(surname) ? surname + (poss ?? "") : whole;
+  });
+}
 
 // Used only to tell a legitimate team reference ("Boston's win," "the
 // Canucks") apart from a fabricated player name — not an allowlist of every
@@ -97,7 +115,7 @@ Rules, no exceptions:
 - A head-to-head fact only tells you a NUMBER OF MEETINGS (e.g. "in 20 meetings"), never a calendar year or a span of time. Do not translate that into "since [year]," "a decade," "four decades," or any other real-world date or duration — you do not actually know what year that count corresponds to, and guessing one from your own knowledge is fabrication, not narration. State the meeting count exactly as given, or don't mention it at all.
 - A fact's own words are the whole claim about how notable it is. Don't inflate it: never "exclusive club", "historic", "legendary", "unprecedented", or "all-time", and only call something rare or a first if the fact itself says so (e.g. "the first time ... since 2007-08").
 - Keep it to 2-4 sentences total.
-- Output ONLY strict JSON, no markdown code fence, no commentary before or after: {"headline": "...", "body": "..."}. Headline is under 10 words. Body is the actual blurb.`;
+- Submit with the submit_blurb tool. Headline is under 10 words. Body is the actual blurb.`;
 
 export async function narrateHighlights(
   gameContext: { homeAbbrev: string; awayAbbrev: string; homeScore: number; awayScore: number; gameDate: string },
@@ -114,30 +132,39 @@ export async function narrateHighlights(
 Facts found (each already verified real, from the database):
 ${facts.map((f, i) => `${i + 1}. [${f.category}] ${f.fact}`).join("\n")}
 
-Write the blurb now, as JSON only.`;
+Write the blurb now and submit it with the submit_blurb tool.`;
 
+  // A forced tool call instead of "reply with JSON": its input is always
+  // structured, so no fence-stripping or parse failures.
   const response = await client.messages.create({
     model: MODEL,
-    max_tokens: 500, // 300 truncated mid-response on a real 2-fact game, breaking its JSON — found via a real batch failure, not sized in advance
+    max_tokens: 900,
     system: SYSTEM_PROMPT,
+    tools: [
+      {
+        name: "submit_blurb",
+        description: "Submit the finished blurb.",
+        input_schema: {
+          type: "object",
+          properties: {
+            headline: { type: "string", description: "Under 10 words." },
+            body: { type: "string", description: "2-4 sentences." },
+          },
+          required: ["headline", "body"],
+        },
+      },
+    ],
+    tool_choice: { type: "tool", name: "submit_blurb" },
     messages: [{ role: "user", content: userPrompt }],
   });
 
-  const rawText = response.content.find((b) => b.type === "text")?.text ?? "";
-  // Defense in depth: don't rely solely on the prompt instruction to skip
-  // markdown fencing — a real test call wrapped its JSON in ```json ...```
-  // despite being told not to, so strip fences before parsing rather than
-  // just hoping the instruction holds every time.
-  const text = rawText.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
-  let parsed: { headline: string; body: string };
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    throw new Error(`Model did not return valid JSON: ${rawText.slice(0, 200)}`);
+  const call = response.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
+  const input = (call?.input ?? {}) as { headline?: string; body?: string };
+  if (!input.headline || !input.body) {
+    throw new Error(`Model response missing headline or body (stop_reason ${response.stop_reason})`);
   }
-  if (!parsed.headline || !parsed.body) {
-    throw new Error(`Model response missing headline or body: ${text.slice(0, 200)}`);
-  }
+  const grounding = facts.map((f) => f.fact).join(" ");
+  const parsed = { headline: replaceNicknames(input.headline, grounding), body: replaceNicknames(input.body, grounding) };
 
   // Defense in depth, again: a real batch run produced a headline saying a
   // streak "snapped" for a game whose only fact was point_streak_extending

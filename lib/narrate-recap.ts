@@ -15,7 +15,7 @@
 // must not manufacture significance.
 
 import Anthropic from "@anthropic-ai/sdk";
-import { TEAM_WORDS, FLOW_CLAIMS, findUngroundedName } from "./narrate-highlights";
+import { TEAM_WORDS, FLOW_CLAIMS, findUngroundedName, replaceNicknames } from "./narrate-highlights";
 import type { GameFacts } from "./game-facts";
 
 export type RecapResult = {
@@ -103,7 +103,11 @@ Write the recap now and submit it with the submit_recap tool.`;
   if (!input.headline || !input.body) {
     throw new Error(`Model response missing headline or body (stop_reason ${response.stop_reason})`);
   }
-  const parsed = { headline: fixCapitalization(input.headline, facts), body: fixCapitalization(input.body, facts) };
+  const names = facts.properNames.join(" ");
+  const parsed = {
+    headline: replaceNicknames(fixCapitalization(input.headline, facts), names),
+    body: replaceNicknames(fixCapitalization(input.body, facts), names),
+  };
 
   validateRecap(parsed, facts);
 
