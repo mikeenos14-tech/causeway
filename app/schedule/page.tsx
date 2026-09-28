@@ -181,13 +181,11 @@ export default async function Schedule({ searchParams }: { searchParams: Promise
                     {MONTHS[month]}
                   </div>
                 )}
-                {r.result?.loaded ? (
-                  <Link href={`/games/${r.id}`} style={{ display: "block", textDecoration: "none" }}>
-                    {row}
-                  </Link>
-                ) : (
-                  row
-                )}
+                {/* Every game links: a preview before it's loaded, the box
+                    score after (same URL). */}
+                <Link href={`/games/${r.id}`} style={{ display: "block", textDecoration: "none" }}>
+                  {row}
+                </Link>
               </div>
             );
           })}

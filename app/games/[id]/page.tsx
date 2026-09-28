@@ -6,6 +6,8 @@ import { roundLabel } from "@/lib/playoff-data";
 import { TARGET_TEAM_ABBREV } from "@/lib/significance-checks";
 import { formatGameDate } from "@/lib/format-date";
 import { Masthead, Footer } from "@/components/Masthead";
+import { GamePreview } from "@/components/GamePreview";
+import { getPreview } from "@/lib/preview-data";
 
 function toi(seconds: number | null) {
   if (seconds == null) return "—";
@@ -20,7 +22,21 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
   if (!Number.isInteger(gameId)) notFound();
 
   const game = await getGameDetail(gameId);
-  if (!game) notFound();
+  // Not played (or not loaded) yet: the pre-game preview at the same URL,
+  // so a link to a game works before, during, and after it.
+  if (!game) {
+    const preview = await getPreview(gameId);
+    if (!preview) notFound();
+    return (
+      <>
+        <Masthead />
+        <main style={{ maxWidth: 1160, margin: "0 auto", padding: "3rem 24px 3.5rem" }}>
+          <GamePreview p={preview} />
+        </main>
+        <Footer />
+      </>
+    );
+  }
 
   // Only shown when the Bruins are actually one of the two teams — this
   // page is a generic /games/[id] route that can show any league game,

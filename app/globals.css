@@ -137,6 +137,16 @@ body {
     scrollbar-width: none;
     gap: 22px;
   }
+  /* Preview tale of the tape: each rank on its own line under the value. */
+  .tape-rank {
+    display: block;
+    white-space: nowrap;
+  }
+  .tape-right {
+    display: flex;
+    flex-direction: column-reverse;
+    align-items: flex-end;
+  }
   /* Roster-change rows: name, then the detail on its own line. */
   .move-row {
     flex-direction: column;

@@ -205,9 +205,9 @@ export async function TeamDashboard({ abbrev, compact = false }: { abbrev: strin
             ) : (
               <div style={{ padding: "1.5rem 1.75rem" }}>
                 <div style={TILE_LABEL}>Next Up</div>
-                <div style={{ fontFamily: "var(--font-display)", fontSize: "2.4rem" }}>
+                <Link href={`/games/${next.id}`} style={{ fontFamily: "var(--font-display)", fontSize: "2.4rem", color: "inherit", textDecoration: "none", display: "block" }}>
                   {next.isHome ? "vs" : "@"} {next.opponent}
-                </div>
+                </Link>
                 <div style={{ fontSize: ".85rem", color: "var(--text-secondary)", marginTop: 2 }}>
                   {formatStartTimeET(next.startTimeUTC)}
                   {next.tv.length > 0 && ` · ${next.tv.join(", ")}`}
@@ -406,8 +406,11 @@ function PreviewHero({
           {flavor && <li style={{ fontFamily: "var(--font-editorial)", fontStyle: "italic" }}>{flavor}</li>}
         </ul>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          <Link href={`/games/${game.id}`} style={{ background: "var(--gold)", color: "var(--ink)", fontWeight: 700, fontSize: ".9rem", padding: "13px 24px", borderRadius: 8, textDecoration: "none" }}>
+            Game preview
+          </Link>
           {abbrev === "BOS" && (
-            <Link href="/schedule" style={{ background: "var(--gold)", color: "var(--ink)", fontWeight: 700, fontSize: ".9rem", padding: "13px 24px", borderRadius: 8, textDecoration: "none" }}>
+            <Link href="/schedule" style={{ color: "var(--text-primary)", fontWeight: 600, fontSize: ".9rem", padding: "13px 20px", borderRadius: 8, border: "1px solid var(--border)", textDecoration: "none" }}>
               Full schedule
             </Link>
           )}
@@ -455,12 +458,17 @@ function PendingHero({ game, teamName, abbrev, titleSize }: { game: ClubGame; te
             ? "Score updates every few minutes here. Full box score and recap land after the final horn."
             : "The full box score and recap land here within about an hour of the final horn, once the NHL posts the official stats."}
         </p>
-        <a
-          href={`https://www.nhl.com/gamecenter/${game.id}`}
-          style={{ color: "var(--text-primary)", fontWeight: 600, fontSize: ".9rem", padding: "13px 20px", borderRadius: 8, border: "1px solid var(--border)", textDecoration: "none" }}
-        >
-          NHL.com game center ↗
-        </a>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          <Link href={`/games/${game.id}`} style={{ background: "var(--gold)", color: "var(--ink)", fontWeight: 700, fontSize: ".9rem", padding: "13px 24px", borderRadius: 8, textDecoration: "none" }}>
+            Game page
+          </Link>
+          <a
+            href={`https://www.nhl.com/gamecenter/${game.id}`}
+            style={{ color: "var(--text-primary)", fontWeight: 600, fontSize: ".9rem", padding: "13px 20px", borderRadius: 8, border: "1px solid var(--border)", textDecoration: "none" }}
+          >
+            NHL.com game center ↗
+          </a>
+        </div>
       </div>
       {hasScore && (
         <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 16, padding: "1.6rem 2rem", minWidth: 240 }}>
