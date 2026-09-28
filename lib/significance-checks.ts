@@ -159,11 +159,10 @@ export async function checkPointStreaks(client: Client, gameId: number, targetTe
     // as HIS best, never a bare "longest of the era", which read like a
     // league or franchise record.
     if (log[idx].scored && current >= STREAK_FLOOR && current > longestBefore) {
-      const scope = fullCareer ? "of his career" : `with ${teamAbbrev}`;
       facts.push({
         category: "point_streak_extending",
         population,
-        fact: `${skater.full_name} has a ${current}-game point streak, his longest ${scope}.`,
+        fact: `${skater.full_name} has a ${current}-game point streak, ${fullCareer ? "the longest of his career" : `his longest with ${teamAbbrev}`}.`,
       });
     }
 
