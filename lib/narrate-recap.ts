@@ -132,7 +132,7 @@ export function validateRecap(parsed: { headline: string; body: string }, facts:
   const combined = `${parsed.headline} ${parsed.body}`;
   const lower = combined.toLowerCase();
   const reject = (why: string) => {
-    throw new Error(`Recap ${why}: ${lower.slice(0, 200)}`);
+    throw new Error(`Recap ${why}: ${lower.slice(0, 800)}`);
   };
 
   const unsupported = UNSUPPORTED_CLAIMS.find((re) => re.test(lower));
