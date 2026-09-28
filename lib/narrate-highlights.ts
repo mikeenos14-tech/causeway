@@ -77,6 +77,13 @@ const GENERIC_ALLOWED_WORDS = [
   // Added with the fact-sheet recaps (2026-09-28): "Nothing went right..."
   // and similar sentence openers were read as names.
   "nothing", "everything", "none", "neither", "each", "one", "someone", "everyone", "all", "what", "which",
+  // Common hockey nouns that start sentences ("Season's over", "Line
+  // chemistry had...", "Milestone night...") — full-regeneration false
+  // positives, 2026-09-28.
+  "season", "line", "lines", "milestone", "game", "night", "team", "goal", "goals", "shot", "shots", "power", "period",
+  "overtime", "win", "loss", "road", "home", "series", "playoff", "playoffs", "offense", "defense", "depth", "net",
+  "scoreboard", "crowd", "bench", "another", "still", "just", "even", "only", "next", "sunday", "monday", "tuesday",
+  "wednesday", "thursday", "friday", "saturday",
 ];
 
 // A capitalized word acting as a name (possessive, or the subject of a
