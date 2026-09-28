@@ -258,6 +258,16 @@ const WIN_MILESTONES = [50, 100, 200, 300];
 export async function checkMilestones(client: Client, gameId: number, targetTeamId: number): Promise<SignificanceFact[]> {
   const facts: SignificanceFact[] = [];
 
+  // Career milestones are regular-season counts, the way the NHL and every
+  // broadcast state them. A playoff game can't reach one, and every total
+  // below is regular season only and bounded to this game's date (the win
+  // and shutout counts once weren't date-bounded, so re-narrating an old
+  // game could see wins or shutouts from later seasons).
+  const { rows: thisGame } = await client.query(`select game_type from games where id = $1`, [gameId]);
+  if (thisGame[0]?.game_type !== "regular") return facts;
+  const PRIOR_REGULAR_GAMES = `game_id in (select id from games where game_type = 'regular'
+       and game_date <= (select game_date from games where id = $2))`;
+
   const { rows: skaters } = await client.query(
     `select s.player_id, p.full_name, p.birth_date, s.goals, s.assists
      from skater_game_stats s join players p on p.id = s.player_id
@@ -270,7 +280,7 @@ export async function checkMilestones(client: Client, gameId: number, targetTeam
     const { rows: totals } = await client.query(
       `select coalesce(sum(goals),0) as goals, coalesce(sum(goals+assists),0) as points
        from skater_game_stats where player_id = $1 and game_id != $2
-       and game_id in (select id from games where game_date <= (select game_date from games where id = $2))`,
+       and ${PRIOR_REGULAR_GAMES}`,
       [skater.player_id, gameId],
     );
     const priorGoals = Number(totals[0].goals);
@@ -301,8 +311,9 @@ export async function checkMilestones(client: Client, gameId: number, targetTeam
     if (!(await playedOnlyForTeam(client, goalie.player_id, targetTeamId, "goalie_game_stats"))) continue;
     if (goalie.decision === "W") {
       const { rows: winTotal } = await client.query(
-        `select count(*) from goalie_game_stats where player_id = $1 and decision = 'W'`,
-        [goalie.player_id],
+        `select count(*) from goalie_game_stats where player_id = $1 and decision = 'W'
+         and (game_id = $2 or ${PRIOR_REGULAR_GAMES})`,
+        [goalie.player_id, gameId],
       );
       const wins = Number(winTotal[0].count);
       if (WIN_MILESTONES.includes(wins)) {
@@ -311,7 +322,8 @@ export async function checkMilestones(client: Client, gameId: number, targetTeam
     }
     if (goalie.shutout) {
       const { rows: priorShutouts } = await client.query(
-        `select count(*) from goalie_game_stats where player_id = $1 and shutout = true and game_id != $2`,
+        `select count(*) from goalie_game_stats where player_id = $1 and shutout = true and game_id != $2
+         and ${PRIOR_REGULAR_GAMES}`,
         [goalie.player_id, gameId],
       );
       if (Number(priorShutouts[0].count) === 0) {

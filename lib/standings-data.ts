@@ -1,19 +1,30 @@
 import { pool } from "./db";
 
-export async function getLatestStandingsDate() {
-  const { rows } = await pool.query(`select max(snapshot_date) as d from standings_snapshots`);
-  return rows[0]?.d ?? null;
+// standings_snapshots holds one row per (team, season), and snapshot_date
+// is that team's own last-game date — it differs team to team. Selecting
+// by a single max(snapshot_date) once silently dropped every team whose
+// last game was earlier (10 of 32 at the end of 2025-26, Boston
+// included). Always select the whole season; the latest date is only a
+// display label.
+export async function getLatestStandingsSeason(): Promise<{ seasonId: string; asOf: string } | null> {
+  const { rows } = await pool.query(
+    `select season_id, max(snapshot_date) as as_of
+     from standings_snapshots
+     where season_id = (select max(season_id) from standings_snapshots)
+     group by season_id`,
+  );
+  return rows[0] ? { seasonId: String(rows[0].season_id), asOf: rows[0].as_of } : null;
 }
 
-export async function getFullStandings(date: string) {
+export async function getFullStandings(seasonId: string) {
   const { rows } = await pool.query(
     `select t.abbrev, t.name, ss.division, ss.conference, ss.games_played, ss.wins, ss.losses,
             ss.ot_losses, ss.points, ss.points_pct, ss.division_rank
      from standings_snapshots ss
      join teams t on t.id = ss.team_id
-     where ss.snapshot_date = $1
+     where ss.season_id = $1
      order by ss.division, ss.division_rank`,
-    [date],
+    [seasonId],
   );
   return rows;
 }
@@ -44,15 +55,15 @@ export type ConferencePicture = {
 // for the plain division tables; this is the same rows regrouped the way
 // the actual playoff format groups them, which the division-only view
 // never showed.
-export async function getConferencePictures(date: string): Promise<ConferencePicture[]> {
+export async function getConferencePictures(seasonId: string): Promise<ConferencePicture[]> {
   const { rows } = await pool.query(
     `select t.abbrev, t.name, ss.division, ss.conference, ss.games_played, ss.wins, ss.losses,
             ss.ot_losses, ss.points, ss.points_pct, ss.division_rank
      from standings_snapshots ss
      join teams t on t.id = ss.team_id
-     where ss.snapshot_date = $1 and ss.conference is not null
+     where ss.season_id = $1 and ss.conference is not null
      order by ss.conference, ss.points desc, ss.points_pct desc`,
-    [date],
+    [seasonId],
   );
 
   const conferences = [...new Set(rows.map((r) => r.conference))];

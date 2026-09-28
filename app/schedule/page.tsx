@@ -3,6 +3,11 @@ import { getLatestSeasonId, getSeasonSchedule } from "@/lib/schedule-data";
 import { formatGameDate, formatSeasonLabel } from "@/lib/format-date";
 import { Masthead, Footer } from "@/components/Masthead";
 
+// Without this the page was prerendered once at build time and never
+// picked up the hourly data refresh — same 5-minute window as every
+// other data page.
+export const revalidate = 300;
+
 export default async function Schedule() {
   const seasonId = await getLatestSeasonId("BOS");
   const games = seasonId ? await getSeasonSchedule("BOS", seasonId) : [];

@@ -108,6 +108,50 @@ export async function verifyTeam(client: Client, abbrev: string): Promise<Verify
     }
   }
 
+  // Goalie decisions must reconcile with the standings: the team's goalies'
+  // regular-season W-L-OTL is, by definition, the team's record. Added
+  // 2026-09-28 after OT/SO losses were found stored as NULL decisions
+  // league-wide (every goalie read W-L-0) — this invariant would have
+  // flagged it on the first team. Only compared once the snapshot covers
+  // every loaded game, so a mid-refresh season doesn't false-positive.
+  const { rows: goalieRecords } = await client.query(
+    `select g.season_id,
+            count(*) filter (where ggs.decision = 'W') as w,
+            count(*) filter (where ggs.decision = 'L') as l,
+            count(*) filter (where ggs.decision = 'OTL') as otl
+     from goalie_game_stats ggs join games g on g.id = ggs.game_id
+     where ggs.team_id = $1 and g.game_type = 'regular'
+     group by g.season_id`,
+    [team.id],
+  );
+  const { rows: standingsRecords } = await client.query(
+    `select season_id, games_played, wins, losses, ot_losses from standings_snapshots where team_id = $1`,
+    [team.id],
+  );
+  for (const st of standingsRecords) {
+    if (Number(st.games_played) !== (regularGamesBySeason.get(st.season_id) ?? -1)) continue;
+    const gr = goalieRecords.find((r) => r.season_id === st.season_id);
+    const goalieLine = gr ? `${gr.w}-${gr.l}-${gr.otl}` : "none";
+    const teamLine = `${st.wins}-${st.losses}-${st.ot_losses}`;
+    if (goalieLine !== teamLine) {
+      issues.push(`Season ${st.season_id}: goalie decisions total ${goalieLine} but the team record is ${teamLine}.`);
+    }
+  }
+
+  // A shutout needs the goalie to have played the whole game alone with
+  // the opponent's final score at 0. Added 2026-09-28 after 1,178 relief
+  // appearances league-wide were found flagged as shutouts.
+  const { rows: badShutouts } = await client.query(
+    `select count(*) as n from goalie_game_stats ggs join games g on g.id = ggs.game_id
+     where ggs.team_id = $1 and ggs.shutout
+       and ((case when ggs.team_id = g.home_team_id then g.away_score else g.home_score end) > 0
+            or (select count(*) from goalie_game_stats o where o.game_id = ggs.game_id and o.team_id = ggs.team_id) > 1)`,
+    [team.id],
+  );
+  if (Number(badShutouts[0].n) > 0) {
+    issues.push(`${badShutouts[0].n} goalie rows flagged as shutouts that aren't (opponent scored, or a second goalie played).`);
+  }
+
   // Degraded names on this team's OWN roster — the exact bug this script
   // exists to catch early. A handful is expected (genuine mid-season
   // joiners not yet repaired); a large count means something's wrong.

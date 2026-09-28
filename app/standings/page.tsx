@@ -1,7 +1,12 @@
 import Link from "next/link";
-import { getLatestStandingsDate, getFullStandings, getConferencePictures, type WildCardTeam } from "@/lib/standings-data";
-import { formatGameDate } from "@/lib/format-date";
+import { getLatestStandingsSeason, getFullStandings, getConferencePictures, type WildCardTeam } from "@/lib/standings-data";
+import { formatGameDate, formatSeasonLabel } from "@/lib/format-date";
 import { Masthead, Footer } from "@/components/Masthead";
+
+// Without this the page was prerendered once at build time and never
+// picked up the hourly data refresh (live it still read "As of Apr 16"
+// in late September) — same 5-minute window as every other data page.
+export const revalidate = 300;
 
 function PictureRow({ label, team, pointsBack }: { label: string; team: WildCardTeam; pointsBack?: number }) {
   const isBos = team.abbrev === "BOS";
@@ -31,9 +36,9 @@ function PictureRow({ label, team, pointsBack }: { label: string; team: WildCard
 }
 
 export default async function Standings() {
-  const date = await getLatestStandingsDate();
-  const rows = date ? await getFullStandings(date) : [];
-  const pictures = date ? await getConferencePictures(date) : [];
+  const latest = await getLatestStandingsSeason();
+  const rows = latest ? await getFullStandings(latest.seasonId) : [];
+  const pictures = latest ? await getConferencePictures(latest.seasonId) : [];
 
   const byDivision = new Map<string, typeof rows>();
   for (const r of rows) {
@@ -48,9 +53,9 @@ export default async function Standings() {
         <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "clamp(2.2rem,4.5vw,3rem)", textTransform: "uppercase", letterSpacing: ".01em", margin: "0 0 .4rem" }}>
           Standings
         </h1>
-        {date && (
+        {latest && (
           <p style={{ color: "var(--text-secondary)", fontSize: ".9rem", marginBottom: "2.5rem" }}>
-            As of {formatGameDate(date, true)}
+            {formatSeasonLabel(latest.seasonId)} regular season · through {formatGameDate(latest.asOf, true)}
           </p>
         )}
 

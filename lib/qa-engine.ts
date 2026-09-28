@@ -37,11 +37,13 @@ player_team_seasons(player_id, team_id, season_id, jersey_number)
 playoff_series(id, season_id, round, team_a_id, team_b_id, winner_team_id, games_played)
 games(id, season_id, game_date, game_datetime, game_type, game_end_type, series_id, series_game_number, home_team_id, away_team_id, home_score, away_score, venue)
   -- game_type: 'regular' | 'playoff' | 'preseason'. game_end_type: 'regulation' | 'overtime' | 'shootout'.
+  -- Career and season totals, records, and milestones are REGULAR SEASON ONLY by NHL convention (filter game_type = 'regular') unless the question asks about playoffs. Never blend the two into one number; if playoffs are relevant, report them as a separate figure.
 skater_game_stats(game_id, player_id, team_id, goals, assists, points, shots, hits, blocked_shots, giveaways, takeaways, faceoff_wins, faceoff_losses, penalty_minutes, plus_minus, pp_goals, sh_goals, gw_goals, toi_seconds)
   -- points is goals+assists, already computed. A row only exists for games a player actually played.
   -- faceoff_wins, faceoff_losses, sh_goals, and gw_goals are ALWAYS NULL — the NHL boxscore data this is backfilled from has no per-player faceoff win/loss counts (only a percentage, not usable here) and no way to identify which specific goal was a shorthanded or game-winning goal (that needs play-by-play event data, which is separate and not yet loaded — see below). Never guess these from other columns; say the data isn't available.
 goalie_game_stats(game_id, player_id, team_id, decision, shots_against, saves, goals_against, save_pct, toi_seconds, shutout)
-  -- decision: 'W' | 'L' | 'OTL' | null (null = relief appearance, no decision awarded)
+  -- decision: 'W' | 'L' | 'OTL' | null (null = relief appearance, no decision awarded). 'OTL' covers both overtime and shootout losses.
+  -- shutout: true only when this goalie played the whole game alone and the opponent's final score was 0 (the NHL rule). A relief appearance with 0 goals against is NOT a shutout.
 team_game_stats(game_id, team_id, shots_on_goal, xg_for, xg_against, corsi_for, corsi_against, pp_goals, pp_opportunities, pk_goals_against, pk_times_shorthanded, hits, faceoff_win_pct)
   -- EMPTY — zero rows loaded, not just the xg/Corsi columns. Nothing in this table is usable yet (no shots_on_goal, no pp_opportunities, no faceoff_win_pct). Never query it expecting data; treat any question needing team-level per-game stats (power play/penalty kill rate, faceoff%, team shot totals, xG, Corsi) as unanswerable and say so.
 play_by_play(id, game_id, period, period_time_seconds, event_type, team_id, primary_player_id, secondary_player_id, description, x_coord, y_coord)

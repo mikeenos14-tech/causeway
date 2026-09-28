@@ -22,8 +22,9 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
   if (!player) notFound();
 
   const isGoalie = player.position === "G";
-  const [totals, seasonSplits, gameLog] = await Promise.all([
+  const [totals, playoffTotals, seasonSplits, gameLog] = await Promise.all([
     isGoalie ? getGoalieCareerTotals(playerId) : getSkaterCareerTotals(playerId),
+    isGoalie ? getGoalieCareerTotals(playerId, "playoff") : getSkaterCareerTotals(playerId, "playoff"),
     isGoalie ? getGoalieSeasonSplits(playerId) : getSkaterSeasonSplits(playerId),
     getRecentGameLog(playerId, isGoalie),
   ]);
@@ -77,6 +78,7 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
         <section style={{ marginBottom: "2.5rem" }}>
           <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".02em", fontSize: "1.4rem", marginBottom: ".2rem" }}>
             {fullCareer ? "Career Totals" : "Totals Since 2007-08"}
+            <span style={{ fontSize: ".8rem", color: "var(--text-secondary)", marginLeft: ".6rem", letterSpacing: ".04em" }}>Regular season</span>
           </h2>
           {!fullCareer && (
             <p style={{ fontSize: ".82rem", color: "var(--text-secondary)", marginBottom: "1rem", maxWidth: "60ch" }}>
@@ -102,6 +104,14 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
               </>
             )}
           </div>
+          {playoffTotals.games > 0 && (
+            <p style={{ fontSize: ".85rem", color: "var(--text-secondary)", marginTop: ".9rem" }}>
+              <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>Playoffs: </span>
+              {isGoalie
+                ? `${playoffTotals.games} GP · ${playoffTotals.wins}-${playoffTotals.losses} · ${playoffTotals.shutouts} SO${playoffTotals.save_pct != null ? ` · ${String(playoffTotals.save_pct).replace(/^0/, "")} SV%` : ""}`
+                : `${playoffTotals.games} GP · ${playoffTotals.goals} G · ${playoffTotals.assists} A · ${playoffTotals.points} P`}
+            </p>
+          )}
         </section>
 
         {seasonSplits.length > 0 && (

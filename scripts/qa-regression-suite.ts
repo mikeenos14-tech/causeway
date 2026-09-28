@@ -325,6 +325,43 @@ const cases: TestCase[] = [
     },
   },
   {
+    // Added 2026-09-28: live, this answered "Korpisalo led with 3" — the
+    // SQL was right but goalie_game_stats credited relief appearances as
+    // shutouts and stored every OT loss as a null decision (both fixed at
+    // the backfill + scripts/repair-goalie-decisions.ts). Ground truth
+    // after the repair: Swayman 2 SO, Korpisalo 1; team went 45-27-10.
+    name: "goalie shutouts and OT losses reflect real NHL crediting (2025-26 Bruins)",
+    question: "Which Bruins goalie had the most shutouts in the 2025-26 regular season, and what were the goalies' W-L-OTL records?",
+    check: (r) => {
+      // The leader is whoever the first sentence names first — Korpisalo
+      // may legitimately appear after him ("one more than Korpisalo's 1").
+      const firstSentence = (r.answer.split(/(?<=[.!?])\s/)[0] ?? "").toLowerCase();
+      const s = firstSentence.indexOf("swayman");
+      const k = firstSentence.indexOf("korpisalo");
+      const swaymanLeads = s >= 0 && (k < 0 || s < k);
+      const otlRows = (r.table?.rows ?? []).map((row) =>
+        Object.entries(row).find(([k]) => /otl|ot_?loss|overtime|^ot$/i.test(k))?.[1],
+      );
+      const zeroOtl = otlRows.length > 0 && otlRows.every((v) => Number(v) === 0);
+      const pass = swaymanLeads && !zeroOtl;
+      return {
+        pass,
+        reason: !swaymanLeads ? "expected Swayman (2 SO) named as the leader, not Korpisalo" : zeroOtl ? "every goalie shows 0 OT losses — the team had 10" : undefined,
+      };
+    },
+  },
+  {
+    // Added 2026-09-28: career totals once silently blended playoffs in
+    // across the site (a "1027 point" career card over a season table
+    // summing to 933). The NHL's career totals are regular season only.
+    name: "career totals default to regular season, not blended with playoffs",
+    question: "How many career points does David Pastrnak have?",
+    check: (r) => {
+      const scoped = r.queries.some((q) => /game_type\s*=\s*'regular'/i.test(q.sql));
+      return { pass: scoped, reason: scoped ? undefined : "no query filtered game_type = 'regular' for a career total" };
+    },
+  },
+  {
     name: "never invents a name for a player id it didn't resolve",
     question: "What's the longest point streak by a Bruins player, and who are the runners-up?",
     check: (r) => {

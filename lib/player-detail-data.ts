@@ -9,28 +9,36 @@ export async function getPlayer(playerId: number) {
   return rows[0] ?? null;
 }
 
-export async function getSkaterCareerTotals(playerId: number) {
+// Scoped by game type: the NHL's career totals (and every milestone) are
+// regular season only. These once summed every game on file, so a career
+// card read 929 GP / 1027 P for Pastrnak while the season table right
+// below it summed to 833 / 933 — playoffs silently blended in.
+export type GameType = "regular" | "playoff";
+
+export async function getSkaterCareerTotals(playerId: number, gameType: GameType = "regular") {
   const { rows } = await pool.query(
-    `select count(*) as games, coalesce(sum(goals),0) as goals, coalesce(sum(assists),0) as assists,
-            coalesce(sum(goals+assists),0) as points
-     from skater_game_stats where player_id = $1`,
-    [playerId],
+    `select count(*)::int as games, coalesce(sum(s.goals),0)::int as goals, coalesce(sum(s.assists),0)::int as assists,
+            coalesce(sum(s.goals+s.assists),0)::int as points
+     from skater_game_stats s join games g on g.id = s.game_id
+     where s.player_id = $1 and g.game_type = $2`,
+    [playerId, gameType],
   );
   return rows[0];
 }
 
-export async function getGoalieCareerTotals(playerId: number) {
+export async function getGoalieCareerTotals(playerId: number, gameType: GameType = "regular") {
   const { rows } = await pool.query(
-    `select count(*) as games,
-            coalesce(sum(case when decision='W' then 1 else 0 end),0) as wins,
-            coalesce(sum(case when decision='L' then 1 else 0 end),0) as losses,
-            coalesce(sum(case when decision='OTL' then 1 else 0 end),0) as otl,
-            coalesce(sum(shutout::int),0) as shutouts,
-            case when sum(shots_against) > 0
-              then round(sum(saves)::numeric / sum(shots_against), 3)
+    `select count(*)::int as games,
+            coalesce(sum(case when s.decision='W' then 1 else 0 end),0)::int as wins,
+            coalesce(sum(case when s.decision='L' then 1 else 0 end),0)::int as losses,
+            coalesce(sum(case when s.decision='OTL' then 1 else 0 end),0)::int as otl,
+            coalesce(sum(s.shutout::int),0)::int as shutouts,
+            case when sum(s.shots_against) > 0
+              then round(sum(s.saves)::numeric / sum(s.shots_against), 3)
               else null end as save_pct
-     from goalie_game_stats where player_id = $1`,
-    [playerId],
+     from goalie_game_stats s join games g on g.id = s.game_id
+     where s.player_id = $1 and g.game_type = $2`,
+    [playerId, gameType],
   );
   return rows[0];
 }

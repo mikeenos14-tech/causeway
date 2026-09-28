@@ -450,11 +450,25 @@ async function backfillOnce(teamAbbrev: string, seasonId: string) {
           ]);
         }
 
+        // A shutout is credited only to a goalie who played the whole game
+        // alone with the opponent held scoreless (final score, so a
+        // shootout loss is correctly excluded). Found live: deriving it
+        // from the goalie's own goals_against=0 credited 1,178 relief
+        // appearances league-wide (e.g. a 6-minute mop-up stint).
+        const goaliesUsed = stats.goalies.filter((p: { toi: string }) => p.toi !== "00:00").length;
+        const oppScore = side === "homeTeam" ? g.awayTeam.score : g.homeTeam.score;
         for (const p of stats.goalies) {
           if (p.toi === "00:00") continue; // didn't play
           await upsertPlayerFromBoxscore(p, teamId);
+          // The API's own codes are authoritative: "O" is an OT/shootout
+          // loss, "L" is always a loss. Two real bugs came from deriving
+          // it instead: only "L" was recognized, so every regular-season
+          // OT loss ("O") became a null decision; and "L" in an OT game
+          // was rewritten to OTL, but that's either a playoff OT loss
+          // (playoffs have no OTL) or the pulled-goalie-in-OT rule, where
+          // the NHL charges a regulation loss (MIN, 2024-03-30).
           const decision =
-            p.decision === "W" ? "W" : p.decision === "L" ? (endType === "regulation" ? "L" : "OTL") : null;
+            p.decision === "W" ? "W" : p.decision === "O" ? (g.gameType === 3 ? "L" : "OTL") : p.decision === "L" ? "L" : null;
           goalieRows.push([
             g.id,
             p.playerId,
@@ -465,7 +479,7 @@ async function backfillOnce(teamAbbrev: string, seasonId: string) {
             p.goalsAgainst ?? null,
             p.savePctg ?? null,
             timeToSeconds(p.toi),
-            p.goalsAgainst === 0 && (p.saves ?? 0) > 0,
+            goaliesUsed === 1 && oppScore === 0,
             "nhl-api",
           ]);
         }
@@ -503,7 +517,9 @@ async function backfillOnce(teamAbbrev: string, seasonId: string) {
         ["game_id", "player_id", "team_id", "decision", "shots_against", "saves", "goals_against", "save_pct", "toi_seconds", "shutout", "source"],
         goalieRows,
         "game_id, player_id",
-        "updated_at = now()",
+        // Overwrite the derived fields on a re-run so a corrected mapping
+        // actually heals existing rows (same lesson as the player-bio upsert).
+        "decision = excluded.decision, shutout = excluded.shutout, updated_at = now()",
       );
       await client.query(goalieInsert.sql, goalieInsert.params);
     }
