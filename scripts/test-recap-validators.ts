@@ -75,6 +75,9 @@ const cases: Case[] = [
   { name: "record on neither line", game: 2023020021, headline: "Bruins win", body: "Bruins improve to 3-0-0.", expect: "reject" },
   { name: "headline passive, correct (NSH led; batch false positive)", game: 2025020979, headline: "Bruins outplayed in Nashville, fall 6-3", body: "Nashville beat Boston 6-3.", expect: "pass" },
   { name: "headline passive, inverted (CBJ led, so CBJ wasn't outplayed)", game: 2025021278, headline: "Blue Jackets outplayed in their own barn", body: "Boston won 3-2.", expect: "reject" },
+  { name: "headlinese passive with 'but' (batch false positive; CBJ led)", game: 2025021278, headline: "Bruins outshot but outscore Columbus", body: "Boston won 3-2 despite 35 shots against.", expect: "pass" },
+  { name: "headlinese passive with 'and' (batch false positive)", game: 2025021278, headline: "Bruins outshot and outchanced, win anyway", body: "Boston won 3-2.", expect: "pass" },
+  { name: "active with object still checked", game: 2025021278, headline: "Bruins outshot them badly", body: "Boston won 3-2.", expect: "reject" },
   { name: "overtime claimed for a regulation game", game: 2025030116, headline: "Overtime loss", body: "Buffalo won 4-1 in overtime.", expect: "reject" },
 ];
 

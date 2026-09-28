@@ -158,8 +158,14 @@ export function validateRecap(parsed: { headline: string; body: string }, facts:
     // Passive voice ("Boston was outshot", headline-style "Bruins outplayed
     // in Nashville" / "outshot by Columbus") makes the subject the side
     // that TRAILED, so the check flips rather than being skipped.
-    const passive =
-      /\b(was|were|got|get|getting|being|been)\b/i.test(m[0]) || /^\s+(in|by|at|on)\b/i.test(combined.slice(m.index! + m[0].length));
+    // Headlinese drops the auxiliary too ("Bruins outshot but outscore
+    // Blues", "outshot and outchanced, win anyway"), so the verb only reads
+    // as active when an object follows it: a team word, a pronoun or
+    // article, or the score itself.
+    const afterVerb = combined.slice(m.index! + m[0].length);
+    const objectWord = /^\s+([A-Za-z]+|\d)/.exec(afterVerb)?.[1] ?? "";
+    const hasObject = /^\d/.test(objectWord) || /^(the|them|their|its|his|every|opponents?)$/i.test(objectWord) || teamOf(objectWord) !== null;
+    const passive = /\b(was|were|got|get|getting|being|been)\b/i.test(m[0]) || !hasObject;
     if (passive) {
       if (team && lead && team === lead[1]) reject(`says ${team} was "${m[2]}", but the sheet has ${team} leading`);
       continue;
