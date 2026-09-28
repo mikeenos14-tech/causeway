@@ -137,6 +137,14 @@ body {
     scrollbar-width: none;
     gap: 22px;
   }
+  /* Roster-change rows: name, then the detail on its own line. */
+  .move-row {
+    flex-direction: column;
+    gap: 2px !important;
+  }
+  .move-detail {
+    text-align: left !important;
+  }
   .dash-hero {
     padding-top: 1.75rem !important;
   }

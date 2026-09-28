@@ -12,6 +12,8 @@ import { hasFullCareerLoaded } from "@/lib/significance-checks";
 import { formatGameDate, formatSeasonLabel } from "@/lib/format-date";
 import { Masthead, Footer } from "@/components/Masthead";
 import { Sparkline } from "@/components/Sparkline";
+import { LEADERSHIP } from "@/lib/leadership";
+import { getClubSeason } from "@/lib/nhl-schedule";
 
 export default async function PlayerDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -22,6 +24,11 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
   if (!player) notFound();
 
   const isGoalie = player.position === "G";
+  // Captaincy for the NHL's current season only (hand-maintained, sourced —
+  // see lib/leadership.ts).
+  const ledTeam = Object.entries(LEADERSHIP).find(([, l]) => l.captainId === playerId || l.alternateIds.includes(playerId));
+  const ledSeason = ledTeam ? (await getClubSeason(ledTeam[0]))?.currentSeason : null;
+  const role = ledTeam && ledSeason === ledTeam[1].season ? (ledTeam[1].captainId === playerId ? "Captain" : "Alternate captain") : null;
   const [totals, playoffTotals, seasonSplits, gameLog] = await Promise.all([
     isGoalie ? getGoalieCareerTotals(playerId) : getSkaterCareerTotals(playerId),
     isGoalie ? getGoalieCareerTotals(playerId, "playoff") : getSkaterCareerTotals(playerId, "playoff"),
@@ -57,7 +64,12 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
       <main style={{ maxWidth: 1160, margin: "0 auto", padding: "3rem 24px 3.5rem" }}>
         <section style={{ marginBottom: "2.5rem" }}>
           <span style={{ fontFamily: "var(--font-display)", fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--gold)", display: "block", marginBottom: ".6rem", fontSize: ".9rem" }}>
-            {player.position === "G" ? "Goalie" : player.position ?? "Player"}
+            {({ C: "Center", L: "Left wing", R: "Right wing", D: "Defense", G: "Goalie" } as Record<string, string>)[player.position] ?? "Player"}
+            {role && ledTeam && (
+              <span style={{ marginLeft: 10, color: "var(--ink)", background: "var(--gold)", borderRadius: 4, padding: "1px 7px", fontSize: ".78rem" }}>
+                {role} · {ledTeam[0]}
+              </span>
+            )}
           </span>
           <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "clamp(2.4rem,5.5vw,4rem)", lineHeight: 0.98, textTransform: "uppercase", letterSpacing: ".01em", margin: "0 0 .6rem" }}>
             {player.full_name}

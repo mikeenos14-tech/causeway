@@ -40,7 +40,17 @@ function SortableHead<Row>({
   );
 }
 
-export function SkaterRosterTable({ rows }: { rows: SkaterRosterRow[] }) {
+// A gold "C" / "A" after a name, for the season the designation applies to.
+function Badge({ b }: { b?: "C" | "A" }) {
+  if (!b) return null;
+  return (
+    <span title={b === "C" ? "Captain" : "Alternate captain"} style={{ marginLeft: 6, fontSize: ".68rem", fontWeight: 700, color: "var(--ink)", background: "var(--gold)", borderRadius: 3, padding: "0 4px" }}>
+      {b}
+    </span>
+  );
+}
+
+export function SkaterRosterTable({ rows, badges = {} }: { rows: SkaterRosterRow[]; badges?: Record<number, "C" | "A"> }) {
   const [sort, setSort] = useState<{ field: keyof SkaterRosterRow; dir: SortDir }>({ field: "points", dir: "desc" });
 
   const sorted = useMemo(() => {
@@ -84,6 +94,7 @@ export function SkaterRosterTable({ rows }: { rows: SkaterRosterRow[] }) {
                 <Link href={`/players/${r.id}`} style={{ color: "var(--text-primary)", textDecoration: "none", fontWeight: 600 }}>
                   {r.full_name}
                 </Link>
+                <Badge b={badges[r.id]} />
               </td>
               <td>{r.position ?? "—"}</td>
               <td>{r.games}</td>
@@ -106,7 +117,7 @@ export function SkaterRosterTable({ rows }: { rows: SkaterRosterRow[] }) {
   );
 }
 
-export function GoalieRosterTable({ rows }: { rows: GoalieRosterRow[] }) {
+export function GoalieRosterTable({ rows, badges = {} }: { rows: GoalieRosterRow[]; badges?: Record<number, "C" | "A"> }) {
   const [sort, setSort] = useState<{ field: keyof GoalieRosterRow; dir: SortDir }>({ field: "wins", dir: "desc" });
 
   const sorted = useMemo(() => {
@@ -144,6 +155,7 @@ export function GoalieRosterTable({ rows }: { rows: GoalieRosterRow[] }) {
                 <Link href={`/players/${r.id}`} style={{ color: "var(--text-primary)", textDecoration: "none", fontWeight: 600 }}>
                   {r.full_name}
                 </Link>
+                <Badge b={badges[r.id]} />
               </td>
               <td>{r.games}</td>
               <td>{r.wins}</td>

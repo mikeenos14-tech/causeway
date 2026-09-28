@@ -31,6 +31,9 @@ import { nextGameFlavor } from "@/lib/next-game";
 import { roundLabel } from "@/lib/playoff-data";
 import { formatGameDate, formatSeasonLabel } from "@/lib/format-date";
 import { StatLeaders } from "@/components/StatLeaders";
+import { RosterMovesCard } from "@/components/RosterMovesCard";
+import { getRosterMoves } from "@/lib/roster-moves";
+import { getCurrentCaptainName } from "@/lib/leadership";
 import { FormBars } from "@/components/Sparkline";
 
 const H2 = { margin: 0, fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "1.5rem", textTransform: "uppercase" as const, letterSpacing: ".02em" };
@@ -102,6 +105,13 @@ export async function TeamDashboard({ abbrev, compact = false }: { abbrev: strin
       ? await Promise.all([getAllSeasonSeriesForTeam(abbrev, seasonId), newSeasonPending ? getSeasonSummary(abbrev, seasonId) : Promise.resolve(null)])
       : [[], null];
   const h2h = next ? h2hRows.find((r) => r.opp_abbrev === next.opponent) : undefined;
+
+  // Roster changes matter most around the turn of a season: before this
+  // team's first game and through its first 10.
+  const showMoves = !!club && (newSeasonPending || gp < 10);
+  const [moves, captainName] = showMoves
+    ? await Promise.all([getRosterMoves(abbrev, club!.previousSeason), getCurrentCaptainName(abbrev, club!.currentSeason)])
+    : [null, null];
 
   const teamName = club?.teamName ?? abbrev;
   const titleSize = compact ? "clamp(1.9rem,4.5vw,2.8rem)" : "clamp(2.6rem,8vw,4.75rem)";
@@ -207,6 +217,8 @@ export async function TeamDashboard({ abbrev, compact = false }: { abbrev: strin
           </div>
         </section>
       )}
+
+      {moves && <RosterMovesCard teamAbbrev={abbrev} moves={moves} captainName={captainName} />}
 
       {!compact && <AskBand />}
 
