@@ -151,3 +151,19 @@ export async function getGoalieRosterStats(teamAbbrev: string, seasonId: string)
     gaa: Number(r.toi_seconds) > 0 ? (Number(r.goals_against) * 3600) / Number(r.toi_seconds) : null,
   }));
 }
+
+// Newest season with any MoneyPuck (xG/Corsi) rows for this team. MoneyPuck
+// updates nightly, so for up to a day after a team's first game of a new
+// season the Advanced tab would otherwise be empty; it shows the latest
+// season that has data instead, labeled as such.
+export async function getLatestAdvancedSeasonId(teamAbbrev: string): Promise<string | null> {
+  const { rows } = await pool.query(
+    `select max(g.season_id) as season_id
+     from skater_game_stats sgs
+     join games g on g.id = sgs.game_id
+     join teams t on t.id = sgs.team_id
+     where t.abbrev = $1 and g.game_type = 'regular' and sgs.ixg is not null`,
+    [teamAbbrev],
+  );
+  return rows[0]?.season_id ? String(rows[0].season_id) : null;
+}

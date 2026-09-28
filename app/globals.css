@@ -54,6 +54,18 @@ body {
   overflow-x: hidden;
 }
 
+/* Masthead: logo, section links, Ask — one row on desktop; on phones the
+   links drop to their own side-scrolling row (see Masthead.tsx). */
+.masthead-inner {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+.masthead-nav {
+  display: flex;
+  gap: 20px;
+}
+
 .stat-strip {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -72,6 +84,13 @@ body {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 12px;
+}
+
+/* A card that spans two columns of a .card-row (a playoff series card) —
+   back to one column on phones, where the row itself is one column and a
+   span of 2 would create an implicit second column and overflow. */
+.card-wide {
+  grid-column: span 2;
 }
 
 .homepage-lower-grid {
@@ -102,15 +121,52 @@ body {
 }
 
 @media (max-width: 700px) {
+  .masthead-inner {
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    padding: 12px 16px !important;
+  }
+  .masthead-ask {
+    margin-left: auto;
+  }
+  .masthead-nav {
+    order: 3;
+    width: 100%;
+    overflow-x: auto;
+    white-space: nowrap;
+    scrollbar-width: none;
+    gap: 22px;
+  }
+  .dash-hero {
+    padding-top: 1.75rem !important;
+  }
+  .hero-aside {
+    display: none;
+  }
+  /* 2x2 on phones rather than four full-width stacked tiles. */
   .stat-strip {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr 1fr;
   }
   .stat-strip > div {
     border-right: none;
     border-bottom: 1px solid var(--border);
+    padding: 1rem 1.1rem !important;
+    min-width: 0;
+  }
+  .stat-strip > div:nth-child(odd) {
+    border-right: 1px solid var(--border);
+  }
+  .stat-strip > div:nth-last-child(-n + 2) {
+    border-bottom: none;
+  }
+  .stat-strip > div > div:nth-child(2) {
+    font-size: 1.9rem !important;
   }
   .homepage-lower-grid {
     grid-template-columns: 1fr;
+  }
+  .card-wide {
+    grid-column: auto;
   }
   .standings-row {
     grid-template-columns: 28px 1fr 40px 40px 52px;
@@ -152,6 +208,15 @@ body {
   font-size: 0.72rem;
   letter-spacing: 0.04em;
   font-weight: 500;
+}
+/* Keep the name column in view while a wide stats table scrolls
+   sideways on a phone. */
+.sticky-first th:first-child,
+.sticky-first td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--surface-1);
 }
 .box-score-table tbody tr {
   border-top: 1px solid var(--border);

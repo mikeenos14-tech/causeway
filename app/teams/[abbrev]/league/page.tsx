@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { getTeam } from "@/lib/homepage-data";
-import { getCurrentLeagueSeasonId, getLeagueTeamStats, rankTeam, type LeagueTeamStats } from "@/lib/league-data";
+import { getLeagueComparisonSeason, getLeagueTeamStats, rankTeam, type LeagueTeamStats } from "@/lib/league-data";
 import { formatSeasonLabel } from "@/lib/format-date";
 import { Masthead, Footer } from "@/components/Masthead";
 import { TeamSubNav } from "@/components/TeamSubNav";
@@ -100,7 +100,7 @@ export default async function TeamLeagueComparison({ params }: { params: Promise
   const team = await getTeam(abbrev);
   if (!team) notFound();
 
-  const seasonId = await getCurrentLeagueSeasonId();
+  const { seasonId, pending } = await getLeagueComparisonSeason();
   const teams = seasonId ? await getLeagueTeamStats(seasonId) : [];
   const own = teams.find((t) => t.abbrev === abbrev);
 
@@ -129,8 +129,16 @@ export default async function TeamLeagueComparison({ params }: { params: Promise
           League Comparison
         </h1>
         <p style={{ color: "var(--text-secondary)", fontSize: ".9rem", marginBottom: "2rem" }}>
-          {seasonId ? `${formatSeasonLabel(seasonId)} regular season · vs. all ${teams.length} NHL teams` : "No season loaded yet"}
+          {seasonId
+            ? `${formatSeasonLabel(seasonId)} regular season${pending ? " · final" : ""} · vs. all ${teams.length} NHL teams`
+            : "No season loaded yet"}
         </p>
+        {pending && (
+          <p style={{ fontSize: ".85rem", color: "var(--text-secondary)", margin: "-1.25rem 0 2rem", maxWidth: "70ch" }}>
+            The {formatSeasonLabel(pending.seasonId)} comparison starts once every team has played — {pending.teamsPlayed} of {pending.teamsTotal} so far.
+            Until then, rankings against a partial league wouldn&apos;t mean what they say.
+          </p>
+        )}
 
         {own ? (
           <>

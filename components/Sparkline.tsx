@@ -7,16 +7,18 @@
 // a line chart for a binary W/L sequence, which is why the homepage's old
 // plain-text "W L L W" dots existed in the first place; this replaces that
 // idea with something with real visual weight.
-export function FormBars({ results, height = 28 }: { results: ("W" | "L")[]; height?: number }) {
+// An "OT" result (overtime/shootout loss) earns a point, so its bar sits
+// between a win and a regulation loss, the way the standings treat it.
+export function FormBars({ results, height = 28 }: { results: ("W" | "L" | "OT")[]; height?: number }) {
   if (results.length === 0) return null;
   const barWidth = 6;
   const gap = 3;
   const width = results.length * barWidth + (results.length - 1) * gap;
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: "block" }}>
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: "block" }} role="img" aria-label={`Last ${results.length}: ${results.join(" ")}`}>
       {results.map((r, i) => {
         const won = r === "W";
-        const barHeight = won ? height : height * 0.55;
+        const barHeight = won ? height : r === "OT" ? height * 0.75 : height * 0.55;
         return (
           <rect
             key={i}

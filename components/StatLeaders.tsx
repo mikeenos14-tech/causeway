@@ -37,14 +37,15 @@ function LeaderCard({ label, leader, value }: { label: string; leader: Leader; v
   );
 }
 
-export function StatLeaders({ statLeaders }: { statLeaders: StatLeadersData }) {
+export function StatLeaders({ statLeaders, caption }: { statLeaders: StatLeadersData; caption?: string }) {
   const anyLeader =
     statLeaders.points || statLeaders.goals || statLeaders.assists || statLeaders.plusMinus || statLeaders.hits || statLeaders.blocks || statLeaders.goalie;
 
   return (
     <section>
-      <div style={{ marginBottom: "1rem" }}>
+      <div style={{ marginBottom: "1rem", display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <h2 style={{ margin: 0, fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "1.5rem", textTransform: "uppercase", letterSpacing: ".02em" }}>Stat Leaders</h2>
+        {caption && <span style={{ fontSize: ".78rem", color: "var(--text-secondary)" }}>{caption}</span>}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
         {statLeaders.points && <LeaderCard label="Points" leader={statLeaders.points} value={statLeaders.points.points as number} />}
@@ -59,7 +60,7 @@ export function StatLeaders({ statLeaders }: { statLeaders: StatLeadersData }) {
         )}
         {statLeaders.hits && <LeaderCard label="Hits" leader={statLeaders.hits} value={statLeaders.hits.hits as number} />}
         {statLeaders.blocks && <LeaderCard label="Blocks" leader={statLeaders.blocks} value={statLeaders.blocks.blocks as number} />}
-        {statLeaders.goalie && <LeaderCard label="Save %" leader={statLeaders.goalie} value={statLeaders.goalie.savePct.toFixed(3)} />}
+        {statLeaders.goalie && <LeaderCard label="Save %" leader={statLeaders.goalie} value={statLeaders.goalie.savePct.toFixed(3).replace(/^0/, "")} />}
         {!anyLeader && <p style={{ color: "var(--text-secondary)", fontSize: ".9rem" }}>No stat leaders on file yet for this team&apos;s most recent loaded season.</p>}
       </div>
     </section>

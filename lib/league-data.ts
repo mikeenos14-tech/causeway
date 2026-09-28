@@ -20,14 +20,35 @@ export type LeagueTeamStats = {
   xgCoverage: number; // fraction of this team's games with a MoneyPuck xG row loaded
 };
 
-// Same "whatever's actually loaded" pattern as everywhere else on the
-// site — the current league season is just the newest season_id with any
-// regular-season games, no hardcoded year.
-export async function getCurrentLeagueSeasonId(): Promise<string | null> {
+// The season a league-wide comparison should rank against — the same
+// "whatever's actually loaded" pattern as the rest of the site, no
+// hardcoded year, with one condition: a ranking is only a claim about the
+// whole league once every active team has played. On a season's first
+// nights, "the newest season with any games" would rank a team "1st of 10"
+// under a header saying "vs. all 32 NHL teams" (every team has a game by
+// the fourth night of 2026-27). Until then this returns last season's
+// final comparison plus the new season's progress, so the page can say why.
+export async function getLeagueComparisonSeason(): Promise<{
+  seasonId: string | null;
+  pending: { seasonId: string; teamsPlayed: number; teamsTotal: number } | null;
+}> {
   const { rows } = await pool.query(
-    `select max(season_id) as season_id from games where game_type = 'regular'`,
+    `select g.season_id, count(distinct t.id)::int as teams_played,
+            (select count(*)::int from teams where is_active) as teams_total
+     from games g
+     join teams t on t.id in (g.home_team_id, g.away_team_id) and t.is_active
+     where g.game_type = 'regular'
+     group by g.season_id
+     order by g.season_id desc
+     limit 2`,
   );
-  return rows[0]?.season_id ?? null;
+  if (rows.length === 0) return { seasonId: null, pending: null };
+  const [newest, previous] = rows;
+  if (newest.teams_played >= newest.teams_total || !previous) return { seasonId: String(newest.season_id), pending: null };
+  return {
+    seasonId: String(previous.season_id),
+    pending: { seasonId: String(newest.season_id), teamsPlayed: newest.teams_played, teamsTotal: newest.teams_total },
+  };
 }
 
 // One row per active team for the given season: goals for/against (from

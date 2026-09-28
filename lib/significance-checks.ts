@@ -100,6 +100,12 @@ export async function checkPointStreaks(client: Client, gameId: number, targetTe
   const game = await getGame(client, gameId);
   if (!game) return [];
   const facts: SignificanceFact[] = [];
+  // Point streaks are a regular-season, single-season stat in the NHL's
+  // own record-keeping: they reset every season and playoff games don't
+  // count toward them. The log below was once every game on file, so an
+  // opening-night point would have "extended" a streak spanning the
+  // offseason and last spring's playoffs.
+  if (game.game_type !== "regular") return facts;
 
   const { rows: skaters } = await client.query(
     `select s.player_id, p.full_name, p.birth_date
@@ -113,47 +119,58 @@ export async function checkPointStreaks(client: Client, gameId: number, targetTe
     // player's sparse pre-trade appearances against Boston (for his old
     // team) would splice into this log as if they were consecutive games
     // for this team, corrupting the streak count itself, not just its label.
+    // Bounded to this game's date so re-narrating an old game can't see
+    // later seasons.
     const { rows: log } = await client.query(
-      `select g.id as game_id, g.game_date, (s.points > 0) as scored
+      `select g.id as game_id, g.season_id, g.game_date, (s.points > 0) as scored
        from skater_game_stats s join games g on g.id = s.game_id
-       where s.player_id = $1 and s.team_id = $2
+       where s.player_id = $1 and s.team_id = $2 and g.game_type = 'regular' and g.game_date <= $3
        order by g.game_date asc`,
-      [skater.player_id, targetTeamId],
+      [skater.player_id, targetTeamId, game.game_date],
     );
     const idx = log.findIndex((r) => r.game_id === gameId);
     if (idx === -1) continue;
+    const sameSeason = (i: number) => log[i].season_id === game.season_id;
 
-    // Current streak ending at this game.
+    // Current streak ending at this game, within this season only.
     let current = 0;
-    for (let i = idx; i >= 0 && log[i].scored; i--) current++;
+    for (let i = idx; i >= 0 && sameSeason(i) && log[i].scored; i--) current++;
 
-    // Longest streak anywhere in loaded history (to know if `current` is a new high).
-    let longest = 0;
+    // His longest earlier streak on file (each season counted separately),
+    // to tell a new personal best from a tie or a shorter run.
+    let longestBefore = 0;
     let running = 0;
-    for (const row of log) {
-      running = row.scored ? running + 1 : 0;
-      longest = Math.max(longest, running);
+    for (let i = 0; i <= idx - current; i++) {
+      if (i > 0 && log[i].season_id !== log[i - 1].season_id) running = 0;
+      running = log[i].scored ? running + 1 : 0;
+      longestBefore = Math.max(longestBefore, running);
     }
 
     const fullCareer =
       hasFullCareerLoaded(skater.birth_date) &&
       (await playedOnlyForTeam(client, skater.player_id, targetTeamId, "skater_game_stats"));
-    const population = fullCareer ? "this player's full career" : "since our data begins (2007-08)";
+    // The log is this team's games only, so unless his whole career is
+    // verifiably here, the honest population is "with this team".
+    const teamAbbrev = targetTeamId === game.home_team_id ? game.home_abbrev : game.away_abbrev;
+    const population = fullCareer ? "this player's full career" : `his games with ${teamAbbrev} (since 2007-08)`;
 
-    if (log[idx].scored && current >= STREAK_FLOOR && current === longest) {
+    // Only a NEW personal best counts — a tie at the 5-game floor fired
+    // constantly in an audit of stored highlights and isn't notable. Worded
+    // as HIS best, never a bare "longest of the era", which read like a
+    // league or franchise record.
+    if (log[idx].scored && current >= STREAK_FLOOR && current > longestBefore) {
+      const scope = fullCareer ? "of his career" : `with ${teamAbbrev}`;
       facts.push({
         category: "point_streak_extending",
         population,
-        fact: `${skater.full_name} has a ${current}-game point streak — the longest of ${
-          fullCareer ? "his career" : `the ${population === "this player's full career" ? "" : "loaded"} era`
-        }.`,
+        fact: `${skater.full_name} has a ${current}-game point streak, his longest ${scope}.`,
       });
     }
 
-    if (!log[idx].scored && idx > 0) {
-      // Streak ending at the game immediately before this one.
+    if (!log[idx].scored && idx > 0 && sameSeason(idx - 1)) {
+      // Streak ending at the game immediately before this one (same season).
       let priorStreak = 0;
-      for (let i = idx - 1; i >= 0 && log[i].scored; i--) priorStreak++;
+      for (let i = idx - 1; i >= 0 && sameSeason(i) && log[i].scored; i--) priorStreak++;
       if (priorStreak >= STREAK_FLOOR) {
         facts.push({
           category: "point_streak_snapped",

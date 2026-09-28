@@ -67,3 +67,23 @@ export async function getPlayoffHistory(teamAbbrev: string): Promise<PlayoffSeri
     maxRoundThatSeason: r.max_round_that_season,
   }));
 }
+
+// Standard 4-round format, which every season in this database uses (the
+// max round is always 4) — labeled relative to that season's actual max
+// round rather than hardcoding "round 4 = Final", so this still reads
+// correctly if a play-in or extra round ever changes that.
+export function roundLabel(round: number, maxRound = 4): string {
+  const fromEnd = maxRound - round;
+  if (fromEnd === 0) return "Final";
+  if (fromEnd === 1) return "Conference Final";
+  if (fromEnd === 2) return "Second Round";
+  if (fromEnd === 3) return "First Round";
+  return `Round ${round}`;
+}
+
+// The earliest season with any games loaded — the honest start of every
+// "history" view until older eras are backfilled.
+export async function getFirstLoadedSeasonId(): Promise<string | null> {
+  const { rows } = await pool.query(`select min(season_id) as season_id from games`);
+  return rows[0]?.season_id ? String(rows[0].season_id) : null;
+}

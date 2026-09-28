@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getTeam } from "@/lib/homepage-data";
 import { getAllRegularSeasonResults, longestWinStreak, longestPointStreak, biggestWin, worstLoss, bestAndWorstMonth } from "@/lib/records-data";
-import { formatGameDate } from "@/lib/format-date";
+import { formatGameDate, formatSeasonLabel } from "@/lib/format-date";
 import { Masthead, Footer } from "@/components/Masthead";
 import { TeamSubNav } from "@/components/TeamSubNav";
 
@@ -40,7 +40,9 @@ export default async function TeamRecords({ params }: { params: Promise<{ abbrev
           Records &amp; Streaks
         </h1>
         <p style={{ color: "var(--text-secondary)", fontSize: ".9rem", marginBottom: "2rem" }}>
-          Regular season, every game on file ({results.length} games)
+          {results.length > 0
+            ? `Regular season since ${formatSeasonLabel(String(results[0].season_id))} · ${results.length.toLocaleString()} games on file. Franchise history before then isn't loaded yet, so these aren't all-time records.`
+            : "No games on file yet."}
         </p>
 
         <div className="card-row" style={{ marginBottom: "2.5rem" }}>

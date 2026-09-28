@@ -1,25 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTeam } from "@/lib/homepage-data";
-import { getPlayoffHistory, type PlayoffSeriesResult } from "@/lib/playoff-data";
+import { getPlayoffHistory, getFirstLoadedSeasonId, roundLabel, type PlayoffSeriesResult } from "@/lib/playoff-data";
 import { formatSeasonLabel } from "@/lib/format-date";
 import { Masthead, Footer } from "@/components/Masthead";
 import { TeamSubNav } from "@/components/TeamSubNav";
 
 export const revalidate = 300;
-
-// Standard 4-round format, which every season in this database uses (the
-// max round is always 4) — labeled relative to that season's actual max
-// round rather than hardcoding "round 4 = Final", so this still reads
-// correctly if a play-in or extra round ever changes that.
-function roundLabel(round: number, maxRound: number): string {
-  const fromEnd = maxRound - round;
-  if (fromEnd === 0) return "Final";
-  if (fromEnd === 1) return "Conference Final";
-  if (fromEnd === 2) return "Second Round";
-  if (fromEnd === 3) return "First Round";
-  return `Round ${round}`;
-}
 
 export default async function TeamPlayoffs({ params }: { params: Promise<{ abbrev: string }> }) {
   const { abbrev: rawAbbrev } = await params;
@@ -40,6 +27,10 @@ export default async function TeamPlayoffs({ params }: { params: Promise<{ abbre
   const seriesWon = history.filter((r) => r.won).length;
   const seriesLost = history.filter((r) => !r.won).length;
   const titles = history.filter((r) => r.won && r.round === r.maxRoundThatSeason).length;
+  // Scope comes from the data, not a hardcoded year: the earliest season we
+  // have any games for. "Championships: 1" on its own read as all-time for
+  // a six-Cup franchise.
+  const firstSeason = await getFirstLoadedSeasonId();
 
   return (
     <>
@@ -50,7 +41,8 @@ export default async function TeamPlayoffs({ params }: { params: Promise<{ abbre
           Playoff History
         </h1>
         <p style={{ color: "var(--text-secondary)", fontSize: ".9rem", marginBottom: "2rem" }}>
-          Every series on file · {seasons.length} playoff appearances
+          {firstSeason ? `Every series since ${formatSeasonLabel(firstSeason)} · ` : ""}
+          {seasons.length} playoff appearances. Franchise history before then isn&apos;t loaded yet.
         </p>
 
         {history.length === 0 ? (
@@ -60,7 +52,7 @@ export default async function TeamPlayoffs({ params }: { params: Promise<{ abbre
             <div className="card-row" style={{ marginBottom: "2.5rem" }}>
               <StatTile label="Series Won" value={seriesWon} />
               <StatTile label="Series Lost" value={seriesLost} />
-              <StatTile label="Championships" value={titles} />
+              <StatTile label={firstSeason ? `Cups since ${formatSeasonLabel(firstSeason)}` : "Stanley Cups"} value={titles} />
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>

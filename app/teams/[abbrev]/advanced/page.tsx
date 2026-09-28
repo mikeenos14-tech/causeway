@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { getTeam } from "@/lib/homepage-data";
-import { getRosterSeasonId, getAdvancedRosterStats } from "@/lib/roster-data";
+import { getRosterSeasonId, getAdvancedRosterStats, getLatestAdvancedSeasonId } from "@/lib/roster-data";
 import { formatSeasonLabel } from "@/lib/format-date";
 import { Masthead, Footer } from "@/components/Masthead";
 import { TeamSubNav } from "@/components/TeamSubNav";
@@ -24,8 +24,20 @@ export default async function TeamAdvancedStats({ params }: { params: Promise<{ 
   const team = await getTeam(abbrev);
   if (!team) notFound();
 
-  const seasonId = await getRosterSeasonId(abbrev);
-  const rows = seasonId ? await getAdvancedRosterStats(abbrev, seasonId) : [];
+  const currentSeasonId = await getRosterSeasonId(abbrev);
+  let seasonId = currentSeasonId;
+  let rows = seasonId ? await getAdvancedRosterStats(abbrev, seasonId) : [];
+  // MoneyPuck lags our own data by up to a day (it updates nightly), so a
+  // brand-new season can have games but no xG yet — show the latest season
+  // that has it, clearly labeled, rather than an empty page.
+  if (rows.length === 0) {
+    const latestWithData = await getLatestAdvancedSeasonId(abbrev);
+    if (latestWithData && latestWithData !== seasonId) {
+      seasonId = latestWithData;
+      rows = await getAdvancedRosterStats(abbrev, latestWithData);
+    }
+  }
+  const showingPrevious = !!(seasonId && currentSeasonId && seasonId !== currentSeasonId);
 
   return (
     <>
@@ -41,8 +53,13 @@ export default async function TeamAdvancedStats({ params }: { params: Promise<{ 
           </div>
         </div>
         <p style={{ color: "var(--text-secondary)", fontSize: ".9rem", marginBottom: "2rem" }}>
-          {seasonId ? `${formatSeasonLabel(seasonId)} regular season · individual expected goals & on-ice possession` : "No season loaded yet"}
+          {seasonId ? `${formatSeasonLabel(seasonId)} regular season${showingPrevious ? " · final" : ""} · individual expected goals & on-ice possession` : "No season loaded yet"}
         </p>
+        {showingPrevious && currentSeasonId && (
+          <p style={{ fontSize: ".85rem", color: "var(--text-secondary)", margin: "-1.25rem 0 2rem", maxWidth: "70ch" }}>
+            {formatSeasonLabel(currentSeasonId)} advanced stats appear after MoneyPuck&apos;s next nightly update.
+          </p>
+        )}
 
         {rows.length > 0 ? (
           <>
