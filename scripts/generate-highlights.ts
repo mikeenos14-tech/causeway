@@ -10,6 +10,7 @@ import { Client } from "pg";
 import { runSignificanceChecks } from "../lib/significance-checks";
 import { narrateHighlights } from "../lib/narrate-highlights";
 import { narrateRecap } from "../lib/narrate-recap";
+import { buildGameFacts } from "../lib/game-facts";
 import { TARGET_TEAM_ABBREV } from "../lib/significance-checks";
 
 async function backfillOnce(candidateGameIds: number[]) {
@@ -67,14 +68,11 @@ async function backfillOnce(candidateGameIds: number[]) {
 
       if (facts.length === 0) {
         console.log("nothing notable — falling back to a recap line (no facts to ground a highlight in)");
-        const recap = await narrateRecap({
-          homeAbbrev: game.home_abbrev,
-          awayAbbrev: game.away_abbrev,
-          homeScore: game.home_score,
-          awayScore: game.away_score,
-          gameDate: game.game_date.toISOString().slice(0, 10),
-          gameType: game.game_type,
-        });
+        // Grounded in the game's verified fact sheet (scorers, goalies,
+        // shots/xG, where it sits in the season) — see lib/game-facts.ts.
+        const sheet = await buildGameFacts(client, gameId, TARGET_TEAM_ABBREV);
+        if (!sheet) throw new Error(`No game row for ${gameId}`);
+        const recap = await narrateRecap(sheet);
         console.log(`\nHEADLINE: ${recap.headline}`);
         console.log(`BODY: ${recap.body}`);
         await client.query(

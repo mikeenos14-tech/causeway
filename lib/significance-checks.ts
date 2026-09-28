@@ -405,6 +405,82 @@ export async function checkHeadToHeadShutout(client: Client, gameId: number): Pr
   return [{ category: "head_to_head_shutout", population: "head-to-head, loaded data only", fact }];
 }
 
+// --- Check 8: individual scoring feats ---------------------------------
+//
+// The most broadcast-nameable things a skater can do in one game, which the
+// original checks had no way to see: a 4-goal, 6-assist night against the
+// Rangers (2026-01-10) produced no highlight at all. One fact per player,
+// headlined by the rarest qualifying stat (a 4-goal, 1-assist game is a
+// 4-goal game first, not also a separate 5-point fact). Populations are
+// stated and compared like-for-like:
+//   hat trick                  this team's games this season (common enough
+//                              league-wide that all-time counts mean little)
+//   4+ goals / 4+ assists /
+//   5+ points                  this team's games of the same type since the
+//                              data begins (2007-08), counted as of this game
+const FEATS = [
+  { stat: "goals", min: 3 },
+  { stat: "assists", min: 4 },
+  { stat: "points", min: 5 },
+] as const;
+
+export async function checkScoringFeats(client: Client, gameId: number, targetTeamId: number): Promise<SignificanceFact[]> {
+  const game = await getGame(client, gameId);
+  if (!game || (game.game_type !== "regular" && game.game_type !== "playoff")) return [];
+  const teamAbbrev = targetTeamId === game.home_team_id ? game.home_abbrev : game.away_abbrev;
+  const gameKind = game.game_type === "playoff" ? "playoff" : "regular-season";
+  const seasonLabel = `${String(game.season_id).slice(0, 4)}-${String(game.season_id).slice(6, 8)}`;
+
+  const { rows: skaters } = await client.query(
+    `select s.player_id, p.full_name, s.goals, s.assists, (s.goals + s.assists) as points
+     from skater_game_stats s join players p on p.id = s.player_id
+     where s.game_id = $1 and s.team_id = $2 and (s.goals >= 3 or s.assists >= 4 or s.goals + s.assists >= 5)`,
+    [gameId, targetTeamId],
+  );
+
+  const facts: SignificanceFact[] = [];
+  for (const sk of skaters) {
+    const line = `${sk.goals} G, ${sk.assists} A`;
+    let best: { stat: string; value: number; prior: number; seasonPrior: number } | null = null;
+    for (const feat of FEATS) {
+      const value = Number(sk[feat.stat]);
+      if (value < feat.min) continue;
+      const { rows } = await client.query(
+        `select count(*) filter (where true)::int as prior,
+                count(*) filter (where g.season_id = $4)::int as season_prior
+         from skater_game_stats s join games g on g.id = s.game_id
+         where s.team_id = $1 and g.game_type = $2 and g.game_date < $3
+           and ${feat.stat === "points" ? "s.goals + s.assists" : `s.${feat.stat}`} >= $5`,
+        [targetTeamId, game.game_type, game.game_date, game.season_id, value],
+      );
+      const candidate = { stat: feat.stat, value, prior: rows[0].prior, seasonPrior: rows[0].season_prior };
+      // Rarest wins: the fewest prior games at or above this mark. A plain
+      // hat trick is only the headline if nothing rarer qualifies.
+      if (!best || candidate.prior < best.prior) best = candidate;
+    }
+    if (!best) continue;
+
+    if (best.stat === "goals" && best.value === 3) {
+      facts.push({
+        category: "scoring_feat",
+        population: `${teamAbbrev} ${gameKind} games, ${seasonLabel} season`,
+        fact: `${sk.full_name} scored a hat trick (${line}) — ${teamAbbrev}'s ${ordinal(best.seasonPrior + 1)} ${gameKind === "playoff" ? "playoff " : ""}hat trick of the ${seasonLabel} season.`,
+      });
+      continue;
+    }
+    const label = `${best.value}${best.stat === "goals" ? " goals" : best.stat === "assists" ? " assists" : " points"}`;
+    facts.push({
+      category: "scoring_feat",
+      population: `${teamAbbrev} ${gameKind} games since 2007-08 (loaded data)`,
+      fact:
+        best.prior === 0
+          ? `${sk.full_name} had ${label} (${line}) — the first time a ${teamAbbrev} player has had ${best.value}+ ${best.stat} in a ${gameKind} game since 2007-08.`
+          : `${sk.full_name} had ${label} (${line}) — the ${ordinal(best.prior + 1)} time a ${teamAbbrev} player has had ${best.value}+ ${best.stat} in a ${gameKind} game since 2007-08.`,
+    });
+  }
+  return facts;
+}
+
 export async function runSignificanceChecks(client: Client, gameId: number): Promise<SignificanceFact[]> {
   // Sequential, not Promise.all — a single pg.Client handles one query at a
   // time; running these concurrently against the same connection is unsafe
@@ -416,5 +492,11 @@ export async function runSignificanceChecks(client: Client, gameId: number): Pro
   facts.push(...(await checkRookieMultiPoint(client, gameId, targetTeamId)));
   facts.push(...(await checkMilestones(client, gameId, targetTeamId)));
   facts.push(...(await checkHeadToHeadShutout(client, gameId)));
-  return facts;
+  const feats = await checkScoringFeats(client, gameId, targetTeamId);
+  facts.push(...feats);
+  // Dedupe overlapping claims about one performance: a defenseman's hat
+  // trick is a scoring feat first; the "multi-goal game by a defenseman"
+  // fact about the same player would be a second callout for one thing.
+  const featNames = feats.map((f) => f.fact.split(" scored ")[0].split(" had ")[0]);
+  return facts.filter((f) => !(f.category === "defenseman_multi_goal" && featNames.some((n) => f.fact.startsWith(n))));
 }

@@ -23,15 +23,15 @@ const MODEL = "claude-haiku-4-5-20251001"; // this is a short, cheap, per-game t
 // used them tonight.
 export const TEAM_WORDS: Record<string, string[]> = {
   ANA: ["anaheim", "ducks"], ARI: ["arizona", "coyotes"], ATL: ["atlanta", "thrashers"],
-  BOS: ["boston", "bruins"], BUF: ["buffalo", "sabres"], CAR: ["carolina", "hurricanes"],
-  CBJ: ["columbus", "blue", "jackets"], CGY: ["calgary", "flames"], CHI: ["chicago", "blackhawks"],
-  COL: ["colorado", "avalanche"], DAL: ["dallas", "stars"], DET: ["detroit", "red", "wings"],
-  EDM: ["edmonton", "oilers"], FLA: ["florida", "panthers"], LAK: ["los", "angeles", "kings"],
+  BOS: ["boston", "bruins"], BUF: ["buffalo", "sabres"], CAR: ["carolina", "hurricanes", "canes"],
+  CBJ: ["columbus", "blue", "jackets"], CGY: ["calgary", "flames"], CHI: ["chicago", "blackhawks", "hawks"],
+  COL: ["colorado", "avalanche", "avs"], DAL: ["dallas", "stars"], DET: ["detroit", "red", "wings"],
+  EDM: ["edmonton", "oilers"], FLA: ["florida", "panthers", "cats"], LAK: ["los", "angeles", "kings"],
   MIN: ["minnesota", "wild"], MTL: ["montreal", "montréal", "canadiens", "habs"],
-  NJD: ["new", "jersey", "devils"], NSH: ["nashville", "predators"], NYI: ["new", "york", "islanders"],
-  NYR: ["new", "york", "rangers"], OTT: ["ottawa", "senators"], PHI: ["philadelphia", "flyers"],
-  PHX: ["phoenix", "coyotes"], PIT: ["pittsburgh", "penguins"], SEA: ["seattle", "kraken"],
-  SJS: ["san", "jose", "sharks"], STL: ["st", "louis", "blues"], TBL: ["tampa", "bay", "lightning"],
+  NJD: ["new", "jersey", "devils"], NSH: ["nashville", "predators", "preds"], NYI: ["new", "york", "islanders", "isles"],
+  NYR: ["new", "york", "rangers"], OTT: ["ottawa", "senators", "sens"], PHI: ["philadelphia", "flyers", "philly"],
+  PHX: ["phoenix", "coyotes"], PIT: ["pittsburgh", "penguins", "pens"], SEA: ["seattle", "kraken"],
+  SJS: ["san", "jose", "sharks"], STL: ["st", "louis", "blues"], TBL: ["tampa", "bay", "lightning", "bolts"],
   TOR: ["toronto", "maple", "leafs"], UTA: ["utah", "mammoth"], VAN: ["vancouver", "canucks"],
   VGK: ["vegas", "golden", "knights"], WPG: ["winnipeg", "jets"], WSH: ["washington", "capitals", "caps"],
 };
@@ -42,9 +42,47 @@ export const TEAM_WORDS: Record<string, string[]> = {
 // trusting it: 122 of 123 initial "violations" were exactly this false
 // positive, not real fabrications. Only real proper names should ever
 // reach the rejection branch.
+// Game-flow claims no narrator can support: no play-by-play is loaded, so
+// nothing knows when goals came, who scored first, which goal won it, or
+// whether anyone blew a lead. Shared by both narrators (a highlight wrote
+// that the Bruins "couldn't quite hold on" in a game it knew only the
+// final score of).
+export const FLOW_CLAIMS: RegExp[] = [
+  /\b(first|second|third|1st|2nd|3rd) period\b/, /\bgame[- ]winn\w*\b/,
+  /\b(comeback|rall(y|ied)|came back|come back)\b/, /\b(opened the scoring|scored first|opening goal)\b/,
+  /\bempty[- ]net\b/, /\blate (goal|in the)\b/, /\b(blew (a|the|their|its) lead|blown lead|couldn.?t (quite )?hold (on|the lead)|let (it|one) slip)\b/,
+  /\b(start to finish|wire[- ]to[- ]wire|from (the )?puck drop|from the opening (faceoff|shift))\b/,
+];
+
 const GENERIC_ALLOWED_WORDS = [
   "tonight", "today", "that", "this", "these", "those", "it", "he", "she", "they", "both", "there",
+  // Added with the fact-sheet recaps (2026-09-28): "Nothing went right..."
+  // and similar sentence openers were read as names.
+  "nothing", "everything", "none", "neither", "each", "one", "someone", "everyone", "all", "what", "which",
 ];
+
+// A capitalized word acting as a name (possessive, or the subject of a
+// hockey-action verb) that appears nowhere in the grounding text or team
+// names — the invented-player failure. Shared by both narrators. Returns
+// the first offending word, or null.
+export function findUngroundedName(text: string, groundingText: string, homeAbbrev: string, awayAbbrev: string): string | null {
+  const groundingLower = groundingText.toLowerCase();
+  const allowedTeamWords = [
+    ...(TEAM_WORDS[homeAbbrev] ?? []),
+    ...(TEAM_WORDS[awayAbbrev] ?? []),
+    homeAbbrev.toLowerCase(),
+    awayAbbrev.toLowerCase(),
+  ];
+  const ACTION_VERBS =
+    "shut|scored?|recorded?|extended?|hits?|notched?|lit|went|had|posted?|snapped|couldn.t|picked|reached|earned|tied|broke|delivered|chipped|stayed|kept|joined|goes|keeps|didn.t|wasn.t|isn.t|made|stopped|turned|added|potted|buried";
+  const namePattern = new RegExp(`\\b([A-Z][a-zA-Z]+)(?:'s\\b|\\s+(?:${ACTION_VERBS})\\b)`, "g");
+  for (const m of text.matchAll(namePattern)) {
+    const lower = m[1].toLowerCase();
+    if (groundingLower.includes(lower) || allowedTeamWords.includes(lower) || GENERIC_ALLOWED_WORDS.includes(lower)) continue;
+    return m[1];
+  }
+  return null;
+}
 
 const SYSTEM_PROMPT = `You write short "what stood out" blurbs for Causeway, a Boston Bruins fan site, based on a list of statistical facts about a single game.
 
@@ -57,6 +95,7 @@ Rules, no exceptions:
 - A "point_streak_extending" fact means the streak is STILL ACTIVE right now — the player just extended it in this game. Never say it "ended," "snapped," "was broken," or similar, even if the team lost this game. The team losing and the individual streak continuing are unrelated facts — do not let one bleed into the other. Only a "point_streak_snapped" fact means a streak ended.
 - Never mention a player who is not named in the facts you were given. Do not fill in a plausible-sounding teammate or invent a second data point for someone else — if only one player's fact is in the input, the blurb is about that one player only.
 - A head-to-head fact only tells you a NUMBER OF MEETINGS (e.g. "in 20 meetings"), never a calendar year or a span of time. Do not translate that into "since [year]," "a decade," "four decades," or any other real-world date or duration — you do not actually know what year that count corresponds to, and guessing one from your own knowledge is fabrication, not narration. State the meeting count exactly as given, or don't mention it at all.
+- A fact's own words are the whole claim about how notable it is. Don't inflate it: never "exclusive club", "historic", "legendary", "unprecedented", or "all-time", and only call something rare or a first if the fact itself says so (e.g. "the first time ... since 2007-08").
 - Keep it to 2-4 sentences total.
 - Output ONLY strict JSON, no markdown code fence, no commentary before or after: {"headline": "...", "body": "..."}. Headline is under 10 words. Body is the actual blurb.`;
 
@@ -170,25 +209,17 @@ Write the blurb now, as JSON only.`;
   // (that version false-positived on ordinary sentence words like
   // "Pretty") — this targets the actual failure shape (a name acting as
   // the subject of a play-by-play sentence) instead.
-  const factsTextLower = facts.map((f) => f.fact).join(" ").toLowerCase();
-  const allowedTeamWords = [
-    ...(TEAM_WORDS[gameContext.homeAbbrev] ?? []),
-    ...(TEAM_WORDS[gameContext.awayAbbrev] ?? []),
-    gameContext.homeAbbrev.toLowerCase(),
-    gameContext.awayAbbrev.toLowerCase(),
-  ];
-  const ACTION_VERBS =
-    "shut|scored?|recorded?|extended?|hits?|notched?|lit|went|had|posted?|snapped|couldn.t|picked|reached|earned|tied|broke|delivered|chipped|stayed|kept|joined|goes|keeps|didn.t|wasn.t|isn.t";
-  const namePattern = new RegExp(`\\b([A-Z][a-zA-Z]+)(?:'s\\b|\\s+(?:${ACTION_VERBS})\\b)`, "g");
   const combinedText = `${parsed.headline} ${parsed.body}`;
-  const candidateNames = new Set([...combinedText.matchAll(namePattern)].map((m) => m[1]));
-  for (const name of candidateNames) {
-    const lower = name.toLowerCase();
-    if (factsTextLower.includes(lower)) continue;
-    if (allowedTeamWords.includes(lower)) continue;
-    if (GENERIC_ALLOWED_WORDS.includes(lower)) continue;
-    throw new Error(`Narration mentions "${name}" who is not named in the facts, the teams, or the allowed word list.`);
-  }
+  // Significance inflation, found in regenerated highlights (2026-09-28):
+  // a 200th career point became "a pretty exclusive club". The fact states
+  // exactly how notable something is; these words claim more than any
+  // fact here ever does.
+  const flow = FLOW_CLAIMS.find((re) => re.test(combinedText.toLowerCase()));
+  if (flow) throw new Error(`Narration describes game flow the facts don't contain (matched ${flow}): ${combinedText.slice(0, 200)}`);
+  const hype = /\b(exclusive club|historic|legendary|unprecedented|all-time)\b/i.exec(combinedText);
+  if (hype) throw new Error(`Narration inflates significance ("${hype[0]}") beyond what the facts state: ${combinedText.slice(0, 200)}`);
+  const ungrounded = findUngroundedName(combinedText, facts.map((f) => f.fact).join(" "), gameContext.homeAbbrev, gameContext.awayAbbrev);
+  if (ungrounded) throw new Error(`Narration mentions "${ungrounded}" who is not named in the facts, the teams, or the allowed word list.`);
 
   // Fifth hallucination pattern: every player named in `facts` is
   // guaranteed to be on TARGET_TEAM_ABBREV for this game (that's what

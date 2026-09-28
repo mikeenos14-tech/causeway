@@ -1,21 +1,22 @@
-// The fallback narration path for a game significance-checks.ts found
-// nothing statistically notable about — most games, in practice (only 1 of
-// the last 8 real Bruins games checked had an actual notable fact). Without
-// this, most homepage visits show a bare templated headline with no voice
-// at all, which doesn't match a "die-hard fan commentary site-wide" bar.
+// The narration path for a game significance-checks.ts found nothing rare
+// about — most games. Grounded in a verified fact sheet (lib/game-facts.ts):
+// result, where the game sits in the season or series, who scored, the
+// goalies, and team shots/xG/power play when loaded.
 //
-// Deliberately a separate function from narrateHighlights, not a shared
-// one with an empty facts array: the grounding contract here is different
-// and narrower. narrateHighlights grounds every claim in a list of
-// pre-verified facts; this has no facts list at all — the only real,
-// checkable things it's allowed to reference are the final score, teams,
-// game type, and date, so its own rules have to enumerate that boundary
-// directly instead of pointing at a facts array. Mixing the two into one
-// prompt risks the highlights path's careful fact-grounding discipline
-// leaking or loosening.
+// Why a fact sheet (2026-09-28): this path once received only the final
+// score, so it had nothing true to say about a 4-goal, 6-assist night and
+// filled the gap by inference — "Buffalo dominated" from a 4-1 score,
+// "home opener" for a team's fourth game. Validators were already
+// rejecting some of those; the fix is to give the model real material, and
+// keep validating that it stays inside it.
+//
+// Deliberately still a separate function from narrateHighlights: that path
+// narrates pre-verified RARE facts; this one describes an ordinary game and
+// must not manufacture significance.
 
 import Anthropic from "@anthropic-ai/sdk";
-import { TEAM_WORDS } from "./narrate-highlights";
+import { TEAM_WORDS, FLOW_CLAIMS, findUngroundedName } from "./narrate-highlights";
+import type { GameFacts } from "./game-facts";
 
 export type RecapResult = {
   headline: string;
@@ -23,90 +24,204 @@ export type RecapResult = {
   modelVersion: string;
 };
 
-const MODEL = "claude-haiku-4-5-20251001"; // same cost tier as narrateHighlights — short, cheap, per-game
+// Sonnet, not Haiku: with a real fact sheet to work from, Haiku produced
+// garbled lines ("leading the way at a point per goal plus two assists")
+// and unsupported reads in a side-by-side trial; Sonnet's were coherent.
+// ~90 Boston games a season makes the cost difference negligible.
+const MODEL = process.env.RECAP_MODEL ?? "claude-sonnet-5";
 
-const SYSTEM_PROMPT = `You write a short "the game happened" line for Causeway, a Boston Bruins fan site, for a game that had nothing statistically notable about it — no streak, no record, no milestone. This is NOT a highlights blurb; you have no list of verified facts to draw on, only the bare result below.
+const SYSTEM_PROMPT = `You write a short recap line for Causeway, a Boston Bruins fan site, about one game. You get a verified fact sheet from the database. Nothing statistically rare happened in this game (that's handled elsewhere), so this is an honest account of an ordinary game.
 
 Rules, no exceptions:
-- The ONLY real, verified things you know are: the final score, which team was home/away, the game type (regular season, playoff, preseason), and the date. Never state or imply anything beyond that — no streaks, no season record, no head-to-head history, no standings implication, no player-specific claim. This explicitly includes the game's position within a series or season: you are NOT told what game number this is, so never call it the "opener," "clincher," "series opener," "Game 1," a "deciding game," or any other claim about where it falls in a series — a playoff game_type tells you it's a playoff game, nothing about which one. If you don't know it from the facts given above, it is not true as far as you're concerned.
-- Write like a die-hard Boston Bruins fan with a dry, understated sense of humor about an ordinary game — this is the "nothing to write home about, but it's still our team" register, not a highlight reel. Real personality is welcome; manufactured excitement about a routine result is not. A blowout win, a deflating loss, and an unremarkable 3-2 game should not read the same — let the actual score margin inform the tone (close game vs. lopsided), since that much you genuinely know.
-- 1-2 sentences. Shorter than a highlights blurb — there's less to say, so don't pad it out.
-- Sentence case, no exclamation points, no hype-speak clichés ("incredible", "amazing"), no Markdown.
-- Output ONLY strict JSON, no markdown code fence, no commentary before or after: {"headline": "...", "body": "..."}. Headline is under 10 words. Body is the actual line.`;
+- Use ONLY the fact sheet. Every name, number, and claim must come from it. Never add anything from your own knowledge: no nicknames, no player history, no standings or playoff-race implications, no streaks, records, or milestones.
+- The sheet does NOT tell you when goals were scored, who scored first, which goal won the game, or how the game unfolded period by period. Never describe any of that: no periods, no "opened the scoring," no "game-winner," no comebacks, no "late goal," no empty-net goals.
+- Only call the game a season opener, home opener, season finale, or a specific playoff game (Game 6, a clinching or elimination game) if the sheet literally says so.
+- Judge the run of play only from what the sheet gives: the score, and shots on goal or expected goals if listed. If shots and expected goals point different ways from the score, that's worth saying plainly. If neither is listed, don't characterize who controlled the game at all — the score alone doesn't tell you.
+- Mention the 1-3 most relevant specifics (a multi-goal scorer, a big assist night, a goalie's workload, a goalie being pulled). Name only players on the sheet, exactly as written there.
+- Voice: a die-hard Bruins fan with a dry, understated sense of humor, texting a friend. Let the result set the tone (a blowout, a tight win, a deflating loss read differently). No hype: never "historic", "rare", "incredible", "amazing", "exclusive club", or similar — this path has no rarity facts. Sentence case with proper nouns capitalized as usual (player, team, and city names), no exclamation points, no Markdown.
+- 2-3 sentences.
+- Submit with the submit_recap tool. Headline is under 10 words.`;
 
-export async function narrateRecap(gameContext: {
-  homeAbbrev: string;
-  awayAbbrev: string;
-  homeScore: number;
-  awayScore: number;
-  gameDate: string;
-  gameType: string;
-}): Promise<RecapResult> {
+// Claims that need grounding the sheet may or may not provide. Each is
+// allowed only when the sheet itself contains the supporting words.
+const CONDITIONAL_CLAIMS: { pattern: RegExp; allowedIf: (facts: string) => boolean; what: string }[] = [
+  { pattern: /\bopener\b/, allowedIf: (f) => /opener|Game 1\b/i.test(f), what: "an opener" },
+  { pattern: /\b(finale|final (regular-season )?game|last game of the (regular )?season)\b/, allowedIf: (f) => /final regular-season game/.test(f), what: "a season finale" },
+  { pattern: /\b(clinch\w*|eliminat\w*|advance[sd]?)\b/, allowedIf: (f) => /won the series/i.test(f), what: "a series result" },
+
+  { pattern: /\b(dominat\w*|outplay\w*|controlled|carried the play|outshot|out-?chanced|lopsided)\b/, allowedIf: (f) => /Shots on goal|Expected goals/.test(f), what: "run-of-play" },
+  { pattern: /\b(overtime|OT)\b/i, allowedIf: (f) => /in overtime/.test(f), what: "overtime" },
+  { pattern: /\bshootout\b/, allowedIf: (f) => /in a shootout/.test(f), what: "a shootout" },
+  { pattern: /\bpower[- ]play\b/, allowedIf: (f) => /Power play:/.test(f), what: "power play" },
+  { pattern: /\bshutout\b/, allowedIf: (f) => /shutout/.test(f), what: "a shutout" },
+  { pattern: /\bpulled\b/, allowedIf: (f) => /changed goalies/.test(f), what: "a goalie change" },
+];
+
+// Never supportable from the sheet (no play-by-play, no rarity facts).
+const UNSUPPORTED_CLAIMS: RegExp[] = [
+  /\bstreak\b/, /\brecord\b/, /\bmilestone\b/, /\bfirst time\b/, /\bsince \d{4}\b/,
+  ...FLOW_CLAIMS, /\bwinner\b/, /\bfirst goal\b/, /\bshorthanded\b/,
+  /\b(historic|rare|rarely|unprecedented|all-time|legendary|exclusive|incredible|amazing)\b/,
+];
+
+export async function narrateRecap(facts: GameFacts): Promise<RecapResult> {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-  // Spelled out explicitly rather than relying on "@" shorthand — found
-  // live: with the terser notation, the model sometimes said a Boston home
-  // game happened "in Buffalo" (the away team's city), getting the venue
-  // backwards despite the home/away data being technically present.
-  const userPrompt = `HOME team: ${gameContext.homeAbbrev} (this game was played at the home team's arena), score ${gameContext.homeScore}
-AWAY team: ${gameContext.awayAbbrev}, score ${gameContext.awayScore}
-Date: ${gameContext.gameDate}
-Game type: ${gameContext.gameType}
+  const userPrompt = `Fact sheet (verified from the database):
+${facts.lines.map((l) => `- ${l}`).join("\n")}
 
-Write the line now, as JSON only.`;
+Write the recap now and submit it with the submit_recap tool.`;
 
+  // Submitted through a forced tool call rather than "reply with JSON":
+  // in trials the model sometimes wrapped or followed its JSON with other
+  // text ("Wait, must output only JSON..."), which no amount of fence-
+  // stripping reliably handles. A tool call's input is always structured.
   const response = await client.messages.create({
     model: MODEL,
-    max_tokens: 300,
+    max_tokens: 900, // 400 truncated Sonnet mid-answer on 3 of 12 trial games
     system: SYSTEM_PROMPT,
+    tools: [
+      {
+        name: "submit_recap",
+        description: "Submit the finished recap.",
+        input_schema: {
+          type: "object",
+          properties: {
+            headline: { type: "string", description: "Under 10 words." },
+            body: { type: "string", description: "2-3 sentences." },
+          },
+          required: ["headline", "body"],
+        },
+      },
+    ],
+    tool_choice: { type: "tool", name: "submit_recap" },
     messages: [{ role: "user", content: userPrompt }],
   });
 
-  const rawText = response.content.find((b) => b.type === "text")?.text ?? "";
-  // Same defense-in-depth as narrateHighlights: don't rely solely on the
-  // prompt instruction to skip markdown fencing.
-  const text = rawText.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
-  let parsed: { headline: string; body: string };
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    throw new Error(`Model did not return valid JSON: ${rawText.slice(0, 200)}`);
+  const call = response.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
+  const input = (call?.input ?? {}) as { headline?: string; body?: string };
+  if (!input.headline || !input.body) {
+    throw new Error(`Model response missing headline or body (stop_reason ${response.stop_reason})`);
   }
-  if (!parsed.headline || !parsed.body) {
-    throw new Error(`Model response missing headline or body: ${text.slice(0, 200)}`);
-  }
+  const parsed = { headline: fixCapitalization(input.headline, facts), body: fixCapitalization(input.body, facts) };
 
-  // Same "validate the output, don't just instruct" pattern as
-  // narrateHighlights: reject a body that invents a streak/record claim
-  // despite the explicit rule against it, rather than trust the prompt
-  // alone to hold every time.
-  const combined = `${parsed.headline} ${parsed.body}`.toLowerCase();
-  const fabricationPatterns = [
-    /\bstreak\b/, /\brecord\b/, /\bmeetings?\b/, /\bsince \d{4}\b/, /\bfirst time\b/, /\bmilestone\b/,
-    // Series/season-position claims — found live: a game that was actually
-    // the 6th and last of a series got called the "playoff opener," a
-    // confident, plausible-sounding, and entirely fabricated claim, since
-    // this function is never told what game number it is.
-    /\bopener\b/, /\bclincher\b/, /\bdeciding game\b/, /\belimination game\b/,
-    /\bgame (one|two|three|four|five|six|seven|1|2|3|4|5|6|7)\b/, /\bseries[- ]opening\b/,
-  ];
-  const hit = fabricationPatterns.find((re) => re.test(combined));
-  if (hit) {
-    throw new Error(`Recap invented an unverified historical claim (matched ${hit}) — this path has no facts to ground that in: ${combined.slice(0, 200)}`);
-  }
-
-  // Venue check — found live (before the prompt rewrite above): a Boston
-  // home game got narrated as happening "in Buffalo," the away team's
-  // city, getting the location backwards. Reject "in <away city>" as a
-  // location claim; a legitimate mention of the away team ("Buffalo's
-  // offense") doesn't match this "in <city>" shape, so this shouldn't
-  // false-positive on normal team references.
-  const awayCityWords = TEAM_WORDS[gameContext.awayAbbrev] ?? [];
-  const homeCityWords = new Set(TEAM_WORDS[gameContext.homeAbbrev] ?? []);
-  const wrongVenue = awayCityWords.find((w) => !homeCityWords.has(w) && new RegExp(`\\bin ${w}\\b`, "i").test(combined));
-  if (wrongVenue) {
-    throw new Error(`Recap places the game "in ${wrongVenue}" (the away team's city), but ${gameContext.homeAbbrev} was actually home: ${combined.slice(0, 200)}`);
-  }
+  validateRecap(parsed, facts);
 
   return { headline: parsed.headline, body: parsed.body, modelVersion: MODEL };
+}
+
+// Every rule a recap must pass before it's stored. Exported so the rules
+// themselves can be tested against real good and bad text
+// (scripts/test-recap-validators.ts) — a safeguard that blocks output is
+// code too, and gets the same test-before-trust treatment.
+export function validateRecap(parsed: { headline: string; body: string }, facts: GameFacts): void {
+  const combined = `${parsed.headline} ${parsed.body}`;
+  const lower = combined.toLowerCase();
+  const reject = (why: string) => {
+    throw new Error(`Recap ${why}: ${lower.slice(0, 200)}`);
+  };
+
+  const unsupported = UNSUPPORTED_CLAIMS.find((re) => re.test(lower));
+  if (unsupported) reject(`makes a claim the fact sheet can't support (matched ${unsupported})`);
+  for (const c of CONDITIONAL_CLAIMS) {
+    if (c.pattern.test(combined) && !c.allowedIf(facts.text)) reject(`claims ${c.what} the fact sheet doesn't state (matched ${c.pattern})`);
+  }
+  // Direction check for shot/xG comparisons: right after a word of
+  // superiority, the first number of the pair must be the larger one
+  // ("outshot them 33-23", not "dominated expected goals 2.46 to 3.54",
+  // which a trial recap wrote for the team that trailed). Natural phrasing
+  // always puts the leading side's number first after these words.
+  for (const m of lower.matchAll(/\b(dominat\w*|edge|advantage|favou?r(?:ed|ing)?|outshot|out-?chanced|controlled|more)\b[^.;]{0,50}?(\d+(?:\.\d+)?)\s*(?:-|to|–)\s*(\d+(?:\.\d+)?)/g)) {
+    if (Number(m[2]) < Number(m[3])) reject(`states a comparison backwards ("${m[0].trim()}")`);
+  }
+
+  // Who led: the sheet states it leader-first ("CBJ outshot BOS, 35 to
+  // 22"). A published trial recap inverted that — "the Bruins won the shot
+  // battle, outshooting Columbus 35-22" — with every number correct, so the
+  // number checks above passed it. Resolve team words in the text and
+  // check the subject (who outshot / dominated) and object (who got
+  // outshot) against the sheet's leaders.
+  const shotsLeader = /Shots on goal: (\w+) outshot (\w+)/.exec(facts.text);
+  const xgLeader = /Expected goals \(MoneyPuck\): (\w+) had more expected goals than (\w+)/.exec(facts.text);
+  const teamOf = (word: string): string | null => {
+    const w = word.toLowerCase().replace(/['’]s$/, "");
+    for (const abbrev of [facts.homeAbbrev, facts.awayAbbrev]) {
+      if (w === abbrev.toLowerCase() || (TEAM_WORDS[abbrev] ?? []).includes(w)) return abbrev;
+    }
+    return null;
+  };
+  const leaderFor = (verb: string) => (/shot|shoot/.test(verb) ? shotsLeader : (xgLeader ?? shotsLeader));
+  // Subject: "<team> outshot ...", "<team> won the shot battle", "<team> dominated".
+  for (const m of combined.matchAll(/\b([A-Za-z]+)(?:['’]s)?\s+(?:\w+\s+){0,2}?(outshot\w*|outshooting|won the shot battle|dominated|out-?chanced|outplayed)\b/gi)) {
+    // Passive voice ("Boston was outshot") names the trailing side as the
+    // subject — correct, not an inversion.
+    if (/\b(was|were|got|get|getting|being|been)\b/i.test(m[0])) continue;
+    const team = teamOf(m[1]);
+    const lead = leaderFor(m[2].toLowerCase());
+    if (team && lead && team === lead[2]) reject(`credits ${team} with "${m[2]}", but the sheet has ${lead[1]} leading`);
+  }
+  // Object: "outshooting <team>", "outplayed <team>".
+  for (const m of combined.matchAll(/\b(outshot|outshooting|outshoots|out-?chanced|outplayed|dominated)\s+(?:the\s+)?([A-Za-z]+)/gi)) {
+    const team = teamOf(m[2]);
+    const lead = leaderFor(m[1].toLowerCase());
+    if (team && lead && team === lead[1]) reject(`says ${lead[1]} was "${m[1]}", but the sheet has ${lead[1]} leading`);
+  }
+
+  // W-L-OTL records must match the record they're describing: the sheet
+  // has two (the team's season record and the season series), and a trial
+  // recap used one as the other. A triple near "series"/"against"/"vs"
+  // must be the series record; anywhere else, the season record.
+  const seasonRec = /season record after this game: (\d+-\d+-\d+)/.exec(facts.text)?.[1];
+  const seriesRec = /Season series vs \w+ after this game[^:]*: \w+ (\d+-\d+-\d+)/.exec(facts.text)?.[1];
+  for (const m of lower.matchAll(/\b\d+-\d+-\d+\b/g)) {
+    const window = lower.slice(Math.max(0, m.index! - 60), m.index! + m[0].length + 40);
+    const aboutSeries = /\b(series|against|vs\.?|versus|over (the )?\w+ this season)\b/.test(window);
+    const expected = aboutSeries ? seriesRec : seasonRec;
+    if (m[0] !== expected) reject(`gives the ${aboutSeries ? "season-series" : "season"} record as ${m[0]}, but the sheet says ${expected ?? "nothing"}`);
+  }
+
+  // "Game 6" / "game two": only the exact game number the sheet states
+  // (a playoff game number, or a regular-season "game N of the season").
+  const WORD_NUM: Record<string, string> = { one: "1", two: "2", three: "3", four: "4", five: "5", six: "6", seven: "7" };
+  // (not a score: "won the opening game 4-3" is about game 1)
+  for (const m of lower.matchAll(/\bgame (one|two|three|four|five|six|seven|\d+)\b(?!\s*[-–]\s*\d)/g)) {
+    const n = WORD_NUM[m[1]] ?? m[1];
+    if (!new RegExp(`\\bgame ${n}\\b`, "i").test(facts.text)) reject(`claims "${m[0]}", which the fact sheet doesn't state`);
+  }
+
+  // Every number in the recap must appear on the sheet (scores, goal
+  // counts, saves, shots). Small words-as-numbers ("two goals") aren't
+  // checked; digits are, since that's where transcription slips show up.
+  const sheetNumbers = new Set(facts.text.match(/\d+(\.\d+)?/g) ?? []);
+  const inventedNumber = (combined.match(/\d+(\.\d+)?/g) ?? []).find((n) => !sheetNumbers.has(n));
+  if (inventedNumber) reject(`uses a number not on the fact sheet (${inventedNumber})`);
+
+  const ungrounded = findUngroundedName(combined, facts.text, facts.homeAbbrev, facts.awayAbbrev);
+  if (ungrounded) reject(`mentions "${ungrounded}", who isn't on the fact sheet`);
+
+  // Venue: found live before the fact sheet existed — a Boston home game
+  // narrated as happening "in Buffalo". Reject "in <away city>".
+  const awayCityWords = TEAM_WORDS[facts.awayAbbrev] ?? [];
+  const homeCityWords = new Set(TEAM_WORDS[facts.homeAbbrev] ?? []);
+  const wrongVenue = awayCityWords.find((w) => !homeCityWords.has(w) && new RegExp(`\\bin ${w}\\b`, "i").test(combined));
+  if (wrongVenue) reject(`places the game "in ${wrongVenue}" (the away team's city), but ${facts.homeAbbrev} was home`);
+
+}
+
+// Names from the fact sheet, restored to their capitalization. Trial
+// output lowercased them ("drop game 1 in buffalo", "reilly smith") despite
+// the instruction — a formatting slip safe to correct in code, the same
+// pattern as the Q&A engine's markdown stripping. Uses only the sheet's
+// explicit proper names (teams, arena, players); an earlier version
+// guessed names from capitalized word runs and turned "after" into "After".
+const COMMON_WORDS = new Set(["new", "bay", "blue", "red", "golden", "st", "center", "centre", "arena", "garden", "the", "of", "and", "de", "van", "le"]);
+function fixCapitalization(text: string, facts: GameFacts): string {
+  const proper = new Map<string, string>();
+  for (const name of facts.properNames) {
+    for (const word of name.split(/\s+/)) {
+      const lower = word.toLowerCase();
+      if (!COMMON_WORDS.has(lower) && word.length > 2 && /^[A-Z]/.test(word)) proper.set(lower, word);
+    }
+  }
+  return text.replace(/\b[a-z][a-zA-Z'’.-]+\b/g, (w) => proper.get(w) ?? w);
 }
