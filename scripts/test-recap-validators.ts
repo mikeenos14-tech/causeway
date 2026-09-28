@@ -86,6 +86,9 @@ const cases: Case[] = [
   { name: "clause between team and verb (batch false positive)", game: 2025021278, headline: "Bruins win in Columbus despite getting outplayed", body: "Boston won 3-2.", expect: "pass" },
   { name: "first meeting called the opener (batch false positive)", game: 2023020021, headline: "Bruins take the opener vs Nashville", body: "Boston won 3-2.", expect: "pass" },
   { name: "season opener not on the sheet", game: 2023020021, headline: "Bruins win season opener", body: "Boston won 3-2.", expect: "reject" },
+  { name: "'advance' to a record in the regular season (batch false positive)", game: 2023020021, headline: "Bruins win", body: "Boston advanced to 2-0-0 with the win.", expect: "pass" },
+  { name: "'force Game 7' digit (batch false positive)", game: 2025030113, headline: "Sabres take Game 3", body: "Buffalo leads 2-1 with Game 4 next.", expect: "pass" },
+  { name: "series record with 'against' a few words later (batch false positive)", game: 2023020021, headline: "Bruins win", body: "Boston moves to 2-0-0 overall and 1-0-0 on the season against Nashville.", expect: "pass" },
   { name: "overtime claimed for a regulation game", game: 2025030116, headline: "Overtime loss", body: "Buffalo won 4-1 in overtime.", expect: "reject" },
 ];
 

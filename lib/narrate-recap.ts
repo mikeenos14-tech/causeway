@@ -52,7 +52,9 @@ const CONDITIONAL_CLAIMS: { pattern: RegExp; allowedIf: (facts: string) => boole
   { pattern: /\bhome opener\b/, allowedIf: (f) => /home opener/.test(f), what: "a home opener" },
   { pattern: /\bopener\b/, allowedIf: (f) => /opener|Game 1\b|\(1 meeting so far this season\)/i.test(f), what: "an opener" },
   { pattern: /\b(finale|final (regular-season )?game|last game of the (regular )?season)\b/, allowedIf: (f) => /final regular-season game/.test(f), what: "a season finale" },
-  { pattern: /\b(clinch\w*|eliminat\w*|advance[sd]?)\b/, allowedIf: (f) => /won the series/i.test(f), what: "a series result" },
+  // "Advance" only as a series result ("advance to the second round"), not
+  // "advance to 30-5-3" in a regular-season recap (batch false positive).
+  { pattern: /\b(clinch\w*|eliminat\w*|advance[sd]? (to|past|into) (the )?(next|second|third|conference|stanley|final|round))\b/, allowedIf: (f) => /won the series/i.test(f), what: "a series result" },
 
   { pattern: /\b(dominat\w*|outplay\w*|controlled|carried the play|outshot|out-?chanced|lopsided)\b/, allowedIf: (f) => /Shots on goal|Expected goals/.test(f), what: "run-of-play" },
   { pattern: /\b(overtime|OT)\b/i, allowedIf: (f) => /in overtime/.test(f), what: "overtime" },
@@ -203,15 +205,21 @@ export function validateRecap(parsed: { headline: string; body: string }, facts:
   // and misfired whenever one sentence carried both records.)
   const seasonRec = /season record after this game: (\d+-\d+-\d+)/.exec(facts.text)?.[1];
   const seriesRec = /Season series vs \w+ after this game[^:]*: \w+ (\d+-\d+-\d+)/.exec(facts.text)?.[1];
-  for (const m of lower.matchAll(/\b\d+-\d+-\d+\b/g)) {
+  const triples = [...lower.matchAll(/\b\d+-\d+-\d+\b/g)];
+  triples.forEach((m, i) => {
     if (m[0] !== seasonRec && m[0] !== seriesRec) reject(`gives a record (${m[0]}) that isn't on the sheet`);
-    const before = lower.slice(Math.max(0, m.index! - 30), m.index!);
-    const after = lower.slice(m.index! + m[0].length, m.index! + m[0].length + 30);
+    // Each record's context stops at its neighbors, so the words framing
+    // one record in "moves to 2-0-0, and 1-0-0 against Nashville" can't be
+    // read as framing the other.
+    const prevEnd = i > 0 ? triples[i - 1].index! + triples[i - 1][0].length : 0;
+    const nextStart = i < triples.length - 1 ? triples[i + 1].index! : lower.length;
+    const before = lower.slice(Math.max(prevEnd, m.index! - 30), m.index!);
+    const after = lower.slice(m.index! + m[0].length, Math.min(nextStart, m.index! + m[0].length + 30));
     const framedAsSeason = /(improv|mov|fall|drop|sit|now|climb|slip)\w*\s+(to|at)\s*$|record (of|at)\s*$/.test(before) || /^\s*(on|for) the (young )?season/.test(after);
-    const framedAsSeries = /^\s*(against|vs\.?|versus|in the (season )?series|head-to-head)/.test(after) || /(against|vs\.?|versus|series)[^.]{0,20}$/.test(before);
+    const framedAsSeries = /\b(against|vs\.?|versus|series|head-to-head)\b/.test(after) || /(against|vs\.?|versus|series)[^.]{0,20}$/.test(before);
     if (m[0] === seriesRec && m[0] !== seasonRec && framedAsSeason && !framedAsSeries) reject(`presents the season-series record ${m[0]} as the season record (${seasonRec})`);
     if (m[0] === seasonRec && m[0] !== seriesRec && framedAsSeries && !framedAsSeason) reject(`presents the season record ${m[0]} as the season-series record (${seriesRec})`);
-  }
+  });
 
   // "Game 6" / "game two": only the exact game number the sheet states
   // (a playoff game number, or a regular-season "game N of the season").
@@ -234,8 +242,11 @@ export function validateRecap(parsed: { headline: string; body: string }, facts:
   // recap was rejected for exactly that).
   const sheetNumbers = new Set(facts.text.match(/\d+(\.\d+)?/g) ?? []);
   const sheetDecimals = [...sheetNumbers].filter((n) => n.includes(".")).map(Number);
+  const nextSeriesGame = !/won the series/.test(facts.text) ? /Game (\d) vs/.exec(facts.text)?.[1] : undefined;
   const onSheet = (n: string) => {
     if (sheetNumbers.has(n)) return true;
+    // "force a Game 7" after Game 6: the next game of an undecided series.
+    if (nextSeriesGame && Number(n) === Number(nextSeriesGame) + 1) return true;
     if (!n.includes(".")) return false;
     const places = n.split(".")[1].length;
     return sheetDecimals.some((d) => d.toFixed(places) === n);
