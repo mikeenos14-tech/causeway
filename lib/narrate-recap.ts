@@ -207,14 +207,28 @@ export function validateRecap(parsed: { headline: string; body: string }, facts:
   // (not a score: "won the opening game 4-3" is about game 1)
   for (const m of lower.matchAll(/\bgame (one|two|three|four|five|six|seven|\d+)\b(?!\s*[-–]\s*\d)/g)) {
     const n = WORD_NUM[m[1]] ?? m[1];
+    // The next game of a series that isn't over follows from the sheet
+    // ("force a Game 6" after Game 5, "on to Game 7" after a 3-3 Game 6).
+    const current = /Game (\d) vs/.exec(facts.text)?.[1];
+    const seriesOver = /won the series/.test(facts.text);
+    if (current && !seriesOver && Number(n) === Number(current) + 1) continue;
     if (!new RegExp(`\\bgame ${n}\\b`, "i").test(facts.text)) reject(`claims "${m[0]}", which the fact sheet doesn't state`);
   }
 
   // Every number in the recap must appear on the sheet (scores, goal
   // counts, saves, shots). Small words-as-numbers ("two goals") aren't
   // checked; digits are, since that's where transcription slips show up.
+  // A rounded form of a sheet decimal counts ("4.5" for 4.52 — a batch
+  // recap was rejected for exactly that).
   const sheetNumbers = new Set(facts.text.match(/\d+(\.\d+)?/g) ?? []);
-  const inventedNumber = (combined.match(/\d+(\.\d+)?/g) ?? []).find((n) => !sheetNumbers.has(n));
+  const sheetDecimals = [...sheetNumbers].filter((n) => n.includes(".")).map(Number);
+  const onSheet = (n: string) => {
+    if (sheetNumbers.has(n)) return true;
+    if (!n.includes(".")) return false;
+    const places = n.split(".")[1].length;
+    return sheetDecimals.some((d) => d.toFixed(places) === n);
+  };
+  const inventedNumber = (combined.match(/\d+(\.\d+)?/g) ?? []).find((n) => !onSheet(n));
   if (inventedNumber) reject(`uses a number not on the fact sheet (${inventedNumber})`);
 
   const ungrounded = findUngroundedName(combined, facts.text, facts.homeAbbrev, facts.awayAbbrev);

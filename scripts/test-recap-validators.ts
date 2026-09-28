@@ -78,6 +78,9 @@ const cases: Case[] = [
   { name: "headlinese passive with 'but' (batch false positive; CBJ led)", game: 2025021278, headline: "Bruins outshot but outscore Columbus", body: "Boston won 3-2 despite 35 shots against.", expect: "pass" },
   { name: "headlinese passive with 'and' (batch false positive)", game: 2025021278, headline: "Bruins outshot and outchanced, win anyway", body: "Boston won 3-2.", expect: "pass" },
   { name: "active with object still checked", game: 2025021278, headline: "Bruins outshot them badly", body: "Boston won 3-2.", expect: "reject" },
+  { name: "next game of an undecided series (batch false positive)", game: 2025030113, headline: "Sabres take Game 3", body: "Buffalo leads 2-1 heading into Game 4.", expect: "pass" },
+  { name: "next game after the series ended", game: 2025030116, headline: "Season over", body: "There won't be a Game 7.", expect: "reject" },
+  { name: "rounded sheet decimal (batch false positive)", game: 2025030116, headline: "Sabres win", body: "Buffalo had 3.6 expected goals to Boston's 2.3.", expect: "pass" },
   { name: "overtime claimed for a regulation game", game: 2025030116, headline: "Overtime loss", body: "Buffalo won 4-1 in overtime.", expect: "reject" },
 ];
 
