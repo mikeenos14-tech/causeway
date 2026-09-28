@@ -90,6 +90,7 @@ const cases: Case[] = [
   { name: "'force Game 7' digit (batch false positive)", game: 2025030113, headline: "Sabres take Game 3", body: "Buffalo leads 2-1 with Game 4 next.", expect: "pass" },
   { name: "series record with 'against' a few words later (batch false positive)", game: 2023020021, headline: "Bruins win", body: "Boston moves to 2-0-0 overall and 1-0-0 on the season against Nashville.", expect: "pass" },
   { name: "common word starting a sentence (batch false positive)", game: 2025030116, headline: "Bruins bow out", body: "Season's over after a 4-1 loss. Line changes didn't help.", expect: "pass" },
+  { name: "singular team nickname (batch false positive)", game: 2025030116, headline: "Bruins bow out", body: "Pastrnak's goal was the only one by a Bruin in a 4-1 loss. Every Bruin's season ends here.", expect: "pass" },
   { name: "overtime claimed for a regulation game", game: 2025030116, headline: "Overtime loss", body: "Buffalo won 4-1 in overtime.", expect: "reject" },
 ];
 

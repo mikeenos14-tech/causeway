@@ -103,7 +103,8 @@ export function findUngroundedName(text: string, groundingText: string, homeAbbr
   const namePattern = new RegExp(`\\b([A-Z][a-zA-Z]+)(?:'s\\b|\\s+(?:${ACTION_VERBS})\\b)`, "g");
   for (const m of text.matchAll(namePattern)) {
     const lower = m[1].toLowerCase();
-    if (groundingLower.includes(lower) || allowedTeamWords.includes(lower) || GENERIC_ALLOWED_WORDS.includes(lower)) continue;
+    // Singular team nicknames count too ("the first Bruin to...").
+    if (groundingLower.includes(lower) || allowedTeamWords.includes(lower) || allowedTeamWords.includes(`${lower}s`) || GENERIC_ALLOWED_WORDS.includes(lower)) continue;
     return m[1];
   }
   return null;
