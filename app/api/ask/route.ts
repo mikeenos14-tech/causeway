@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { answerQuestionCached } from "@/lib/qa-cache";
 import { QAStepLimitError } from "@/lib/qa-engine";
 import { logQuestion, logQuestionError } from "@/lib/qa-log";
+import { checkAndRecord, clientHash, clientIp } from "@/lib/qa-rate-limit";
 
 export async function POST(req: NextRequest) {
   const { question } = await req.json();
@@ -12,6 +13,9 @@ export async function POST(req: NextRequest) {
   if (question.length > 500) {
     return NextResponse.json({ error: "Question is too long (500 characters max)." }, { status: 400 });
   }
+
+  const limited = await checkAndRecord(clientHash(clientIp(req.headers)));
+  if (limited) return NextResponse.json({ error: limited }, { status: 429 });
 
   const trimmed = question.trim();
   try {
