@@ -185,9 +185,11 @@ async function buildTeam(
                 count(*) filter (where s.decision = 'W')::int as w, count(*) filter (where s.decision = 'L')::int as l,
                 count(*) filter (where s.decision = 'OTL')::int as otl, count(*) filter (where s.shutout)::int as so,
                 sum(s.saves)::float / nullif(sum(s.shots_against), 0) as sv,
-                sum(s.goals_against)::float * 3600 / nullif(sum(s.toi_seconds), 0) as gaa
+                sum(s.goals_against)::float * 3600 / nullif(sum(s.toi_seconds), 0) as gaa,
+                (array_agg(t.abbrev order by g.game_date desc))[1] as last_team
          from latest l join goalie_game_stats s on s.player_id = l.player_id
          join games g on g.id = s.game_id and g.season_id = l.season_id and g.game_type = 'regular'
+         join teams t on t.id = s.team_id
          group by l.player_id, l.season_id`,
         [goalieIds],
       )
@@ -200,7 +202,7 @@ async function buildTeam(
         id: p.id,
         name: p.name,
         line: r
-          ? `${seasonLabel(String(r.season_id))}: ${r.gp} GP, ${r.w}-${r.l}-${r.otl}, ${r.sv != null ? r.sv.toFixed(3).replace(/^0/, "") : "—"} SV%, ${r.gaa != null ? r.gaa.toFixed(2) : "—"} GAA, ${r.so} SO`
+          ? `${seasonLabel(String(r.season_id))}${r.last_team !== api.abbrev ? ` with ${r.last_team}` : ""}: ${r.gp} GP, ${r.w}-${r.l}-${r.otl}, ${r.sv != null ? r.sv.toFixed(3).replace(/^0/, "") : "—"} SV%, ${r.gaa != null ? r.gaa.toFixed(2) : "—"} GAA, ${r.so} SO`
           : null,
       };
     })
