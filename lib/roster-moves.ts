@@ -70,9 +70,11 @@ export async function getRosterMoves(teamAbbrev: string, lastSeason: string): Pr
                union all select player_id, game_id, team_id from goalie_game_stats) s
          join games g on g.id = s.game_id
          join teams t on t.id = s.team_id
-         where s.player_id = any($1::int[]) and g.game_type = 'regular'
+         where s.player_id = any($1::int[]) and g.game_type = 'regular' and g.season_id <= $2
          order by s.player_id, g.game_date desc`,
-        [newcomers.map((p) => p.id)],
+        // Capped at last season: once the new season starts, a newcomer's
+        // latest game is with this team, which read as "back with BOS".
+        [newcomers.map((p) => p.id), lastSeason],
       )
     : { rows: [] };
   const prevById = new Map(prevRows.map((r) => [Number(r.player_id), r]));

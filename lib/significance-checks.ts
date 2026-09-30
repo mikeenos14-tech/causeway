@@ -381,18 +381,22 @@ export async function checkHeadToHeadShutout(client: Client, gameId: number): Pr
   const { rows: meetings } = await client.query(
     `select id, game_date, home_team_id, home_score, away_score from games
      where ((home_team_id = $1 and away_team_id = $2) or (home_team_id = $2 and away_team_id = $1))
-       and game_date <= $3
+       and game_date <= $3 and game_type in ('regular', 'playoff')
      order by game_date desc`,
     [shutoutTeamId, shutTeamId, game.game_date],
   );
 
+  // "First shutout in N meetings" counts this game and the meetings since
+  // the prior shutout, not the prior shutout itself — counting it said "18"
+  // for the 2026-27 opener when the true number was 17.
   let meetingsSinceLastShutout = 0;
   for (const m of meetings) {
+    if (m.id !== gameId) {
+      const shutoutTeamWasHome = m.home_team_id === shutoutTeamId;
+      const shutTeamScore = shutoutTeamWasHome ? m.away_score : m.home_score;
+      if (shutTeamScore === 0) break; // found the prior shutout, stop counting
+    }
     meetingsSinceLastShutout++;
-    if (m.id === gameId) continue;
-    const shutoutTeamWasHome = m.home_team_id === shutoutTeamId;
-    const shutTeamScore = shutoutTeamWasHome ? m.away_score : m.home_score;
-    if (shutTeamScore === 0) break; // found the prior shutout, stop counting
   }
 
   if (meetingsSinceLastShutout < MIN_MEETINGS_SINCE_LAST_SHUTOUT) return [];
