@@ -78,7 +78,40 @@ async function main() {
   console.log("\nAgreement with the site's games table:");
   console.table(cross);
 
-  // 6. Coverage the later phases care about.
+  // 6. External reconciliation (docs/verification.md, layer 6): every
+  // team-season's record and goals, computed from our game-by-game data,
+  // against the NHL's own standings on the season's last regular-season
+  // date. OT losses count as losses before 1999-2000 (no OTL column then);
+  // the shootout winner's +1 is in GF/GA, as in the NHL's standings.
+  const { rows: recon } = await client.query(
+    `with last_day as (select season, max(game_date) as d from nhl_games where game_type = 'regular' group by season),
+     ours as (
+       select g.season, t.team,
+              count(*)::int as gp,
+              count(*) filter (where t.gf > t.ga)::int as w,
+              count(*) filter (where t.gf < t.ga and (g.final_state = 'REG' or g.season < '19992000'))::int as l,
+              count(*) filter (where t.gf < t.ga and g.final_state in ('OT','SO') and g.season >= '19992000')::int as otl,
+              count(*) filter (where t.gf = t.ga)::int as ties,
+              sum(t.gf)::int as gf, sum(t.ga)::int as ga
+       from nhl_games g
+       cross join lateral (values (g.home_team_id, g.home_score, g.away_score), (g.away_team_id, g.away_score, g.home_score)) t(team, gf, ga)
+       where g.game_type = 'regular' group by g.season, t.team)
+     select o.season, nt.tri_code, o.gp, s.games_played as nhl_gp, o.w, s.wins as nhl_w, o.l, s.losses as nhl_l,
+            o.otl, s.ot_losses as nhl_otl, o.ties, s.ties as nhl_ties, o.gf, s.goals_for as nhl_gf, o.ga, s.goals_against as nhl_ga
+     from ours o join last_day d on d.season = o.season
+     join nhl_standings s on s.date = d.d and s.team_id = o.team
+     join nhl_teams nt on nt.id = o.team
+     where (o.gp, o.w, o.l, o.otl, o.ties, o.gf, o.ga) is distinct from (s.games_played, s.wins, s.losses, s.ot_losses, s.ties, s.goals_for, s.goals_against)
+     order by o.season, nt.tri_code`,
+  );
+  const { rows: reconCount } = await client.query(
+    `select count(*)::int as n from (select distinct s.season, s.team_id from nhl_standings s
+       join (select season, max(game_date) as d from nhl_games where game_type = 'regular' group by season) l on l.season = s.season and l.d = s.date) x`,
+  );
+  console.log(`\nReconciliation vs NHL season-end standings: ${reconCount[0].n} team-seasons compared, ${recon.length} differ.`);
+  if (recon.length) console.table(recon.slice(0, 25));
+
+  // 7. Coverage the later phases care about.
   const { rows: other } = await client.query(
     `select (select count(*) from nhl_goal_events e where e.scorer_id is not null and not exists (select 1 from nhl_players p where p.id = e.scorer_id))::int as scorers_without_name,
             (select count(distinct venue_name) from nhl_games)::int as venues,

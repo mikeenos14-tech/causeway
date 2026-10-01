@@ -22,6 +22,6 @@ Owner requirement (2026-10-01): every feature is tested exhaustively and its mat
 
 | Feature | 1 Unit | 2 Second computation | 3 Invariants | 4 Calibration | 5 Golden | 6 Reconciliation | 7 Edge cases | 8 Spot checks | 9 Report |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Phase 0 data layer | Parser 26 checks | Audit vs site games table | Goals add up to finals | — | — | Standings (after load) | Forfeits, non-NHL Finals, ties, shootouts | Famous games traced | After full load |
+| Phase 0 data layer | Parser 26 checks | Audit vs site games table | Goals add up to finals | — | — | Standings: built, 56/56 team-seasons match so far | Forfeits, non-NHL Finals, ties, shootouts | Famous games traced | After full load |
 | Elo | 16 checks | Planned | Zero-sum, mean | Built | Planned | Planned | Partly | Planned | Planned |
 | WP, Leverage, Misery, Doppelganger, Grudge, Legs | Planned | Planned | Planned | Planned | Planned | Planned | Planned | Planned | Planned |
