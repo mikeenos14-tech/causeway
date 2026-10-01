@@ -217,4 +217,4 @@ Owner decisions so far (2026-10-01): history back to **1917**; Utah inherits Ari
 | Performance tests | In progress | Series sim done |
 | Correction tests (overturned goal) | Planned | Needs a recorded overturned goal, or a synthetic one |
 | Validation split (every fifth season held out) | Done | `isHeldOutSeason` |
-| Golden games fixtures | **Needs owner** | 20–30 games with human-approved expected values |
+| Golden games fixtures | In progress | 25-game list approved 2026-10-01 (docs/golden-games.md); values approved per model as built |

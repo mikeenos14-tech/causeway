@@ -1,6 +1,6 @@
 # Golden games (draft for owner approval)
 
-Spec section 13: a fixed set of games with human-approved expected outputs, run on every model change. If a change moves one, the test fails until the owner approves the new value. **Status: game list proposed 2026-10-01; expected values are filled in as each model is built, then approved.**
+Spec section 13: a fixed set of games with human-approved expected outputs, run on every model change. If a change moves one, the test fails until the owner approves the new value. **Status: game list approved by the owner 2026-10-01. Expected values are filled in as each model is built, then approved.**
 
 Golden games are tests, not content. They overlap with the iconic list, but they also include deliberately boring games, since a model that gets excited about a dull 2-1 game is broken.
 
