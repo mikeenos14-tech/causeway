@@ -49,6 +49,16 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      # The homepage's question of the day, answered ahead of time. Calls
+      # the model only when today's answer is missing or older than the
+      # newest Bruins game (about once a day); never fails the run.
+      - name: Warm question of the day
+        timeout-minutes: 3
+        continue-on-error: true
+        run: npx tsx scripts/warm-question-of-the-day.ts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       # Last, so a failure never blocks the refresh itself — it flags the
       # run (and emails the workflow's last editor) when any team breaks a
       # data invariant: goalie W-L-OTL must equal the standings, shutouts
