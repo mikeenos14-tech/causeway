@@ -84,3 +84,8 @@ export async function getGameTeamLines(gameId: number): Promise<TeamGameLine[]> 
     xg: r.xg_for != null ? Number(r.xg_for) : null,
   }));
 }
+
+export async function getTeamName(abbrev: string): Promise<string> {
+  const { rows } = await pool.query(`select name from teams where abbrev = $1 order by is_active desc limit 1`, [abbrev]);
+  return rows[0]?.name ?? abbrev;
+}

@@ -3,6 +3,7 @@ import { answerQuestionCached } from "@/lib/qa-cache";
 import { QAStepLimitError } from "@/lib/qa-engine";
 import { logQuestion, logQuestionError } from "@/lib/qa-log";
 import { checkAndRecord, clientHash, clientIp } from "@/lib/qa-rate-limit";
+import { isQuestionOfTheDay, bruinsDataChangedAt } from "@/lib/question-of-the-day";
 
 export async function POST(req: NextRequest) {
   const { question } = await req.json();
@@ -19,7 +20,13 @@ export async function POST(req: NextRequest) {
 
   const trimmed = question.trim();
   try {
-    const result = await answerQuestionCached(trimmed);
+    // The homepage's question of the day is warmed daily; tapping through
+    // to it shouldn't pay for a fresh answer.
+    const daily = isQuestionOfTheDay(trimmed);
+    const result = await answerQuestionCached(
+      trimmed,
+      daily ? { maxAgeMs: 36 * 3600_000, freshAfter: await bruinsDataChangedAt().catch(() => null) } : {},
+    );
     const logId = await logQuestion(trimmed, result);
     return NextResponse.json({ ...result, logId });
   } catch (err) {

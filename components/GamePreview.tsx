@@ -4,6 +4,7 @@ import { formatStartTimeET } from "@/lib/nhl-schedule";
 import { formatGameDate } from "@/lib/format-date";
 import { milestoneText } from "@/lib/milestones-data";
 import { FormBars } from "@/components/Sparkline";
+import { AskAboutGame, gameQuestions } from "@/components/AskAboutGame";
 
 const H2 = { margin: "0 0 .9rem", fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "1.35rem", textTransform: "uppercase" as const, letterSpacing: ".02em" };
 const CARD = { background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, padding: "1.1rem 1.3rem" } as const;
@@ -13,6 +14,10 @@ const LABEL = { fontSize: ".72rem", fontWeight: 600, color: "var(--text-secondar
 // /games/[id] renders this until the game is in our database, then the box
 // score. Every number is from our own database or the NHL's feed; no model.
 export function GamePreview({ p }: { p: Preview }) {
+  // Bruins games only: the follow-ups a fan would ask before puck drop.
+  const bos = p.home.abbrev === "BOS" ? p.home : p.away.abbrev === "BOS" ? p.away : null;
+  const opp = bos === p.home ? p.away : p.home;
+  const askQuestions = bos ? gameQuestions({ opponent: opp.fullName, skater: bos.topSkaters[0]?.name ?? null }) : [];
   const live = p.state === "LIVE" || p.state === "CRIT";
   const final = p.state === "FINAL" || p.state === "OFF";
   return (
@@ -92,6 +97,12 @@ export function GamePreview({ p }: { p: Preview }) {
           Current NHL rosters, with each player&apos;s most recent regular season on file. Starting goalies aren&apos;t announced until close to puck drop.
         </p>
       </section>
+
+      {askQuestions.length > 0 && (
+        <section style={{ marginBottom: "2.25rem" }}>
+          <AskAboutGame title="Ask about this matchup" questions={askQuestions} />
+        </section>
+      )}
 
       {/* Head to head */}
       {p.meetings.length > 0 && (
