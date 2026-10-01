@@ -1,4 +1,4 @@
-# Golden games (draft for owner approval)
+# Golden games
 
 Spec section 13: a fixed set of games with human-approved expected outputs, run on every model change. If a change moves one, the test fails until the owner approves the new value. **Status: game list approved by the owner 2026-10-01. Expected values are filled in as each model is built, then approved.**
 
