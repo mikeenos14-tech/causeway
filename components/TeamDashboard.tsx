@@ -27,6 +27,8 @@ import { getLatestSeasonId } from "@/lib/schedule-data";
 import { getAllSeasonSeriesForTeam } from "@/lib/season-series-data";
 import { getUpcomingMilestones, milestoneText } from "@/lib/milestones-data";
 import { LiveScoreboard } from "@/components/LiveScoreboard";
+
+import { questionOfTheDay, getCachedAnswer, answerTeaser, etDate } from "@/lib/question-of-the-day";
 import { getClubSeason, isFinal, isInProgress, formatStartTimeET, openerTag, chooseHero, type ClubGame } from "@/lib/nhl-schedule";
 import { nextGameFlavor } from "@/lib/next-game";
 import { roundLabel } from "@/lib/playoff-data";
@@ -113,6 +115,17 @@ export async function TeamDashboard({ abbrev, compact = false }: { abbrev: strin
   const [moves, captainName] = showMoves
     ? await Promise.all([getRosterMoves(abbrev, club!.previousSeason), getCurrentCaptainName(abbrev, club!.currentSeason)])
     : [null, null];
+
+  // Homepage only: a question with its answer already filled in (warmed by
+  // the hourly job), so the Ask box shows what it does.
+  let qotd: { question: string; answer: string | null } | null = null;
+  if (!compact && abbrev === "BOS") {
+    const today = etDate(new Date(now));
+    const tonight = club?.games.find((g) => etDate(new Date(g.startTimeUTC)) === today) ?? null;
+    const question = questionOfTheDay(new Date(now), tonight ? { opponentName: tonight.opponentName } : null);
+    const answer = await getCachedAnswer(question);
+    qotd = { question, answer: answer ? answerTeaser(answer) : null };
+  }
 
   const teamName = club?.teamName ?? abbrev;
   const titleSize = compact ? "clamp(1.9rem,4.5vw,2.8rem)" : "clamp(2.6rem,8vw,4.75rem)";
@@ -229,7 +242,7 @@ export async function TeamDashboard({ abbrev, compact = false }: { abbrev: strin
 
       {moves && <RosterMovesCard teamAbbrev={abbrev} moves={moves} captainName={captainName} />}
 
-      {!compact && <AskBand />}
+      {!compact && <AskBand qotd={qotd} />}
 
       {/* RECENT RESULTS */}
       {recent.length > 0 && (
@@ -635,7 +648,7 @@ function SeriesCard({ card, abbrev }: { card: Extract<RecentCard, { kind: "serie
   );
 }
 
-function AskBand() {
+function AskBand({ qotd }: { qotd: { question: string; answer: string | null } | null }) {
   return (
     <section
       style={{
@@ -651,13 +664,24 @@ function AskBand() {
         flexWrap: "wrap",
       }}
     >
-      <div style={{ maxWidth: 460 }}>
-        <div style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--gold)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 8 }}>Ask Causeway</div>
-        <h2 style={{ margin: "0 0 6px", fontSize: "1.4rem", fontFamily: "var(--font-body)", fontWeight: 700 }}>Got a stat question? Just ask.</h2>
-        {/* Scope stated plainly: the database starts in 2007-08. It once
-            said "Full NHL history", which the answers themselves contradict. */}
-        <p style={{ margin: 0, fontSize: ".9rem", color: "var(--text-secondary)" }}>Every NHL game since 2007-08, every team, straight from the database. Every answer shows its work.</p>
-      </div>
+      {qotd ? (
+        <div style={{ maxWidth: 600, flex: "1 1 360px" }}>
+          <div style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--gold)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 8 }}>Ask Causeway · Question of the day</div>
+          <h2 style={{ margin: "0 0 8px", fontSize: "1.25rem", fontFamily: "var(--font-body)", fontWeight: 700, lineHeight: 1.3 }}>{qotd.question}</h2>
+          {qotd.answer && <p style={{ margin: "0 0 10px", fontSize: ".95rem", color: "var(--text-primary)", fontFamily: "var(--font-editorial)", lineHeight: 1.55 }}>{qotd.answer}</p>}
+          <Link href={`/ask?q=${encodeURIComponent(qotd.question)}`} style={{ fontSize: ".85rem", fontWeight: 600, color: "var(--gold)", textDecoration: "none" }}>
+            {qotd.answer ? "Full answer, table and SQL →" : "See the answer →"}
+          </Link>
+        </div>
+      ) : (
+        <div style={{ maxWidth: 460 }}>
+          <div style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--gold)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 8 }}>Ask Causeway</div>
+          <h2 style={{ margin: "0 0 6px", fontSize: "1.4rem", fontFamily: "var(--font-body)", fontWeight: 700 }}>Got a stat question? Just ask.</h2>
+          {/* Scope stated plainly: the database starts in 2007-08. It once
+              said "Full NHL history", which the answers themselves contradict. */}
+          <p style={{ margin: 0, fontSize: ".9rem", color: "var(--text-secondary)" }}>Every NHL game since 2007-08, every team, straight from the database. Every answer shows its work.</p>
+        </div>
+      )}
       <Link
         href="/ask"
         style={{
@@ -679,7 +703,7 @@ function AskBand() {
           <circle cx="11" cy="11" r="7" />
           <line x1="21" y1="21" x2="16.65" y2="16.65" />
         </svg>
-        e.g. &ldquo;Longest point streak by a Bruins player?&rdquo;
+        {qotd ? "Ask your own question…" : <>e.g. &ldquo;Longest point streak by a Bruins player?&rdquo;</>}
       </Link>
     </section>
   );

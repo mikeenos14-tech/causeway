@@ -1,6 +1,8 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getGameDetail, getGameSkaters, getGameGoalies, getGameTeamLines, type TeamGameLine } from "@/lib/game-detail-data";
+import { getGameDetail, getGameSkaters, getGameGoalies, getGameTeamLines, getTeamName, type TeamGameLine } from "@/lib/game-detail-data";
+import { AskAboutGame, gameQuestions } from "@/components/AskAboutGame";
 import { getSeasonSeriesAsOfGame, getPlayoffSeriesForGame } from "@/lib/season-series-data";
 import { roundLabel } from "@/lib/playoff-data";
 import { TARGET_TEAM_ABBREV } from "@/lib/significance-checks";
@@ -14,6 +16,19 @@ function toi(seconds: number | null) {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+// The text half of a shared game link (the image is opengraph-image.tsx):
+// "NYR 0, BOS 3 · Swayman shuts out Rangers" and the recap's first lines.
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const gameId = Number((await params).id);
+  if (!Number.isInteger(gameId)) return {};
+  const game = await getGameDetail(gameId).catch(() => null);
+  if (!game) return { title: "Game preview · Causeway", openGraph: { title: "Game preview · Causeway" } };
+  const score = `${game.away_abbrev} ${game.away_score}, ${game.home_abbrev} ${game.home_score}`;
+  const title = game.headline ? `${score} · ${game.headline}` : `${score} · Causeway`;
+  const description = game.body ?? `Box score and stats, ${formatGameDate(game.game_date, true)}.`;
+  return { title, description, openGraph: { title, description }, twitter: { card: "summary_large_image", title, description } };
 }
 
 export default async function GameDetail({ params }: { params: Promise<{ id: string }> }) {
@@ -52,6 +67,15 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
     getGameTeamLines(gameId),
   ]);
   const opponentAbbrev = game.home_abbrev === TARGET_TEAM_ABBREV ? game.away_abbrev : game.home_abbrev;
+  // Follow-up questions for the Ask box: tonight's top Bruins scorer and
+  // goalie against this opponent, and the head-to-head record.
+  const askQuestions = bosInGame
+    ? gameQuestions({
+        opponent: await getTeamName(opponentAbbrev),
+        skater: skaters.find((r) => r.team_abbrev === TARGET_TEAM_ABBREV && r.points > 0)?.full_name ?? null,
+        goalie: goalies.find((r) => r.team_abbrev === TARGET_TEAM_ABBREV && r.toi_seconds > 0)?.full_name ?? null,
+      })
+    : [];
   const thisSeries = seasonSeries;
   // Head-to-head "leads" compares wins: the opponent's wins are this team's
   // regulation losses plus OT/SO losses.
@@ -110,6 +134,7 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
               </div>
             )}
           </div>
+          <AskAboutGame title="Ask about this game" questions={askQuestions} />
         </section>
 
         {thisSeries && (

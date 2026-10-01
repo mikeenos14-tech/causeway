@@ -25,8 +25,15 @@ export function normalizeQuestion(question: string): string {
   return question.trim().toLowerCase().replace(/\s+/g, " ").replace(/[?!.]+$/, "");
 }
 
-export async function answerQuestionCached(question: string): Promise<QAResult & { fromCache: boolean }> {
+// options.maxAgeMs / freshAfter: the question of the day is answered once
+// daily, so it's served for up to 36 hours — but never from before the
+// latest Bruins game was loaded (lib/question-of-the-day.ts).
+export async function answerQuestionCached(
+  question: string,
+  options: { maxAgeMs?: number; freshAfter?: Date | null } = {},
+): Promise<QAResult & { fromCache: boolean }> {
   const normalized = normalizeQuestion(question);
+  const maxAgeMs = options.maxAgeMs ?? CACHE_TTL_MS;
 
   try {
     const { rows } = await pool.query(
@@ -34,8 +41,9 @@ export async function answerQuestionCached(question: string): Promise<QAResult &
       [normalized],
     );
     if (rows.length > 0) {
-      const ageMs = Date.now() - new Date(rows[0].created_at).getTime();
-      if (ageMs < CACHE_TTL_MS) {
+      const created = new Date(rows[0].created_at);
+      const ageMs = Date.now() - created.getTime();
+      if (ageMs < maxAgeMs && (!options.freshAfter || created > options.freshAfter)) {
         return { ...(rows[0].result as QAResult), fromCache: true };
       }
     }

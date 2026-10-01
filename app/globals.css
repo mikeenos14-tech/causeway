@@ -244,3 +244,15 @@ body {
 @keyframes live-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 .live-dot { animation: live-pulse 1.6s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .live-dot { animation: none; } }
+
+/* Header banner: rises into the rafters with a small settle, once per
+   visit (the flag is set by the script in app/layout.tsx). */
+.banner-raise-wrap { display: inline-flex; overflow: hidden; padding-top: 2px; }
+.banner-raise { display: inline-flex; }
+html:not([data-banner-raised]) .banner-raise { animation: banner-raise 900ms cubic-bezier(.2, .8, .2, 1) 150ms both; }
+@keyframes banner-raise {
+  0% { transform: translateY(115%); }
+  70% { transform: translateY(-6%); }
+  100% { transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) { html:not([data-banner-raised]) .banner-raise { animation: none; } }

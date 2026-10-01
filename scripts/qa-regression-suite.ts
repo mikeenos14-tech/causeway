@@ -161,6 +161,16 @@ const cases: TestCase[] = [
   // both directions: answer where data exists, decline where it doesn't,
   // and never read an empty table as "none exist".
   {
+    name: "writes a team record as W-L-OTL, not wins-losses",
+    question: "What's the Bruins' regular-season record against the New York Rangers since 2007-08?",
+    check: (r) => {
+      // Ground truth (through the 2026-27 opener): 68 meetings, 32-26-10.
+      const triple = /\b32-26-10\b/.test(r.answer);
+      const collapsed = /\b32-36\b/.test(r.answer);
+      return { pass: triple && !collapsed, reason: collapsed ? 'collapsed to "32-36"' : !triple ? "expected 32-26-10" : undefined };
+    },
+  },
+  {
     name: "answers power-play % for a season with full team-stat coverage",
     question: "What was the Bruins' power play percentage in the 2023-24 regular season?",
     check: (r) => {
@@ -187,7 +197,8 @@ const cases: TestCase[] = [
     question: "Which numbers have the Bruins retired?",
     check: (r) => {
       const claimsNone = /(have|has) (not|never) retired|no (retired )?numbers (have been )?retired|haven'?t retired any/i.test(r.answer);
-      const saysNotLoaded = /isn'?t (loaded|available)|not (loaded|available|in (the|this) (data|database))|don'?t have|no data|hasn'?t been loaded/i.test(r.answer);
+      // "is empty ... I can't answer this" is the same correct decline (seen 2026-10-01).
+      const saysNotLoaded = /isn'?t (loaded|available)|not (loaded|available|in (the|this) (data|database))|don'?t have|no data|hasn'?t been loaded|(table|data) is (simply )?empty|can'?t answer this/i.test(r.answer);
       return { pass: !claimsNone && saysNotLoaded, reason: claimsNone ? "treated an empty table as 'no retired numbers'" : !saysNotLoaded ? "expected 'that data isn't loaded'" : undefined };
     },
   },
