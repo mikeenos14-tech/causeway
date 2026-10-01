@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import type { LiveGame } from "@/lib/live-game";
+import { diffGoals, type LiveGame, type LiveGoal } from "@/lib/live-game";
 
 const POLL_MS = 20_000;
 const WINDOW_BEFORE_MS = 15 * 60_000; // start polling 15 min before puck drop
@@ -16,22 +16,46 @@ const isFinal = (g: LiveGame) => g.state === "FINAL" || g.state === "OFF";
 // `children` (the server-rendered preview or score) until the game starts,
 // and outside the game window it never fetches at all. Polling pauses
 // while the tab is hidden.
+//
+// Goal light: a goal that appears while the page is open flashes the card
+// red (about once a second, well under the 3-per-second photosensitivity
+// limit) and drops in a banner with the scorer. Only focusTeam's goals
+// when it's playing; either team's otherwise. Goals already on the board
+// when the page opens never trigger it. A goal that vanishes from the feed
+// (overturned on review) shows a note instead.
 export function LiveScoreboard({
   gameId,
   startTimeUTC,
   title,
   variant,
+  focusTeam = "BOS",
   children,
 }: {
   gameId: number;
   startTimeUTC: string;
   title: string; // "Bruins vs Rangers"
   variant: "hero" | "page";
+  focusTeam?: string;
   children?: ReactNode;
 }) {
   const [game, setGame] = useState<LiveGame | null>(null);
   const [stale, setStale] = useState(false);
+  const [celebration, setCelebration] = useState<{ id: number; goal: LiveGoal } | null>(null);
+  const [overturned, setOverturned] = useState<{ id: number; goal: LiveGoal } | null>(null);
   const done = useRef(false);
+  const seenGoals = useRef<LiveGoal[] | null>(null);
+
+  // Each celebration or note clears itself after a few seconds.
+  useEffect(() => {
+    if (!celebration) return;
+    const t = setTimeout(() => setCelebration(null), 7000);
+    return () => clearTimeout(t);
+  }, [celebration]);
+  useEffect(() => {
+    if (!overturned) return;
+    const t = setTimeout(() => setOverturned(null), 30000);
+    return () => clearTimeout(t);
+  }, [overturned]);
 
   useEffect(() => {
     const start = Date.parse(startTimeUTC);
@@ -47,6 +71,16 @@ export function LiveScoreboard({
           if (res.ok) {
             const g: LiveGame = await res.json();
             if (cancelled) return;
+            // The first response is the baseline: goals already scored
+            // when the page opened never light up.
+            if (seenGoals.current) {
+              const { added, removed } = diffGoals(seenGoals.current, g.goals);
+              const playing = g.home.abbrev === focusTeam || g.away.abbrev === focusTeam;
+              const cheer = added.filter((x) => !playing || x.team === focusTeam).at(-1);
+              if (cheer) setCelebration({ id: Date.now(), goal: cheer });
+              if (removed.length) setOverturned({ id: Date.now(), goal: removed.at(-1)! });
+            }
+            seenGoals.current = g.goals;
             setGame(g);
             setStale(false);
             if (isFinal(g)) done.current = true;
@@ -74,10 +108,40 @@ export function LiveScoreboard({
       clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [gameId, startTimeUTC]);
+  }, [gameId, startTimeUTC, focusTeam]);
 
   if (!game || !(isLive(game) || isFinal(game))) return <>{children}</>;
-  return variant === "hero" ? <HeroBoard g={game} title={title} stale={stale} /> : <PageBoard g={game} stale={stale} />;
+  const extras = { celebration, overturned };
+  return variant === "hero" ? <HeroBoard g={game} title={title} stale={stale} {...extras} /> : <PageBoard g={game} stale={stale} {...extras} />;
+}
+
+type Extras = { celebration: { id: number; goal: LiveGoal } | null; overturned: { id: number; goal: LiveGoal } | null };
+
+// The red flash and the scorer banner, layered over the score card.
+function GoalLight({ celebration }: Pick<Extras, "celebration">) {
+  if (!celebration) return null;
+  const { goal } = celebration;
+  return (
+    <>
+      <span key={`light-${celebration.id}`} className="goal-light" aria-hidden="true" />
+      <div key={`banner-${celebration.id}`} className="goal-banner" role="status">
+        <span style={{ fontFamily: "var(--font-display)", fontWeight: 600, letterSpacing: ".08em" }}>{goal.team} GOAL</span>
+        <span style={{ fontWeight: 600 }}>
+          {goal.scorer}
+          {goal.scorerGoals != null ? ` (${goal.scorerGoals})` : ""}
+        </span>
+      </div>
+    </>
+  );
+}
+
+function OverturnedNote({ overturned }: Pick<Extras, "overturned">) {
+  if (!overturned) return null;
+  return (
+    <p role="status" style={{ margin: "8px 0 0", fontSize: ".8rem", color: "var(--text-secondary)" }}>
+      Goal overturned: {overturned.goal.team} {overturned.goal.period} {overturned.goal.time} ({overturned.goal.scorer}) is off the board.
+    </p>
+  );
 }
 
 function StatusLine({ g, stale }: { g: LiveGame; stale: boolean }) {
@@ -148,7 +212,7 @@ function GoalList({ g, limit }: { g: LiveGame; limit?: number }) {
   );
 }
 
-function HeroBoard({ g, title, stale }: { g: LiveGame; title: string; stale: boolean }) {
+function HeroBoard({ g, title, stale, celebration, overturned }: { g: LiveGame; title: string; stale: boolean } & Extras) {
   const final = isFinal(g);
   return (
     <>
@@ -157,9 +221,11 @@ function HeroBoard({ g, title, stale }: { g: LiveGame; title: string; stale: boo
           <StatusLine g={g} stale={stale} />
         </div>
         <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "clamp(2.2rem,5vw,3.6rem)", lineHeight: 0.94, letterSpacing: ".01em", textTransform: "uppercase", margin: "0 0 1rem" }}>{title}</h1>
-        <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 16, padding: "1.2rem 1.5rem", maxWidth: 420, marginBottom: "1.2rem" }}>
+        <div style={{ position: "relative", overflow: "hidden", background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 16, padding: "1.2rem 1.5rem", maxWidth: 420, marginBottom: "1.2rem" }}>
+          <GoalLight celebration={celebration} />
           <Scores g={g} big />
         </div>
+        <OverturnedNote overturned={overturned} />
         <p style={{ fontSize: ".85rem", color: "var(--text-secondary)", margin: "0 0 1.2rem" }}>
           {final ? "The full box score and recap land here within about an hour, once the NHL posts the official stats." : "Updates on its own every 20 seconds."}
         </p>
@@ -180,14 +246,16 @@ function HeroBoard({ g, title, stale }: { g: LiveGame; title: string; stale: boo
   );
 }
 
-function PageBoard({ g, stale }: { g: LiveGame; stale: boolean }) {
+function PageBoard({ g, stale, celebration, overturned }: { g: LiveGame; stale: boolean } & Extras) {
   return (
     <div style={{ display: "grid", gap: "1rem", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", marginTop: "1.2rem" }}>
-      <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, padding: "1.1rem 1.3rem" }}>
+      <div style={{ position: "relative", overflow: "hidden", background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, padding: "1.1rem 1.3rem" }}>
+        <GoalLight celebration={celebration} />
         <div style={{ marginBottom: ".8rem" }}>
           <StatusLine g={g} stale={stale} />
         </div>
         <Scores g={g} big={false} />
+        <OverturnedNote overturned={overturned} />
       </div>
       <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, padding: "1.1rem 1.3rem" }}>
         <div style={{ fontSize: ".72rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 6 }}>Scoring</div>

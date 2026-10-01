@@ -256,3 +256,24 @@ html:not([data-banner-raised]) .banner-raise { animation: banner-raise 900ms cub
   100% { transform: translateY(0); }
 }
 @media (prefers-reduced-motion: reduce) { html:not([data-banner-raised]) .banner-raise { animation: none; } }
+
+/* Goal light: the live score card flashes red three times (~1/second, well
+   under the 3-per-second photosensitivity limit) and a banner with the
+   scorer drops in, then both fade. Reduced motion: a steady red edge and a
+   banner that simply appears. */
+.goal-light { position: absolute; inset: 0; pointer-events: none; border-radius: inherit; box-shadow: inset 0 0 0 2px #e4002b; background: rgba(228, 0, 43, .16); animation: goal-light 3.2s ease-out both; }
+@keyframes goal-light {
+  0%, 30%, 60% { opacity: 1; }
+  15%, 45%, 75% { opacity: .25; }
+  100% { opacity: 0; }
+}
+.goal-banner { position: absolute; left: 0; right: 0; top: 0; z-index: 1; display: flex; justify-content: space-between; gap: 12px; padding: 8px 14px; background: var(--gold); color: var(--ink); font-size: .9rem; animation: goal-banner 7s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes goal-banner {
+  0% { transform: translateY(-110%); }
+  8%, 88% { transform: translateY(0); opacity: 1; }
+  100% { transform: translateY(0); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .goal-light { animation: none; opacity: 1; background: transparent; }
+  .goal-banner { animation: none; }
+}

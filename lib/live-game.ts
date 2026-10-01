@@ -136,3 +136,18 @@ export async function fetchLiveGame(gameId: number): Promise<LiveGame | null> {
     return null;
   }
 }
+
+// A goal's identity across polls: period, time and team. A scoring change
+// (credit moved to another player) keeps the key; an overturned goal
+// disappears from the feed and its key with it.
+export const goalKey = (g: LiveGoal) => `${g.period}|${g.time}|${g.team}`;
+
+/**
+ * What changed between two polls: goals that just appeared and goals that
+ * vanished (overturned on review). Pure, so it's unit-tested.
+ */
+export function diffGoals(prev: LiveGoal[], next: LiveGoal[]): { added: LiveGoal[]; removed: LiveGoal[] } {
+  const before = new Set(prev.map(goalKey));
+  const after = new Set(next.map(goalKey));
+  return { added: next.filter((g) => !before.has(goalKey(g))), removed: prev.filter((g) => !after.has(goalKey(g))) };
+}
