@@ -11,7 +11,9 @@
 // Resumable: a game already in the cache is skipped, so re-running after
 // a crash, a sleep, or a rate-limit storm picks up where it left off.
 //
-// Usage: npx tsx scripts/stats/fetch-nhl-history.ts [--from 19171918] [--to 20262027] [--limit N]
+// Usage: npx tsx scripts/stats/fetch-nhl-history.ts [--from 19171918] [--to 20262027] [--limit N] [--kinds pbp,landing]
+//   --kinds box   fetch boxscores instead (goalie per game: who played,
+//                 started, decision), queued after the main backfill
 
 import { mkdirSync, existsSync, writeFileSync, readFileSync, appendFileSync } from "node:fs";
 import { gzipSync, gunzipSync } from "node:zlib";
@@ -26,6 +28,9 @@ const arg = (name: string) => {
 const FROM = arg("from") ?? "19171918";
 const TO = arg("to") ?? "99999999";
 const LIMIT = Number(arg("limit") ?? Infinity);
+type Kind = "pbp" | "landing" | "box";
+const KINDS = (arg("kinds") ?? "pbp,landing").split(",") as Kind[];
+const ENDPOINT: Record<Kind, string> = { pbp: "play-by-play", landing: "landing", box: "boxscore" };
 
 export type ListGame = {
   id: number;
@@ -41,7 +46,7 @@ export type ListGame = {
   period: number;
 };
 
-export const cachePath = (season: string | number, id: number, kind: "pbp" | "landing") =>
+export const cachePath = (season: string | number, id: number, kind: Kind) =>
   join(ROOT, String(season), `${id}.${kind}.json.gz`);
 
 // One global pacing clock shared by every worker.
@@ -53,7 +58,7 @@ async function pace() {
   if (wait) await new Promise((r) => setTimeout(r, wait));
 }
 
-async function fetchText(url: string): Promise<string> {
+export async function fetchText(url: string): Promise<string> {
   for (let attempt = 0; ; attempt++) {
     await pace();
     try {
@@ -84,7 +89,7 @@ async function main() {
   const games = all
     .filter((g) => String(g.season) >= FROM && String(g.season) <= TO)
     .sort((a, b) => a.id - b.id)
-    .filter((g) => !existsSync(cachePath(g.season, g.id, "pbp")) || !existsSync(cachePath(g.season, g.id, "landing")))
+    .filter((g) => KINDS.some((k) => !existsSync(cachePath(g.season, g.id, k))))
     .slice(0, LIMIT);
   console.log(`${all.length} completed games in the NHL list; ${games.length} still to fetch (${FROM}-${TO}).`);
 
@@ -99,10 +104,10 @@ async function main() {
       const g = games[cursor++];
       try {
         mkdirSync(join(ROOT, String(g.season)), { recursive: true });
-        for (const kind of ["pbp", "landing"] as const) {
+        for (const kind of KINDS) {
           const path = cachePath(g.season, g.id, kind);
           if (existsSync(path)) continue;
-          const url = `https://api-web.nhle.com/v1/gamecenter/${g.id}/${kind === "pbp" ? "play-by-play" : "landing"}`;
+          const url = `https://api-web.nhle.com/v1/gamecenter/${g.id}/${ENDPOINT[kind]}`;
           let text: string;
           try {
             text = await fetchText(url);
@@ -139,7 +144,7 @@ if (process.argv[1]?.endsWith("fetch-nhl-history.ts")) {
   });
 }
 
-export function readCached(season: string | number, id: number, kind: "pbp" | "landing"): unknown | null {
+export function readCached(season: string | number, id: number, kind: Kind): unknown | null {
   const path = cachePath(season, id, kind);
   if (!existsSync(path)) return null;
   const data = JSON.parse(gunzipSync(readFileSync(path)).toString());

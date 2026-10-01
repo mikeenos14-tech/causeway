@@ -16,8 +16,8 @@ Owner decisions so far (2026-10-01): history back to **1917**; Utah inherits Ari
 | Shots on goal, game totals | Mid-1950s on | play-by-play | Per-period and shot events from about 2005-06 |
 | On-ice manpower (situation codes) | 2009-10 on | play-by-play | Basis for manpower and goalie intervals |
 | Shifts | 2010-11 on | shiftcharts API | Too big for the free database (≈13M rows); not planned |
-| Goalie per game (who played, decision) | Yes, historical | boxscore | Not fetched yet; needed for Elo V2 goalie and Legs V2 |
-| Standings by date, divisions, conferences | Yes, historical | standings/{date} | Not fetched yet; needed for Grudge (division), Misery (playoff race, seeding) |
+| Goalie per game (who played, started, decision) | Yes, historical | boxscore | Queued after the main backfill; loader built (`nhl_goalie_games`) |
+| Standings by date, divisions, conferences | Yes, historical | standings/{date} | Queued after the boxscores; loader built (`nhl_standings`) |
 | Venue name and city | Yes | play-by-play | Coordinates must be curated (Legs only) |
 | Transactions (trades, signings) | **No free source found** | — | Blocks Elo roster shock and Grudge transactions |
 | Betting odds | No | paid | Blocks Legs betting view |
@@ -76,7 +76,7 @@ Owner decisions so far (2026-10-01): history back to **1917**; Utah inherits Ari
 | Data-quality tiers + audit script | Done | `scripts/stats/audit.ts` |
 | Franchise mapping incl. Utah decision | Done | `LINEAGE_OVERRIDES` |
 | Extra: game_labels (names for every notable game) | Done | Not in the spec; makes Doppelganger's featured card always nameable |
-| Extra: historical standings, goalie per game | Planned | Newly found data; see availability table |
+| Extra: historical standings, goalie per game | In progress | `nhl_standings`, `nhl_goalie_games`; fetch queued, loaders tested |
 
 ## Section 5: Win Probability
 
