@@ -29,6 +29,18 @@ async function main() {
   }
   // Current, not just correct: see verify-freshness.ts.
   const stale = await checkFreshness(client);
+  // The latest standings season must list every active team. Added
+  // 2026-10-01: after the 2026-27 opener only the teams that had played
+  // got rows, and the Standings page showed 8 of 32 for two days.
+  const { rows: standingsGap } = await client.query(
+    `with latest as (select max(season_id) as s from standings_snapshots)
+     select (select count(*) from teams where is_active)::int as active,
+            count(distinct ss.team_id)::int as listed, max(l.s) as season
+     from latest l left join standings_snapshots ss on ss.season_id = l.s`,
+  );
+  if (standingsGap[0].listed < standingsGap[0].active) {
+    stale.push(`Standings for ${standingsGap[0].season} list ${standingsGap[0].listed} of ${standingsGap[0].active} active teams.`);
+  }
   await client.end();
   console.log(`\n${teams.length - failing}/${teams.length} teams pass every invariant.`);
   if (stale.length === 0) {
