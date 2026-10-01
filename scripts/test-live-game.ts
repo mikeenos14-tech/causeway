@@ -19,17 +19,18 @@ const check = (name: string, ok: boolean, detail = "") => {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${!ok && detail ? ` — ${detail}` : ""}`);
 };
 
-const goal = (over: Partial<LiveGoal>): LiveGoal => ({ period: "1st", time: "05:00", team: "BOS", scorer: "David Pastrnak", scorerGoals: 1, assists: [], strength: null, emptyNet: false, awayScore: 0, homeScore: 1, ...over });
+const goal = (over: Partial<LiveGoal>): LiveGoal => ({ eventId: 101, period: "1st", time: "05:00", team: "BOS", scorer: "David Pastrnak", scorerGoals: 1, assists: [], strength: null, emptyNet: false, awayScore: 0, homeScore: 1, ...over });
 
 // ---- Unit ----
 const a = goal({});
-const b = goal({ period: "2nd", time: "10:12", team: "NYR", scorer: "Mika Zibanejad" });
+const b = goal({ eventId: 202, period: "2nd", time: "10:12", team: "NYR", scorer: "Mika Zibanejad" });
 check("first goal is new", diffGoals([], [a]).added.length === 1);
 check("same goal on the next poll is not new", diffGoals([a], [a]).added.length === 0);
 check("a second goal is the only new one", JSON.stringify(diffGoals([a], [a, b]).added) === JSON.stringify([b]));
 check("scoring change (credit moves to another player) is not a new goal", diffGoals([a], [{ ...a, scorer: "Brad Marchand" }]).added.length === 0);
 check("a goal that vanishes is reported as removed (overturned)", diffGoals([a, b], [a]).removed.length === 1 && diffGoals([a, b], [a]).removed[0] === b);
-check("goal keys differ by period, time and team", new Set([goalKey(a), goalKey(b), goalKey({ ...a, team: "NYR" })]).size === 3);
+check("NHL time correction (11:10 -> 11:12, same event) is neither new nor removed", (() => { const d = diffGoals([a], [{ ...a, time: "05:02" }]); return d.added.length === 0 && d.removed.length === 0; })());
+check("without event ids, keys fall back to period, time and team", new Set([goalKey({ ...a, eventId: null }), goalKey({ ...b, eventId: null }), goalKey({ ...a, eventId: null, team: "NYR" })]).size === 3);
 
 // ---- Replay recorded games ----
 const i = process.argv.indexOf("--date");
@@ -63,12 +64,19 @@ if (!existsSync(root)) {
     const final = lastParsed.goals;
     const label = `${lastParsed.away.abbrev}@${lastParsed.home.abbrev} (${lastParsed.status}, ${timeline.length} polls)`;
     const keys = detected.map(goalKey);
+    const finalKeys = new Set(final.map(goalKey));
     check(`${label}: each goal detected exactly once`, new Set(keys).size === keys.length, keys.join(", "));
-    check(
-      `${label}: detected goals match the scoring summary (${final.length} goals${overturned ? `, ${overturned} overturned` : ""})`,
-      overturned > 0 || JSON.stringify([...new Set(keys)].sort()) === JSON.stringify(final.map(goalKey).sort()),
-      `detected ${keys.length}, final ${final.length}`,
-    );
+    // The double-fire the first version had: the same team and period
+    // "scoring" twice within 10 seconds of game time.
+    const sec = (t: string) => Number(t.split(":")[0]) * 60 + Number(t.split(":")[1]);
+    const doubles = detected.filter((x, i) => detected.some((y, j) => j < i && y.team === x.team && y.period === x.period && Math.abs(sec(y.time) - sec(x.time)) <= 10));
+    check(`${label}: no goal fires twice`, doubles.length === 0, doubles.map((x) => `${x.period} ${x.time} ${x.scorer}`).join(", "));
+    // Every final goal was detected; anything detected but not final must
+    // have been reported as overturned, and nothing else was.
+    const missing = [...finalKeys].filter((k) => !keys.includes(k));
+    const extra = keys.filter((k) => !finalKeys.has(k));
+    check(`${label}: every goal in the final summary was detected (${final.length})`, missing.length === 0, missing.join(", "));
+    check(`${label}: overturns (${overturned}) account exactly for goals no longer on the board`, extra.length === overturned, `extra ${extra.length}, overturned ${overturned}`);
     check(`${label}: score equals goals on the board`, lastParsed.home.score + lastParsed.away.score === final.length || lastParsed.status.includes("SO"), `${lastParsed.away.score}-${lastParsed.home.score} vs ${final.length} goals`);
   }
 }

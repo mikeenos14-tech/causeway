@@ -10,6 +10,7 @@ const API = "https://api-web.nhle.com/v1";
 export type LiveState = "FUT" | "PRE" | "LIVE" | "CRIT" | "FINAL" | "OFF";
 
 export type LiveGoal = {
+  eventId: number | null; // the feed's id for this goal; stable when the NHL corrects the time
   period: string; // "1st", "OT", "2OT"
   time: string; // elapsed in the period, "16:14"
   team: string; // abbrev
@@ -97,6 +98,7 @@ export function parseLanding(d: any): LiveGame {
       const code: string = g.situationCode ?? "";
       const defendingGoalie = g.isHome ? code[0] : code[3];
       goals.push({
+        eventId: typeof g.eventId === "number" ? g.eventId : null,
         period: periodLabel(p.periodDescriptor, d.regPeriods ?? 3),
         time: g.timeInPeriod ?? "",
         team: name(g.teamAbbrev) || g.teamAbbrev,
@@ -137,10 +139,14 @@ export async function fetchLiveGame(gameId: number): Promise<LiveGame | null> {
   }
 }
 
-// A goal's identity across polls: period, time and team. A scoring change
-// (credit moved to another player) keeps the key; an overturned goal
-// disappears from the feed and its key with it.
-export const goalKey = (g: LiveGoal) => `${g.period}|${g.time}|${g.team}`;
+// A goal's identity across polls: the feed's event id. Found on the first
+// real games (2026-10-01): the NHL posts a goal with a provisional time and
+// corrects it by a second or two about a minute later (11:10 -> 11:12), so
+// a key that included the time saw every goal vanish and reappear: a false
+// "overturned" note and a second goal light. A scoring change (credit
+// moved to another player) keeps the id too; an overturned goal
+// disappears with it. Period/time/team only if a feed ever lacks ids.
+export const goalKey = (g: LiveGoal) => (g.eventId != null ? `e${g.eventId}` : `${g.period}|${g.time}|${g.team}`);
 
 /**
  * What changed between two polls: goals that just appeared and goals that
