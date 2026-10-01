@@ -1,14 +1,17 @@
 // Keeps the stats history current (spec section 3, ingest_finals): run by
 // the hourly refresh. Loads every finished game of the current season that
 // isn't in nhl_games yet, and re-loads anything that finished in the last
-// 48 hours, since the NHL corrects scoring credit after games. Fetches
-// directly (no local cache, which doesn't exist on the CI runner).
+// 48 hours, since the NHL corrects scoring credit after games: events,
+// goalies (boxscore), and the league standings for the last two game
+// dates. Fetches directly (no local cache, which doesn't exist on the CI
+// runner).
 //
 // Usage: npx tsx --env-file=.env.local scripts/stats/ingest-recent-games.ts
 
 import { Client } from "pg";
 import { parseGame, type ListRow } from "../../lib/stats/parse-game";
-import { storeParsedGames } from "../../lib/stats/store-games";
+import { storeParsedGames, insertRows } from "../../lib/stats/store-games";
+import { goalieRows, standingsRows, GOALIE_COLS, STANDINGS_COLS, TEAM_CODES_SQL } from "../../lib/stats/parse-extras";
 
 const UA = { "User-Agent": "causeway-ingest/1.0" };
 const RECHECK_HOURS = 48;
@@ -53,15 +56,42 @@ async function main() {
   console.log(`${season}: ${finals.length} finished games, ${todo.length} to load or re-check.`);
 
   const parsed = [];
+  const goalies: unknown[][] = [];
   for (const g of todo) {
-    const [pbp, landing] = [await getJson(`https://api-web.nhle.com/v1/gamecenter/${g.id}/play-by-play`), await getJson(`https://api-web.nhle.com/v1/gamecenter/${g.id}/landing`)];
+    const pbp = await getJson(`https://api-web.nhle.com/v1/gamecenter/${g.id}/play-by-play`);
+    const landing = await getJson(`https://api-web.nhle.com/v1/gamecenter/${g.id}/landing`);
+    const box = await getJson(`https://api-web.nhle.com/v1/gamecenter/${g.id}/boxscore`);
     if (!pbp) continue;
     const p = parseGame(g, pbp, landing);
     if (!p.game.goals_match_final) console.warn(`  ${g.id}: goal events don't add up to the final score yet`);
     parsed.push(p);
+    if (box) goalies.push(...goalieRows(box, { id: g.id, game_type: p.game.game_type, home_team_id: g.homeTeamId, away_team_id: g.visitingTeamId }));
   }
   await storeParsedGames(client, parsed);
-  console.log(`Stored ${parsed.length} games.`);
+  if (parsed.length) {
+    await client.query("begin");
+    await client.query(`delete from nhl_goalie_games where game_id = any($1)`, [parsed.map((p) => p.game.id)]);
+    await insertRows(client, "nhl_goalie_games", GOALIE_COLS, goalies, "on conflict do nothing");
+    await client.query("commit");
+  }
+  console.log(`Stored ${parsed.length} games (${goalies.length} goalie rows).`);
+
+  // Standings as of the two most recent regular-season game dates (the
+  // later one may still be in progress; re-fetched next hour).
+  const dates = [...new Set(finals.filter((g) => g.gameType === 2).map((g) => g.gameDate))].sort().slice(-2);
+  const { rows: codes } = await client.query(TEAM_CODES_SQL);
+  const idFor = new Map(codes.map((r) => [`${r.season}|${r.tri_code}`, Number(r.id)]));
+  for (const date of dates) {
+    const data = await getJson(`https://api-web.nhle.com/v1/standings/${date}`);
+    if (!data) continue;
+    const unresolved = new Set<string>();
+    const rows = standingsRows(data, date, idFor, unresolved);
+    await client.query("begin");
+    await client.query(`delete from nhl_standings where date = $1`, [date]);
+    await insertRows(client, "nhl_standings", STANDINGS_COLS, rows, "on conflict do nothing");
+    await client.query("commit");
+    console.log(`Standings ${date}: ${rows.length} teams${unresolved.size ? ` (unresolved: ${[...unresolved].join(", ")})` : ""}.`);
+  }
   await client.end();
 }
 
