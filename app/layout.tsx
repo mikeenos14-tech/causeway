@@ -20,9 +20,20 @@ const plexSans = IBM_Plex_Sans({
   subsets: ["latin"],
 });
 
+// Link previews need absolute image URLs. Vercel sets the production
+// domain; previews and local dev fall back to their own host.
+const siteUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
+  ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+  : process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : "http://localhost:3000";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: "Causeway",
   description: "A stats-first Boston Bruins fan hub.",
+  openGraph: { siteName: "Causeway", type: "website" },
+  twitter: { card: "summary_large_image" },
   appleWebApp: {
     capable: true,
     title: "Causeway",
