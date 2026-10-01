@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getGameDetail, getGameSkaters, getGameGoalies, getGameTeamLines, type TeamGameLine } from "@/lib/game-detail-data";
@@ -14,6 +15,19 @@ function toi(seconds: number | null) {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+// The text half of a shared game link (the image is opengraph-image.tsx):
+// "NYR 0, BOS 3 · Swayman shuts out Rangers" and the recap's first lines.
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const gameId = Number((await params).id);
+  if (!Number.isInteger(gameId)) return {};
+  const game = await getGameDetail(gameId).catch(() => null);
+  if (!game) return { title: "Game preview · Causeway", openGraph: { title: "Game preview · Causeway" } };
+  const score = `${game.away_abbrev} ${game.away_score}, ${game.home_abbrev} ${game.home_score}`;
+  const title = game.headline ? `${score} · ${game.headline}` : `${score} · Causeway`;
+  const description = game.body ?? `Box score and stats, ${formatGameDate(game.game_date, true)}.`;
+  return { title, description, openGraph: { title, description }, twitter: { card: "summary_large_image", title, description } };
 }
 
 export default async function GameDetail({ params }: { params: Promise<{ id: string }> }) {
