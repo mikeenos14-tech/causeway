@@ -541,10 +541,29 @@ async function backfillOnce(teamAbbrev: string, seasonId: string) {
   //    overwritten when at least as complete (games_played can only grow
   //    across a season, so the highest games_played is always the most
   //    complete/final snapshot available), so this can't regress no
-  //    matter which team's run processes a given opponent last.
+  //    matter which team's run processes a given opponent last. On a tie in
+  //    games_played the newer snapshot wins, so a team whose own last game
+  //    is older can't roll back the ranks (which move as other teams play).
+  //
+  //    Early in a season abbrevToId only knows this team and the opponents
+  //    it has already played, so every other team's row was skipped: after
+  //    the 2026-27 opener only 10 of 32 teams had a snapshot. For the newest
+  //    season only, fill the gaps from the active teams in the database.
+  //    Not for past seasons: an abbrev can belong to more than one team id
+  //    over time (UTA is both Utah Hockey Club, 59, and Utah Mammoth, 68),
+  //    and only the active one is right for the current season.
+  const standingsIds = new Map(abbrevToId);
+  const { rows: newestSeason } = await client.query(`select max(id) as id from seasons`);
+  if (newestSeason[0]?.id === seasonId) {
+    const { rows: activeTeams } = await client.query(`select id, abbrev from teams where is_active`);
+    for (const r of activeTeams) {
+      if (!standingsIds.has(r.abbrev)) standingsIds.set(r.abbrev, Number(r.id));
+    }
+  }
+
   let standingsWritten = 0;
   for (const t of standings.standings) {
-    const teamId = abbrevToId.get(t.teamAbbrev.default);
+    const teamId = standingsIds.get(t.teamAbbrev.default);
     if (!teamId) {
       console.warn(`  no team id for ${t.teamAbbrev.default}, skipping standings row`);
       continue;
@@ -563,7 +582,9 @@ async function backfillOnce(teamAbbrev: string, seasonId: string) {
          goals_for = excluded.goals_for, goals_against = excluded.goals_against,
          division_rank = excluded.division_rank, conference_rank = excluded.conference_rank,
          league_rank = excluded.league_rank, updated_at = now()
-       where excluded.games_played >= standings_snapshots.games_played`,
+       where excluded.games_played > standings_snapshots.games_played
+          or (excluded.games_played = standings_snapshots.games_played
+              and excluded.snapshot_date >= standings_snapshots.snapshot_date)`,
       [
         teamId,
         seasonId,
