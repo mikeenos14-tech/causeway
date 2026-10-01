@@ -9,11 +9,20 @@
 import { Client } from "pg";
 import { buildGameFacts, type GameFacts } from "../lib/game-facts";
 import { validateRecap } from "../lib/narrate-recap";
+import type { SignificanceFact } from "../lib/significance-checks";
 
-type Case = { name: string; game: number; headline: string; body: string; expect: "pass" | "reject" };
+type Case = { name: string; game: number; headline: string; body: string; expect: "pass" | "reject"; notable?: SignificanceFact[] };
 
 const cases: Case[] = [
   // Must pass — real trial output.
+  // Notable facts woven into the full recap (2026-10-01).
+  { name: "notable: shutout meeting count, paraphrased as a first", game: 2026020003, notable: [{"category": "head_to_head_shutout", "population": "head-to-head, loaded data only", "fact": "BOS's first shutout of NYR in 17 meetings."}], headline: "Swayman blanks the Rangers in the opener", body: "It's the first time Boston has blanked New York in 17 meetings. Jeremy Swayman stopped all 24 shots in a 3-0 season-opening win.", expect: "pass" },
+  { name: "notable: meeting count turned into a year", game: 2026020003, notable: [{"category": "head_to_head_shutout", "population": "head-to-head, loaded data only", "fact": "BOS's first shutout of NYR in 17 meetings."}], headline: "Bruins blank the Rangers", body: "Boston's first shutout of New York since 2021, 3-0, with Jeremy Swayman stopping all 24 shots.", expect: "reject" },
+  { name: "notable: count changed from the fact", game: 2026020003, notable: [{"category": "head_to_head_shutout", "population": "head-to-head, loaded data only", "fact": "BOS's first shutout of NYR in 17 meetings."}], headline: "Bruins blank the Rangers", body: "Boston's first shutout of New York in 18 meetings, 3-0, with Jeremy Swayman stopping all 24 shots.", expect: "reject" },
+  { name: "notable: inflated significance", game: 2026020003, notable: [{"category": "head_to_head_shutout", "population": "head-to-head, loaded data only", "fact": "BOS's first shutout of NYR in 17 meetings."}], headline: "A historic night at the Garden", body: "Boston's first shutout of New York in 17 meetings, 3-0, with Jeremy Swayman stopping all 24 shots.", expect: "reject" },
+  { name: "notable: streak extended, goalie 'stopped' in another sentence (trial false positive)", game: 2015020202, notable: [{"category": "point_streak_extending", "population": "own career", "fact": "Colin Miller has a 6-game point streak, the longest of his career."}], headline: "Miller's streak reaches six", body: "Colin Miller has a 6-game point streak, the longest of his career. Mike Condon stopped 29 of 31 as Montréal won 4-2.", expect: "pass" },
+  { name: "notable: streak extended but called snapped", game: 2015020202, notable: [{"category": "point_streak_extending", "population": "own career", "fact": "Colin Miller has a 6-game point streak, the longest of his career."}], headline: "Miller's streak snapped", body: "Colin Miller has a 6-game point streak, the longest of his career.", expect: "reject" },
+  { name: "no notable facts: a 'first time' claim is still unsupported", game: 2026020003, headline: "Bruins blank the Rangers", body: "It's the first time Boston has blanked New York in 17 meetings, 3-0.", expect: "reject" },
   {
     name: "Game 6 elimination, shots even, xG favors BUF",
     game: 2025030116,
@@ -120,7 +129,7 @@ async function main() {
     let outcome: "pass" | "reject" = "pass";
     let why = "";
     try {
-      validateRecap({ headline: c.headline, body: c.body }, sheets.get(c.game)!);
+      validateRecap({ headline: c.headline, body: c.body }, sheets.get(c.game)!, c.notable ?? []);
     } catch (e) {
       outcome = "reject";
       why = (e as Error).message.slice(0, 110);

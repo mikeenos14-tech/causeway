@@ -174,6 +174,23 @@ Write the blurb now and submit it with the submit_blurb tool.`;
   const grounding = facts.map((f) => f.fact).join(" ");
   const parsed = { headline: replaceNicknames(input.headline, grounding), body: replaceNicknames(input.body, grounding) };
 
+  validateNotableClaims(parsed, facts, gameContext);
+  const ungroundedName = findUngroundedName(`${parsed.headline} ${parsed.body}`, grounding, gameContext.homeAbbrev, gameContext.awayAbbrev);
+  if (ungroundedName) throw new Error(`Narration mentions "${ungroundedName}" who is not named in the facts, the teams, or the allowed word list.`);
+
+  return { headline: parsed.headline, body: parsed.body, modelVersion: MODEL };
+}
+
+// The checks specific to narrating verified rare facts — streak polarity,
+// invented years, inflated significance, a player credited to the
+// opponent. Exported so the full recap (lib/narrate-recap.ts), which now
+// carries these facts too, applies exactly the same rules. Name grounding
+// is left to each caller, since what counts as grounding differs.
+export function validateNotableClaims(
+  parsed: { headline: string; body: string },
+  facts: SignificanceFact[],
+  gameContext: { homeAbbrev: string; awayAbbrev: string },
+): void {
   // Defense in depth, again: a real batch run produced a headline saying a
   // streak "snapped" for a game whose only fact was point_streak_extending
   // (still active) — the model saw the team lost that game and let that
@@ -184,7 +201,14 @@ Write the blurb now and submit it with the submit_blurb tool.`;
   const hasExtendingFact = facts.some((f) => f.category === "point_streak_extending");
   const hasSnappedFact = facts.some((f) => f.category === "point_streak_snapped");
   if (hasExtendingFact && !hasSnappedFact) {
-    const combined = `${parsed.headline} ${parsed.body}`.toLowerCase();
+    // Only sentences that mention the streak: a full recap also says
+    // "Rask stopped 30 shots", which isn't about the streak at all
+    // (trial false positive, 2026-10-01).
+    const combined = `${parsed.headline}. ${parsed.body}`
+      .toLowerCase()
+      .split(/(?<=[.!?;:—])\s+/)
+      .filter((sentence) => /streak/.test(sentence))
+      .join(" ");
     // Word-boundary regexes, not plain substring matches — a first pass at
     // this used .includes("ends"), which also matches inside "extends,"
     // the exact word this text is expected to use. Caught by re-checking
@@ -253,8 +277,6 @@ Write the blurb now and submit it with the submit_blurb tool.`;
   if (flow) throw new Error(`Narration describes game flow the facts don't contain (matched ${flow}): ${combinedText.slice(0, 200)}`);
   const hype = /\b(exclusive club|historic|legendary|unprecedented|all-time)\b/i.exec(combinedText);
   if (hype) throw new Error(`Narration inflates significance ("${hype[0]}") beyond what the facts state: ${combinedText.slice(0, 200)}`);
-  const ungrounded = findUngroundedName(combinedText, facts.map((f) => f.fact).join(" "), gameContext.homeAbbrev, gameContext.awayAbbrev);
-  if (ungrounded) throw new Error(`Narration mentions "${ungrounded}" who is not named in the facts, the teams, or the allowed word list.`);
 
   // Fifth hallucination pattern: every player named in `facts` is
   // guaranteed to be on TARGET_TEAM_ABBREV for this game (that's what
@@ -278,5 +300,4 @@ Write the blurb now and submit it with the submit_blurb tool.`;
     }
   }
 
-  return { headline: parsed.headline, body: parsed.body, modelVersion: MODEL };
 }
