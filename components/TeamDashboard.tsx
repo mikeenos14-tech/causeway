@@ -26,6 +26,7 @@ import {
 import { getLatestSeasonId } from "@/lib/schedule-data";
 import { getAllSeasonSeriesForTeam } from "@/lib/season-series-data";
 import { getUpcomingMilestones, milestoneText } from "@/lib/milestones-data";
+import { LiveScoreboard } from "@/components/LiveScoreboard";
 import { getClubSeason, isFinal, isInProgress, formatStartTimeET, openerTag, chooseHero, type ClubGame } from "@/lib/nhl-schedule";
 import { nextGameFlavor } from "@/lib/next-game";
 import { roundLabel } from "@/lib/playoff-data";
@@ -139,6 +140,9 @@ export async function TeamDashboard({ abbrev, compact = false }: { abbrev: strin
           )}
           <div style={{ position: "relative", display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 32, flexWrap: "wrap" }}>
             {hero === "preview" && next && (
+              // Takes over at puck drop on its own, rather than waiting for
+              // this page's 5-minute revalidation to notice the game started.
+              <LiveScoreboard gameId={next.id} startTimeUTC={next.startTimeUTC} title={`${teamName} ${next.isHome ? "vs" : "at"} ${next.opponentName}`} variant="hero">
               <PreviewHero
                 game={next}
                 tag={(club && openerTag(club, next)) ?? (next.gameType === 3 ? "Playoffs" : whenLabel(next, now))}
@@ -164,8 +168,13 @@ export async function TeamDashboard({ abbrev, compact = false }: { abbrev: strin
                 }
                 lastGame={lastGame && daysSinceLast < 3 ? lastGame : null}
               />
+              </LiveScoreboard>
             )}
-            {hero === "pending" && pending && <PendingHero game={pending} teamName={teamName} abbrev={abbrev} titleSize={titleSize} />}
+            {hero === "pending" && pending && (
+              <LiveScoreboard gameId={pending.id} startTimeUTC={pending.startTimeUTC} title={`${teamName} ${pending.isHome ? "vs" : "at"} ${pending.opponentName}`} variant="hero">
+                <PendingHero game={pending} teamName={teamName} abbrev={abbrev} titleSize={titleSize} />
+              </LiveScoreboard>
+            )}
             {hero === "recap" && lastGame && <RecapHero game={lastGame} abbrev={abbrev} titleSize={titleSize} compact={compact} />}
           </div>
         </section>

@@ -4,6 +4,7 @@ import { formatStartTimeET } from "@/lib/nhl-schedule";
 import { formatGameDate } from "@/lib/format-date";
 import { milestoneText } from "@/lib/milestones-data";
 import { FormBars } from "@/components/Sparkline";
+import { LiveScoreboard } from "@/components/LiveScoreboard";
 
 const H2 = { margin: "0 0 .9rem", fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "1.35rem", textTransform: "uppercase" as const, letterSpacing: ".02em" };
 const CARD = { background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, padding: "1.1rem 1.3rem" } as const;
@@ -33,14 +34,17 @@ export function GamePreview({ p }: { p: Preview }) {
             </>
           )}
         </p>
-        {(live || final) && p.away.score != null && p.home.score != null && (
-          <p style={{ margin: ".8rem 0 0", fontFamily: "var(--font-display)", fontSize: "2rem" }}>
-            {p.away.abbrev} {p.away.score} · {p.home.abbrev} {p.home.score}
-            <a href={`https://www.nhl.com/gamecenter/${p.id}`} style={{ marginLeft: 14, fontFamily: "var(--font-body)", fontSize: ".85rem", color: "var(--gold)", textDecoration: "none" }}>
-              NHL.com game center ↗
-            </a>
-          </p>
-        )}
+        {/* Replaces the static score with a self-updating one once the game starts. */}
+        <LiveScoreboard gameId={p.id} startTimeUTC={p.startTimeUTC} title={`${p.away.name} at ${p.home.name}`} variant="page">
+          {(live || final) && p.away.score != null && p.home.score != null && (
+            <p style={{ margin: ".8rem 0 0", fontFamily: "var(--font-display)", fontSize: "2rem" }}>
+              {p.away.abbrev} {p.away.score} · {p.home.abbrev} {p.home.score}
+              <a href={`https://www.nhl.com/gamecenter/${p.id}`} style={{ marginLeft: 14, fontFamily: "var(--font-body)", fontSize: ".85rem", color: "var(--gold)", textDecoration: "none" }}>
+                NHL.com game center ↗
+              </a>
+            </p>
+          )}
+        </LiveScoreboard>
       </section>
 
       {/* Tale of the tape */}
