@@ -32,7 +32,7 @@ jobs:
   refresh-current-season:
     if: github.event.schedule == '17 * * * *' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -85,7 +85,7 @@ jobs:
   refresh-moneypuck:
     if: github.event.schedule == '23 14 * * *' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
