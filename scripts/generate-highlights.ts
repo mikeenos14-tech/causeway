@@ -1,14 +1,10 @@
-// Full pipeline for one game: run the significance checks. If something
-// real was found, narrate it as a fact-grounded highlight. If not — which
-// is most games, in practice — fall back to a shorter, differently-grounded
-// "recap" line instead of leaving the game with no voice at all (see
-// lib/narrate-recap.ts for why that's a separate function with its own
-// rules, not a relaxed version of the highlights prompt). Every game ends
-// up with exactly one stored narrative, 'highlights' or 'recap'.
+// Full pipeline for one game: run the significance checks, then write one
+// recap from the game's verified fact sheet with any notable facts woven
+// in (lib/narrate-recap.ts). Every game ends up with exactly one stored
+// narrative: 'highlights' when it carries notable facts, 'recap' when not.
 
 import { Client } from "pg";
 import { runSignificanceChecks } from "../lib/significance-checks";
-import { narrateHighlights } from "../lib/narrate-highlights";
 import { narrateRecap } from "../lib/narrate-recap";
 import { buildGameFacts } from "../lib/game-facts";
 import { TARGET_TEAM_ABBREV } from "../lib/significance-checks";
@@ -58,60 +54,35 @@ async function backfillOnce(candidateGameIds: number[]) {
     try {
       const facts = await runSignificanceChecks(client, gameId);
 
-      const { rows } = await client.query(
-        `select g.game_date, g.game_type, ht.abbrev as home_abbrev, at.abbrev as away_abbrev, g.home_score, g.away_score
-         from games g join teams ht on ht.id=g.home_team_id join teams at on at.id=g.away_team_id
-         where g.id = $1`,
-        [gameId],
-      );
-      const game = rows[0];
-
-      if (facts.length === 0) {
-        console.log("nothing notable — falling back to a recap line (no facts to ground a highlight in)");
-        // Grounded in the game's verified fact sheet (scorers, goalies,
-        // shots/xG, where it sits in the season) — see lib/game-facts.ts.
-        const sheet = await buildGameFacts(client, gameId, TARGET_TEAM_ABBREV);
-        if (!sheet) throw new Error(`No game row for ${gameId}`);
-        const recap = await narrateRecap(sheet);
-        console.log(`\nHEADLINE: ${recap.headline}`);
-        console.log(`BODY: ${recap.body}`);
-        await client.query(
-          `insert into narratives (game_id, kind, headline, body, facts_json, source, model_version)
-           values ($1, 'recap', $2, $3, null, 'ai_generated', $4)
-           on conflict (game_id, kind) do update set
-             headline = excluded.headline, body = excluded.body,
-             model_version = excluded.model_version, generated_at = now()`,
-          [gameId, recap.headline, recap.body, recap.modelVersion],
-        );
-        console.log("(stored)");
-        continue;
+      // One path for every game (2026-10-01): the full recap from the
+      // verified fact sheet, with any notable facts woven in. Previously a
+      // notable fact REPLACED the recap — the 2026-27 opener, a 3-0
+      // shutout, got two sentences about a meeting count and no scorers.
+      // Stored as 'highlights' when it carries notable facts (pages show
+      // those as "what stood out"), 'recap' otherwise.
+      const sheet = await buildGameFacts(client, gameId, TARGET_TEAM_ABBREV);
+      if (!sheet) throw new Error(`No game row for ${gameId}`);
+      if (facts.length) {
+        console.log(`${facts.length} notable fact(s):`);
+        for (const f of facts) console.log(`  - ${f.fact}`);
+      } else {
+        console.log("nothing notable — plain recap");
       }
-
-      console.log(`${facts.length} fact(s) found:`);
-      for (const f of facts) console.log(`  - ${f.fact}`);
-
-      const result = await narrateHighlights(
-        {
-          homeAbbrev: game.home_abbrev,
-          awayAbbrev: game.away_abbrev,
-          homeScore: game.home_score,
-          awayScore: game.away_score,
-          gameDate: game.game_date.toISOString().slice(0, 10),
-        },
-        facts,
-      );
-
+      const result = await narrateRecap(sheet, facts);
       console.log(`\nHEADLINE: ${result.headline}`);
       console.log(`BODY: ${result.body}`);
-
+      const kind = facts.length ? "highlights" : "recap";
       await client.query(
         `insert into narratives (game_id, kind, headline, body, facts_json, source, model_version)
-         values ($1, 'highlights', $2, $3, $4, 'ai_generated', $5)
+         values ($1, $2, $3, $4, $5, 'ai_generated', $6)
          on conflict (game_id, kind) do update set
            headline = excluded.headline, body = excluded.body, facts_json = excluded.facts_json,
            model_version = excluded.model_version, generated_at = now()`,
-        [gameId, result.headline, result.body, JSON.stringify(facts), result.modelVersion],
+        [gameId, kind, result.headline, result.body, facts.length ? JSON.stringify(facts) : null, result.modelVersion],
       );
+      // A game has one narrative: drop the other kind if an earlier run
+      // stored it (e.g. regenerated after a fact was added or removed).
+      await client.query(`delete from narratives where game_id = $1 and kind in ('highlights', 'recap') and kind <> $2`, [gameId, kind]);
       console.log("(stored)");
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

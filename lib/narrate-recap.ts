@@ -15,8 +15,9 @@
 // must not manufacture significance.
 
 import Anthropic from "@anthropic-ai/sdk";
-import { TEAM_WORDS, FLOW_CLAIMS, findUngroundedName, replaceNicknames } from "./narrate-highlights";
+import { TEAM_WORDS, FLOW_CLAIMS, findUngroundedName, replaceNicknames, validateNotableClaims } from "./narrate-highlights";
 import type { GameFacts } from "./game-facts";
+import type { SignificanceFact } from "./significance-checks";
 
 export type RecapResult = {
   headline: string;
@@ -75,12 +76,36 @@ const UNSUPPORTED_CLAIMS: RegExp[] = [
   /\b(historic|rare|rarely|unprecedented|all-time|legendary|exclusive|incredible|amazing)\b/,
 ];
 
-export async function narrateRecap(facts: GameFacts): Promise<RecapResult> {
+// When significance-checks.ts finds something rare, it's narrated INSIDE
+// the full recap rather than instead of it. Found on opening night
+// 2026-27: a 3-0 shutout got only "first shutout of NYR in 18 meetings…
+// took long enough" — no scorers, no Swayman — because the notable-fact
+// path replaced the recap. Same sheet, same validators, plus the rules and
+// checks written for rare facts.
+const NOTABLE_RULES = `
+
+This game ALSO has verified notable facts, listed separately. Lead with the most interesting one, then give the game itself (score, the key scorers or goalie) from the sheet. Rules for notable facts:
+- They replace the "nothing rare" premise above: you may call something a first, a streak, a milestone, or rare ONLY in the words the fact itself uses. Never inflate it ("historic", "legendary", "exclusive club", "all-time").
+- Preserve exactly what a fact counts. "In 17 meetings" is a number of meetings, never a year or a span of time: no "since 2021", no "decade".
+- A point_streak_extending fact means the streak is STILL ACTIVE, even in a loss. Only a point_streak_snapped fact means one ended.
+- Every notable fact is about a Bruins player or the Bruins; never attach one to the opponent.
+- 3-4 sentences instead of 2-3.`;
+
+// The notable facts as sheet lines, so the sheet-based validators (numbers,
+// names, conditional claims) treat them as grounding too.
+export function withNotable(facts: GameFacts, notable: SignificanceFact[]): GameFacts {
+  if (notable.length === 0) return facts;
+  const lines = [...facts.lines, ...notable.map((f) => `Notable: ${f.fact}`)];
+  return { ...facts, lines, text: lines.join("\n") };
+}
+
+export async function narrateRecap(sheet: GameFacts, notable: SignificanceFact[] = []): Promise<RecapResult> {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const facts = withNotable(sheet, notable);
 
   const userPrompt = `Fact sheet (verified from the database):
-${facts.lines.map((l) => `- ${l}`).join("\n")}
-
+${sheet.lines.map((l) => `- ${l}`).join("\n")}
+${notable.length ? `\nNotable facts (each verified real and rare; see the rules):\n${notable.map((f, i) => `${i + 1}. [${f.category}] ${f.fact}`).join("\n")}\n` : ""}
 Write the recap now and submit it with the submit_recap tool.`;
 
   // Submitted through a forced tool call rather than "reply with JSON":
@@ -90,7 +115,7 @@ Write the recap now and submit it with the submit_recap tool.`;
   const response = await client.messages.create({
     model: MODEL,
     max_tokens: 900, // 400 truncated Sonnet mid-answer on 3 of 12 trial games
-    system: SYSTEM_PROMPT,
+    system: notable.length ? SYSTEM_PROMPT + NOTABLE_RULES : SYSTEM_PROMPT,
     tools: [
       {
         name: "submit_recap",
@@ -99,7 +124,7 @@ Write the recap now and submit it with the submit_recap tool.`;
           type: "object",
           properties: {
             headline: { type: "string", description: "Under 10 words." },
-            body: { type: "string", description: "2-3 sentences." },
+            body: { type: "string", description: notable.length ? "3-4 sentences." : "2-3 sentences." },
           },
           required: ["headline", "body"],
         },
@@ -120,7 +145,7 @@ Write the recap now and submit it with the submit_recap tool.`;
     body: replaceNicknames(fixCapitalization(input.body, facts), names),
   };
 
-  validateRecap(parsed, facts);
+  validateRecap(parsed, facts, notable);
 
   return { headline: parsed.headline, body: parsed.body, modelVersion: MODEL };
 }
@@ -129,14 +154,20 @@ Write the recap now and submit it with the submit_recap tool.`;
 // themselves can be tested against real good and bad text
 // (scripts/test-recap-validators.ts) — a safeguard that blocks output is
 // code too, and gets the same test-before-trust treatment.
-export function validateRecap(parsed: { headline: string; body: string }, facts: GameFacts): void {
+export function validateRecap(parsed: { headline: string; body: string }, sheet: GameFacts, notable: SignificanceFact[] = []): void {
+  const facts = sheet.lines.some((l) => l.startsWith("Notable: ")) ? sheet : withNotable(sheet, notable);
   const combined = `${parsed.headline} ${parsed.body}`;
   const lower = combined.toLowerCase();
   const reject = (why: string) => {
     throw new Error(`Recap ${why}: ${lower.slice(0, 800)}`);
   };
 
-  const unsupported = UNSUPPORTED_CLAIMS.find((re) => re.test(lower));
+  // A claim the plain sheet can't support is allowed when a notable fact
+  // makes the same kind of claim ("streak" for a streak fact, "first" for
+  // a first). "First time" paraphrases any "first …" fact.
+  const notableText = notable.map((f) => f.fact).join(" ").toLowerCase();
+  const groundedByNotable = (re: RegExp) => re.test(notableText) || (re.source.includes("first time") && /\bfirst\b/.test(notableText));
+  const unsupported = UNSUPPORTED_CLAIMS.find((re) => re.test(lower) && !groundedByNotable(re));
   if (unsupported) reject(`makes a claim the fact sheet can't support (matched ${unsupported})`);
   for (const c of CONDITIONAL_CLAIMS) {
     if (c.pattern.test(combined) && !c.allowedIf(facts.text)) reject(`claims ${c.what} the fact sheet doesn't state (matched ${c.pattern})`);
@@ -274,6 +305,13 @@ export function validateRecap(parsed: { headline: string; body: string }, facts:
   const wrongVenue = awayCityWords.find((w) => !homeCityWords.has(w) && new RegExp(`\\bin ${w}\\b`, "i").test(combined));
   if (wrongVenue) reject(`places the game "in ${wrongVenue}" (the away team's city), but ${facts.homeAbbrev} was home`);
 
+  if (notable.length) {
+    try {
+      validateNotableClaims(parsed, notable, { homeAbbrev: facts.homeAbbrev, awayAbbrev: facts.awayAbbrev });
+    } catch (e) {
+      reject(`breaks a notable-fact rule (${(e as Error).message.split(":")[0]})`);
+    }
+  }
 }
 
 // Names from the fact sheet, restored to their capitalization. Trial
@@ -283,6 +321,7 @@ export function validateRecap(parsed: { headline: string; body: string }, facts:
 // explicit proper names (teams, arena, players); an earlier version
 // guessed names from capitalized word runs and turned "after" into "After".
 const COMMON_WORDS = new Set(["new", "bay", "blue", "red", "golden", "st", "center", "centre", "arena", "garden", "the", "of", "and", "de", "van", "le"]);
+
 function fixCapitalization(text: string, facts: GameFacts): string {
   const proper = new Map<string, string>();
   for (const name of facts.properNames) {
