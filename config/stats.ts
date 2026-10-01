@@ -19,6 +19,19 @@ export function eraOf(season: string): (typeof ERAS)[number] {
   return ERAS.find((e) => season >= e.from && season <= e.to) ?? ERAS[ERAS.length - 1];
 }
 
+// Regular-season overtime rules by season, for season_context.
+export function otFormat(season: string): { label: string; shootout: boolean; tiesPossible: boolean } {
+  if (season < "19281929") return { label: "varied (early era)", shootout: false, tiesPossible: true };
+  if (season < "19421943") return { label: "10-minute overtime, not sudden death", shootout: false, tiesPossible: true };
+  if (season < "19831984") return { label: "none (ties)", shootout: false, tiesPossible: true };
+  if (season < "19992000") return { label: "5-minute sudden death, 5-on-5", shootout: false, tiesPossible: true };
+  if (season < "20052006") return { label: "5-minute sudden death, 4-on-4", shootout: false, tiesPossible: true };
+  if (season < "20152016") return { label: "5-minute 4-on-4, then shootout", shootout: true, tiesPossible: false };
+  return { label: "5-minute 3-on-3, then shootout", shootout: true, tiesPossible: false };
+}
+
+export const DERIVED_MODEL_VERSION = "derived-v1";
+
 // Franchise continuity. Starts from the NHL's own franchise ids
 // (api.nhle.com/stats/rest/en/team) with two deliberate changes:
 export const LINEAGE_OVERRIDES: { teamId: number; franchiseId?: number; lineageId: number; why: string }[] = [
