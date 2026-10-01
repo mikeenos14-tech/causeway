@@ -21,18 +21,18 @@ async function main() {
 
   async function resolve(e: IconicEntry): Promise<GameRow | string> {
     const mine = idsFor(e.team);
-    const theirs = idsFor(e.opp);
+    const anyOpp = e.opp === "*";
+    const theirs = anyOpp ? teams.map((t) => Number(t.id)) : idsFor(e.opp);
     if (!mine.length || !theirs.length) return `unknown team code ${!mine.length ? e.team : e.opp}`;
-    const { rows } = await client.query<GameRow>(
-      `select id, season, game_type, game_date::text, home_team_id, away_team_id, home_score, away_score, final_state, ot_periods
-       from nhl_games
-       where season = $1 and game_type = $2
-         and ((home_team_id = any($3) and away_team_id = any($4)) or (home_team_id = any($4) and away_team_id = any($3)))
-         ${e.date ? "and game_date = $5" : ""}
-       order by game_date, id`,
-      e.date ? [e.season, "regular", mine, theirs, e.date] : [e.season, "playoff", mine, theirs],
-    );
-    if (e.date) return rows[0] ?? `no ${e.team}-${e.opp} game on ${e.date}`;
+    const cols = `id, season, game_type, game_date::text, home_team_id, away_team_id, home_score, away_score, final_state, ot_periods`;
+    const pair = `((home_team_id = any($2) and away_team_id = any($3)) or (home_team_id = any($3) and away_team_id = any($2)))`;
+    if (e.date) {
+      // Any game type: playoff moments are often remembered by date.
+      const { rows } = await client.query<GameRow>(`select ${cols} from nhl_games where game_date = $1 and ${pair} order by id`, [e.date, mine, theirs]);
+      if (rows.length > 1 && anyOpp) return `${rows.length} games for ${e.team} on ${e.date}`;
+      return rows[0] ?? `no ${e.team} game vs ${e.opp} on ${e.date}`;
+    }
+    const { rows } = await client.query<GameRow>(`select ${cols} from nhl_games where season = $1 and game_type = 'playoff' and ${pair} order by game_date, id`, [e.season, mine, theirs]);
     return rows[(e.playoffGame ?? 0) - 1] ?? `no Game ${e.playoffGame} (${rows.length} playoff games ${e.team}-${e.opp} in ${e.season})`;
   }
 
@@ -49,7 +49,7 @@ async function main() {
     if (x.ot != null && x.ot !== (g.final_state === "OT")) say("overtime", x.ot, g.final_state);
     if (x.otPeriods != null && x.otPeriods !== g.ot_periods) say("overtime periods", x.otPeriods, g.ot_periods);
     if (x.shootout != null && x.shootout !== (g.final_state === "SO")) say("shootout", x.shootout, g.final_state);
-    if (x.lastGoalBy || x.trailedBy || x.ledBy) {
+    if (x.lastGoalBy || x.trailedBy || x.ledBy || x.scoredBy) {
       const { rows: goals } = await client.query(
         `select e.team_id, e.score_before_home, e.score_before_away, p.full_name
          from nhl_goal_events e left join nhl_players p on p.id = e.scorer_id
@@ -59,6 +59,9 @@ async function main() {
       if (x.lastGoalBy) {
         const last = goals.at(-1)?.full_name ?? "(none)";
         if (!last.toLowerCase().endsWith(x.lastGoalBy.toLowerCase())) say("final goal scorer", x.lastGoalBy, last);
+      }
+      for (const who of x.scoredBy ?? []) {
+        if (!goals.some((goal) => (goal.full_name ?? "").toLowerCase().endsWith(who.toLowerCase()))) say("scorers", `${who} among them`, goals.map((goal) => goal.full_name).join(", ") || "(none)");
       }
       // Margins at every point, from this team's side (after each goal).
       let maxLead = 0;
@@ -98,8 +101,10 @@ async function main() {
     await client.query("delete from iconic_games");
     for (const { e, g } of verified) {
       await client.query(
-        `insert into iconic_games (game_id, label, short_story, fame_weight, category, curated_by, verified_at) values ($1, $2, $3, $4, $5, 'site owner (approved 2026-10-01)', now())`,
-        [g.id, e.label, e.story, e.weight, e.category],
+        `insert into iconic_games (game_id, label, short_story, fame_weight, category, curated_by, verified_at, featurable, sources)
+         values ($1, $2, $3, $4, $5, 'site owner (approved 2026-10-01)', now(), $6, $7)
+         on conflict (game_id) do nothing`,
+        [g.id, e.label, e.story, e.weight, e.category, e.featurable ?? true, e.sources ?? null],
       );
     }
     await client.query("commit");
