@@ -75,3 +75,29 @@ export const FETCH = {
   maxRetries: 6,
   backoffMs: [2_000, 5_000, 10_000, 20_000, 40_000, 60_000],
 } as const;
+
+// Elo (spec section 6). Starting values from the spec; build-elo.ts --tune
+// grid-searches K, home ice, reversion and the margin coefficient on the
+// training seasons and prints the winners to paste here. The model version
+// changes whenever these do.
+export const ELO = {
+  modelVersion: "elo-v1-untuned",
+  params: {
+    initial: 1500,
+    expansionStart: 1380,
+    leagueMean: 1505,
+    kRegular: 6,
+    kPlayoff: 8,
+    homeIce: { early: 50, "original-six": 50, expansion: 50, "high-scoring": 50, "dead-puck": 50, "cap-shootout": 50, modern: 50 } as Record<string, number>,
+    marginCoef: 0.5,
+    reversion: 0.3,
+    otWinnerScore: 0.75,
+  },
+  // Games that aren't real results: the 1918 Montreal Wanderers forfeits
+  // (their arena burned down; Montreal and Toronto were credited 1-0 wins).
+  excludeGameIds: [1917020035, 1917020036],
+};
+
+// Spec section 13: hold out every fifth season (those ending in 0 and 5)
+// for calibration checks; never tune on them.
+export const isHeldOutSeason = (season: string) => ["0", "5"].includes(season.slice(-1));
