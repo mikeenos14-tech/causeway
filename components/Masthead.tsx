@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BannerMark } from "@/components/BannerMark";
 
 export function Masthead({ scoreline }: { scoreline?: React.ReactNode }) {
   return (
@@ -9,8 +10,12 @@ export function Masthead({ scoreline }: { scoreline?: React.ReactNode }) {
           sub-nav before any content). */}
       <div className="masthead-inner" style={{ maxWidth: 1160, margin: "0 auto", padding: "14px 24px" }}>
         <Link href="/" className="masthead-logo" style={{ display: "flex", alignItems: "center", gap: 10, fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "1.7rem", color: "#f1eee5", textDecoration: "none" }}>
-          <span style={{ width: 26, height: 26, borderRadius: "50%", border: "2px solid var(--gold)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <span style={{ width: 8, height: 8, background: "var(--gold)", borderRadius: 2, transform: "rotate(45deg)" }} />
+          {/* Raised into the rafters once per visit (see globals.css and the
+              script in app/layout.tsx); still for reduced-motion users. */}
+          <span className="banner-raise-wrap">
+            <span className="banner-raise">
+              <BannerMark width={28} />
+            </span>
           </span>
           Causeway
         </Link>
