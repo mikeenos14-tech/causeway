@@ -204,6 +204,12 @@ Owner decisions so far (2026-10-01): history back to **1917**; Utah inherits Ari
 | Copy templates file | Planned | |
 | Copy rules (Bruins' side, whole %, signed WPA, playful vs straight) | Planned | |
 | Visual conventions, static chart rendering | Planned | |
+| Animation: goal light on the live scoreboard | In progress | Owner-approved 2026-10-01, for the Oct 2 game; no sound |
+| Animation: WP chart draws itself, swings labeled | Planned | Ships with WP (section 5) |
+| Animation: Cup banners in the rafters (history page) | Planned | Ships with the history features |
+| Animation: Time Machine series revealed game by game | Planned | Ships with the Time Machine (section 6) |
+| Animation: Doppelganger card flip reveal | Planned | Ships with Doppelganger (section 7) |
+| Animation rules | Standing | Mark moments, never decorate; honor reduced motion; never delay the information |
 
 ## Section 13: testing and validation
 
