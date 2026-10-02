@@ -19,6 +19,7 @@ import { Headshot } from "@/components/Headshot";
 import { getHeadshots } from "@/lib/headshots";
 import { formatSavePct } from "@/lib/util/save-pct";
 import { buildCareerTrend, seasonByDate, MIN_GAMES } from "@/lib/career-trend";
+import { skaterPace, goaliePace } from "@/lib/pace";
 
 export default async function PlayerDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -59,6 +60,23 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
       : null
     : seasonByDate(new Date());
   const trend = buildCareerTrend(seasonSplits, isGoalie, inProgressSeason);
+
+  // "On pace for" during the regular season, from 20 GP (lib/pace.ts):
+  // his totals so far plus his rate over his team's remaining games.
+  const pace = (() => {
+    if (!club || !inProgressSeason || inProgressSeason !== club.currentSeason) return null;
+    const regular = club.games.filter((g) => g.season === club.currentSeason && g.gameType === 2);
+    const teamGamesPlayed = regular.filter(isFinal).length;
+    const rows = seasonSplits.filter((r) => r.season_id === inProgressSeason);
+    const gp = rows.reduce((sum, r) => sum + Number(r.games), 0);
+    if (isGoalie) {
+      // Wins per team game needs one team's games; skip a goalie traded mid-season.
+      if (rows.length !== 1 || rows[0].team_abbrev !== latestTeam) return null;
+      return goaliePace({ gp, wins: Number((rows[0] as { wins: number }).wins), teamGamesPlayed, seasonGames: regular.length });
+    }
+    const sum = (k: "goals" | "points") => rows.reduce((t, r) => t + Number((r as Record<string, unknown>)[k]), 0);
+    return skaterPace({ gp, goals: sum("goals"), points: sum("points"), teamGamesPlayed, seasonGames: regular.length });
+  })();
   const trendLabel = (p: (typeof trend.points)[number]) =>
     `${formatSeasonLabel(p.seasonId)}${p.inProgress ? " so far" : ""}: ${isGoalie ? `${formatSavePct(p.value)} SV%` : `${p.value.toFixed(2)} pts/game`} (${p.games} GP)`;
 
@@ -135,6 +153,25 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
               </>
             )}
           </div>
+          {pace && inProgressSeason && (
+            <p style={{ fontSize: ".9rem", color: "var(--text-secondary)", marginTop: ".9rem" }} title={`His totals so far plus his ${pace.kind === "goalie" ? "wins per team game" : "per-game rate"} over the ${latestTeam}'s ${pace.remaining} remaining games, if he plays them all.`}>
+              <span style={{ fontWeight: 600, color: "var(--gold)" }}>{formatSeasonLabel(inProgressSeason)}: </span>
+              {pace.kind === "skater" ? (
+                <>
+                  {pace.goals} G, {pace.points} P in {pace.gp} GP · on pace for{" "}
+                  <strong style={{ color: "var(--text-primary)" }}>
+                    {pace.paceGoals} {pace.paceGoals === 1 ? "goal" : "goals"} and {pace.pacePoints} {pace.pacePoints === 1 ? "point" : "points"}
+                  </strong>
+                </>
+              ) : (
+                <>
+                  {pace.wins} {pace.wins === 1 ? "win" : "wins"} in {pace.gp} GP · on pace for{" "}
+                  <strong style={{ color: "var(--text-primary)" }}>{pace.paceWins} wins</strong>
+                </>
+              )}
+              <span style={{ color: "var(--text-muted)", fontSize: ".8rem" }}> (at his current rate, {pace.remaining} games left)</span>
+            </p>
+          )}
           {playoffTotals.games > 0 && (
             <p style={{ fontSize: ".85rem", color: "var(--text-secondary)", marginTop: ".9rem" }}>
               <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>Playoffs: </span>

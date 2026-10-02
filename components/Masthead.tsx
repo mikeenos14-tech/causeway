@@ -28,9 +28,7 @@ export function Masthead({ scoreline }: { scoreline?: React.ReactNode }) {
           </span>
         </Link>
         <nav className="masthead-nav" style={{ fontFamily: "var(--font-display)", fontSize: "1.15rem" }}>
-          {/* Hidden on phones, where the logo is the way home and the row
-              needs the room for History and Ask. */}
-          <Link href="/" className="nav-home" style={{ color: "#d8d6cc", textDecoration: "none" }}>
+          <Link href="/" style={{ color: "#d8d6cc", textDecoration: "none" }}>
             Home
           </Link>
           <Link href="/schedule" style={{ color: "#d8d6cc", textDecoration: "none" }}>
@@ -47,8 +45,10 @@ export function Masthead({ scoreline }: { scoreline?: React.ReactNode }) {
           <Link href="/ask" style={{ color: "var(--gold)", textDecoration: "none" }}>
             Ask
           </Link>
+          {/* "News", not "Headlines": short enough that all six links fit
+              on a phone without hiding Home (users looked for it). */}
           <Link href="/headlines" style={{ color: "#d8d6cc", textDecoration: "none" }}>
-            Headlines
+            News
           </Link>
         </nav>
         <SiteSearch />

@@ -135,16 +135,13 @@ body {
   .masthead-ask {
     margin-left: auto;
   }
-  .nav-home {
-    display: none;
-  }
   .masthead-nav {
     order: 3;
     width: 100%;
     overflow-x: auto;
     white-space: nowrap;
     scrollbar-width: none;
-    gap: 22px;
+    gap: 16px;
   }
   /* Preview tale of the tape: each rank on its own line under the value. */
   .tape-rank {
@@ -312,7 +309,7 @@ html:not([data-banner-raised]) .banner-raise { animation: banner-raise 900ms cub
 .decade-summary > span:nth-child(2) { margin-left: auto; }
 .decade-summary::after { content: "+"; color: var(--gold); font-weight: 700; margin-left: 12px; }
 .decade[open] > .decade-summary::after { content: "–"; }
-/* The smallest phones (320px): tighter nav spacing so all five links fit. */
+/* The smallest phones (320px): tighter nav so all six links fit. */
 @media (max-width: 359px) {
-  .masthead-nav { gap: 12px !important; }
+  .masthead-nav { gap: 9px !important; font-size: 1.05rem !important; }
 }
