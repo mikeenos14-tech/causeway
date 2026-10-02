@@ -26,6 +26,7 @@ import {
 import { getLatestSeasonId } from "@/lib/schedule-data";
 import { getAllSeasonSeriesForTeam } from "@/lib/season-series-data";
 import { getUpcomingMilestones, milestoneText } from "@/lib/milestones-data";
+import { teamNickname } from "@/lib/team-names";
 import { questionOfTheDay, getCachedAnswer, answerTeaser, etDate } from "@/lib/question-of-the-day";
 import { getClubSeason, isFinal, isInProgress, formatStartTimeET, openerTag, chooseHero, type ClubGame } from "@/lib/nhl-schedule";
 import { nextGameFlavor } from "@/lib/next-game";
@@ -358,7 +359,10 @@ export async function TeamDashboard({ abbrev, compact = false }: { abbrev: strin
                     }}
                   >
                     <span style={{ color: own ? "var(--gold)" : "inherit" }}>{t.division_rank}</span>
-                    <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingRight: 8 }}>{t.name}</span>
+                    <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingRight: 8 }}>
+                      <span className="name-full">{t.name}</span>
+                      <span className="name-short">{teamNickname(t.abbrev, t.name)}</span>
+                    </span>
                     <span>{t.wins}</span>
                     <span>{t.losses}</span>
                     <span className="standings-col-otl">{t.ot_losses}</span>
