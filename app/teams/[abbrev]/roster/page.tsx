@@ -44,7 +44,7 @@ export default async function TeamRoster({ params }: { params: Promise<{ abbrev:
           Roster &amp; Stats
         </h1>
         <p style={{ color: "var(--text-secondary)", fontSize: ".9rem", marginBottom: "2rem" }}>
-          {seasonId ? `${formatSeasonLabel(seasonId)} regular season · click any column to sort` : "No season loaded yet"}
+          {seasonId ? `${formatSeasonLabel(seasonId)} regular season · tap or click a column to sort` : "No season loaded yet"}
         </p>
 
         {moves && <RosterMovesCard teamAbbrev={abbrev} moves={moves} captainName={captainName} />}

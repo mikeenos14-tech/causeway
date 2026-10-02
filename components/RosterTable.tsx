@@ -67,6 +67,10 @@ export function SkaterRosterTable({ rows, badges = {} }: { rows: SkaterRosterRow
   }, [rows, sort]);
 
   return (
+    <>
+    {/* Phones see only the first few columns; say there's more (the
+        default sort column, points, is off-screen at 375px). */}
+    <p className="swipe-hint">Swipe the table for more columns →</p>
     <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", overflowX: "auto" }}>
       <table className="box-score-table sticky-first" style={{ minWidth: 860, padding: "0 18px" }}>
         <thead>
@@ -114,6 +118,7 @@ export function SkaterRosterTable({ rows, badges = {} }: { rows: SkaterRosterRow
         </tbody>
       </table>
     </div>
+    </>
   );
 }
 
@@ -134,6 +139,10 @@ export function GoalieRosterTable({ rows, badges = {} }: { rows: GoalieRosterRow
   }, [rows, sort]);
 
   return (
+    <>
+    {/* Phones see only the first few columns; say there's more (the
+        default sort column, points, is off-screen at 375px). */}
+    <p className="swipe-hint">Swipe the table for more columns →</p>
     <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", overflowX: "auto" }}>
       <table className="box-score-table sticky-first" style={{ minWidth: 560, padding: "0 18px" }}>
         <thead>
@@ -169,5 +178,6 @@ export function GoalieRosterTable({ rows, badges = {} }: { rows: GoalieRosterRow
         </tbody>
       </table>
     </div>
+    </>
   );
 }

@@ -74,6 +74,8 @@ export function AdvancedTable({ rows }: { rows: AdvancedRosterRow[] }) {
         </button>
       </div>
     )}
+    {/* Phones see only the first few columns; say there's more. */}
+    <p className="swipe-hint">Swipe the table for more columns →</p>
     <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", overflowX: "auto" }}>
       <table className="box-score-table sticky-first" style={{ minWidth: 820, padding: "0 18px" }}>
         <thead>
