@@ -39,7 +39,7 @@ Owner decisions so far (2026-10-01): history back to **1917**; Utah inherits Ari
 | --- | --- | --- |
 | Batch: ingest_finals | Done | Hourly (not 4 AM + 15 min after final): new finals + 48-hour re-check for scoring changes |
 | Batch: rebuild_derived | Done | Daily job |
-| Batch: update_elo | Built | Add to daily job once tuned |
+| Batch: update_elo | Done | Daily job rebuilds Elo and runs `verify-elo-sql.ts` |
 | Batch: update_wp_tables (weekly), update_wpa_ledger, update_grudge, update_misery, update_legs, rebuild_similarity_index | Planned | With their phases |
 | Idempotent jobs | Done | Every builder rebuilds from scratch or replaces per game |
 | Feed adapter module | Done | `lib/live-game.ts` (live scoreboard branch) |
@@ -76,7 +76,9 @@ Owner decisions so far (2026-10-01): history back to **1917**; Utah inherits Ari
 | Data-quality tiers + audit script | Done | `scripts/stats/audit.ts` |
 | Franchise mapping incl. Utah decision | Done | `LINEAGE_OVERRIDES` |
 | Extra: game_labels (names for every notable game) | Done | Not in the spec; makes Doppelganger's featured card always nameable |
-| Extra: historical standings, goalie per game | In progress | `nhl_standings`, `nhl_goalie_games`; fetch queued, loaders tested |
+| Extra: historical standings, goalie per game | Done | `nhl_standings` (1,774/1,774 team-seasons match the NHL's final standings), `nhl_goalie_games` |
+| Extra: historical box scores | Done | `nhl_skater_games` (1.55M rows, checked against play-by-play; played/not from game logs; 30,519/30,521 player-seasons match official totals) |
+| Extra: "This day in Bruins history" | Done | Home page; facts only from verified data |
 
 ## Section 5: Win Probability
 
@@ -106,10 +108,10 @@ Owner decisions so far (2026-10-01): history back to **1917**; Utah inherits Ari
 | Tuning script (grid search, per-era log loss) | Built | Tunes on training seasons only; every fifth season held out |
 | elo_history / elo_current | Built | Migration 0015 |
 | Forfeits excluded | Done | 1918 Wanderers forfeits |
-| Time Machine: franchise rankings | Planned | |
+| Time Machine: franchise rankings | Done (Bruins) | `/history/elo`: every Bruins season by peak, average or final Elo, with record and result (2026-10-02) |
 | Time Machine: series simulator | Built (engine) | Seeded 2-2-1-1-1 simulator, ms for 10,000 series; UI planned |
 | Time Machine: twin team | Planned | |
-| Pregame Elo odds on previews | Planned | |
+| Pregame Elo odds on previews | Done | Win chance from the Elo gap + era home ice (`config ELO.winProb`, `lib/elo-odds.ts`); held-out log loss 0.6737 vs 0.6882, calibration error 2.7 pts; owner chose whole % with a "How this works" note (2026-10-02) |
 | V2 goalie adjustment | Planned | Needs historical goalie-per-game fetch |
 | V2 roster shock | **Blocked** | No transactions source; manual nudges possible |
 | V2 era-neutral box score sim | Planned | |
