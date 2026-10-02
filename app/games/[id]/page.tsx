@@ -20,6 +20,17 @@ import { WinProbChart } from "@/components/WinProbChart";
 import { getGameWpTimeline } from "@/lib/wp-game";
 import { goalWpaFromCurve } from "@/lib/wp-curve";
 
+// Cached a minute (ISR): a game page makes about ten NHL and database
+// calls, and on game night many fans open the same one. The live score
+// doesn't wait on this; it polls /api/live on its own. A failed render
+// (NHL outage) is never cached, so the last good page keeps serving.
+export const revalidate = 60;
+// No games prebuilt at deploy; each is rendered on its first visit, then
+// cached as above (an [id] route is only cached with this declared).
+export async function generateStaticParams() {
+  return [];
+}
+
 function toi(seconds: number | null) {
   if (seconds == null) return "—";
   const m = Math.floor(seconds / 60);
