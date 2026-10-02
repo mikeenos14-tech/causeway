@@ -3,7 +3,10 @@ import type { Metadata } from "next";
 import { Masthead, Footer } from "@/components/Masthead";
 import { TeamLogo } from "@/components/TeamLogo";
 import { formatGameDate, formatSeasonLabel } from "@/lib/format-date";
-import { getBruinsCups, getBruinsIconicGames, getBruinsSeasonLines, type IconicGame, type SeasonLine } from "@/lib/history-hub-data";
+import { getBruinsCups, getBruinsIconicGames, getBruinsSeasonLines, getBruinsSeriesRecord, type IconicGame, type SeasonLine } from "@/lib/history-hub-data";
+import { getBruinsEloSeasons } from "@/lib/elo-seasons";
+import { getBruinsBiggestGoals } from "@/lib/leverage-data";
+import { DestinationCard } from "@/components/DestinationCard";
 
 // Everything from 1924 on in one place: the six Cups, the iconic games and
 // every season, each a link into the pages that hold the detail (game
@@ -34,7 +37,17 @@ function byDecade<T>(items: T[], seasonOf: (t: T) => string): [string, T[]][] {
 
 export default async function HistoryPage() {
   const cups = await getBruinsCups();
-  const [iconic, seasons] = await Promise.all([getBruinsIconicGames(), getBruinsSeasonLines(new Set(cups.map((c) => c.seasonId)))]);
+  const [iconic, seasons, series, eloSeasons, [topGoal]] = await Promise.all([
+    getBruinsIconicGames(),
+    getBruinsSeasonLines(new Set(cups.map((c) => c.seasonId))),
+    getBruinsSeriesRecord(),
+    getBruinsEloSeasons(),
+    getBruinsBiggestGoals("cup", 1),
+  ]);
+  // Teasers for the cards: the same #1s the linked pages open on.
+  const ranked = eloSeasons.filter((s) => !s.current);
+  const topSeason = [...ranked].sort((a, b) => b.peak - a.peak)[0];
+  const rankedCount = ranked.length;
   const currentSeason = seasons[0]?.seasonId;
 
   return (
@@ -46,16 +59,21 @@ export default async function HistoryPage() {
         </h1>
         <p style={{ color: "var(--text-secondary)", fontSize: ".95rem", maxWidth: "62ch", margin: "0 0 2.5rem" }}>
           Every Bruins game since the first one, December 1, 1924, from the NHL&apos;s official game records. {seasons.length} seasons, {iconic.length} iconic games, six Stanley Cups.{" "}
-          <Link href="/teams/BOS/playoffs" style={{ color: "var(--gold)", textDecoration: "none", fontWeight: 600 }}>
-            Every playoff series →
-          </Link>{" "}
-          <Link href="/history/elo" style={{ color: "var(--gold)", textDecoration: "none", fontWeight: 600 }}>
-            Every season, ranked →
-          </Link>{" "}
-          <Link href="/history/leverage" style={{ color: "var(--gold)", textDecoration: "none", fontWeight: 600 }}>
-            Biggest goals →
-          </Link>
         </p>
+
+        <nav className="dest-cards" aria-label="More Bruins history">
+          <DestinationCard href="/teams/BOS/playoffs" title="Every playoff series" teaser={`${series.series} series since ${formatSeasonLabel(series.since)}, ${series.won} won. Every round, every game.`} />
+          <DestinationCard
+            href="/history/elo"
+            title="Every season, ranked"
+            teaser={topSeason ? `#1: the ${formatSeasonLabel(topSeason.seasonId)} Bruins (${topSeason.record}). All ${rankedCount} seasons by Elo.` : "Every season by Elo."}
+          />
+          <DestinationCard
+            href="/history/leverage"
+            title="Biggest goals"
+            teaser={topGoal ? `#1: ${topGoal.scorer}, ${topGoal.season.slice(4)} ${topGoal.stage}. Every goal since 1924, ranked.` : "Every goal since 1924, ranked by what it meant."}
+          />
+        </nav>
 
         <section style={{ marginBottom: "3rem" }}>
           <h2 style={H2}>Stanley Cups</h2>

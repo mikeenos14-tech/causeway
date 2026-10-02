@@ -71,3 +71,21 @@ export async function getBruinsSeasonLines(cupSeasons: Set<string>): Promise<Sea
     .map(([seasonId, e]) => ({ seasonId, record: eraRecord(seasonId, e.reg), games: e.reg.length, cup: cupSeasons.has(seasonId), playoffs: e.playoffs }))
     .sort((a, b) => b.seasonId.localeCompare(a.seasonId));
 }
+
+// Every Bruins playoff series: how many, and how many won (more wins, or
+// in the early two-game series on total goals, more goals).
+export async function getBruinsSeriesRecord(): Promise<{ series: number; won: number; since: string }> {
+  const { rows: [r] } = await pool.query(
+    `with s as (
+       select g.season, (g.id / 100) % 10 rnd, (g.id / 10) % 10 ser,
+              sum(case when (g.home_team_id = 6 and g.home_score > g.away_score) or (g.away_team_id = 6 and g.away_score > g.home_score) then 1 else 0 end) w,
+              sum(case when (g.home_team_id = 6 and g.home_score < g.away_score) or (g.away_team_id = 6 and g.away_score < g.home_score) then 1 else 0 end) l,
+              sum(case when g.home_team_id = 6 then g.home_score else g.away_score end) gf,
+              sum(case when g.home_team_id = 6 then g.away_score else g.home_score end) ga
+       from nhl_games g where g.game_type = 'playoff' and 6 in (g.home_team_id, g.away_team_id) and (g.id / 100) % 10 > 0
+       group by 1, 2, 3
+     )
+     select count(*)::int series, count(*) filter (where w > l or (w = l and gf > ga))::int won, min(season) since from s`,
+  );
+  return { series: r.series, won: r.won, since: r.since };
+}
