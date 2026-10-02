@@ -77,7 +77,7 @@ async function main() {
     if (clinched && last.final_state === "OT") add(last, "series_clincher_ot", `${year} ${stageName(last, finalRound.get(last.season)!)}, Game ${series(last.id).game}: series ends in overtime, ${scoreline(last)}`, 5);
   }
   for (const g of playoff) {
-    const { round, game } = series(g.id);
+    const { game } = series(g.id);
     const stage = stageName(g, finalRound.get(g.season)!);
     if (game === 7) add(g, "game7", `${yearOf(g.season)} ${stage}, Game 7: ${scoreline(g)}`, 5);
     if (g.final_state === "OT" && g.ot_periods >= 3) add(g, "long_ot", `${yearOf(g.season)} ${stage}, Game ${game}: ${ordinal(g.ot_periods)} overtime, ${scoreline(g)}`, 4);
