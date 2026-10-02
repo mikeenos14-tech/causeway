@@ -92,6 +92,15 @@ async function main() {
     await client.query("commit");
     console.log(`Standings ${date}: ${rows.length} teams${unresolved.size ? ` (unresolved: ${[...unresolved].join(", ")})` : ""}.`);
   }
+  // games.ot_loser_point (migration 0021 on main): an OT loss on an
+  // empty-net goal earns no point. Set from the goal events just stored;
+  // idempotent, and covers any game the site's own refresh loaded first.
+  const { rowCount } = await client.query(
+    `update games g set ot_loser_point = false
+     where g.game_type = 'regular' and g.game_end_type = 'overtime' and g.ot_loser_point
+       and exists (select 1 from nhl_goal_events e where e.game_id = g.id and e.period_type = 'OT' and e.empty_net)`,
+  );
+  if (rowCount) console.log(`Marked ${rowCount} OT loss(es) on an empty-net goal as no-point losses.`);
   await client.end();
 }
 

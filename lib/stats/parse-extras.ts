@@ -31,12 +31,18 @@ export function goalieRows(box: any, g: { id: number; game_type: string; home_te
   return out;
 }
 
+// The standings feed spells a few old clubs differently from the game
+// feed. Each alias is checked against the season's games (the Cleveland
+// Barons played 1976-78 as CLE in games, CBN in standings).
+const STANDINGS_ALIASES: Record<string, string> = { CBN: "CLE" };
+
 // idFor resolves "season|TRI" to a team id (codes are reused over time).
 export function standingsRows(data: any, date: string, idFor: Map<string, number>, unresolved?: Set<string>): unknown[][] {
   const out: unknown[][] = [];
   for (const s of data?.standings ?? []) {
     const season = String(s.seasonId);
-    const abbrev = s.teamAbbrev?.default;
+    const raw = s.teamAbbrev?.default;
+    const abbrev = STANDINGS_ALIASES[raw] && idFor.has(`${season}|${STANDINGS_ALIASES[raw]}`) ? STANDINGS_ALIASES[raw] : raw;
     const teamId = idFor.get(`${season}|${abbrev}`) ?? idFor.get(`*|${abbrev}`);
     if (!teamId) {
       unresolved?.add(`${season} ${abbrev}`);
