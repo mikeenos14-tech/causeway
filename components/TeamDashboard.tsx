@@ -41,6 +41,7 @@ import { FormBars } from "@/components/Sparkline";
 import { TeamLogo } from "@/components/TeamLogo";
 import { Headshot } from "@/components/Headshot";
 import { getHeadshots } from "@/lib/headshots";
+import { ThisDay } from "@/components/ThisDay";
 
 const H2 = { margin: 0, fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "1.5rem", textTransform: "uppercase" as const, letterSpacing: ".02em" };
 const TILE_LABEL = { fontSize: ".78rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase" as const, letterSpacing: ".06em", marginBottom: 8 };
@@ -271,6 +272,9 @@ export async function TeamDashboard({ abbrev, compact = false }: { abbrev: strin
           </div>
         </section>
       )}
+
+      {/* Home page only (the Bruins' own dashboard, not the team page). */}
+      {!compact && abbrev === "BOS" && <ThisDay />}
 
       {/* STANDINGS + STAT LEADERS */}
       <div className="homepage-lower-grid" style={{ marginBottom: "2.5rem" }}>

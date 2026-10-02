@@ -8,6 +8,7 @@ import { eraRecord, eraResult, roundName, getHistorySeasonSchedule, getHistorica
 import { pool } from "../lib/db";
 import { getHistoricalStandings, getHistoricalStandingsSeasons } from "../lib/history-standings";
 import { teamNickname } from "../lib/team-names";
+import { getThisDay } from "../lib/this-day";
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = "") => {
@@ -105,6 +106,16 @@ async function main() {
   }
   check("every season: league W = L + OTL, and GF = GA", bad.length === 0, bad.slice(0, 5).join("; "));
   check("short names: (1917) Senators, Maple Leafs, St. Patricks", teamNickname("SEN", "Ottawa Senators (1917)") === "Senators" && teamNickname("TOR", "Toronto Maple Leafs") === "Maple Leafs" && teamNickname("TSP", "Toronto St. Patricks") === "St. Patricks");
+
+  // This day in Bruins history
+  const may10 = await getThisDay(new Date("2026-05-10T15:00:00Z"));
+  check("this day, May 10: Orr's flying goal first, 1970 Final Game 4 in OT, 56 years ago", may10[0]?.headline === "Orr's flying goal" && may10[0].facts.includes("Stanley Cup Final, Game 4") && may10[0].facts.includes("Overtime") && may10[0].yearsAgo === 56, JSON.stringify(may10[0]));
+  const apr2 = await getThisDay(new Date("2026-04-02T15:00:00Z"));
+  check("this day, Apr 2: Sudden Death Hill, 1939 Semifinal Game 7, 3 overtimes", apr2[0]?.headline === "Sudden Death Hill" && apr2[0].facts.includes("Semifinal, Game 7") && apr2[0].facts.includes("3 overtimes"), JSON.stringify(apr2[0]?.facts));
+  const oct2 = await getThisDay(new Date("2026-10-02T15:00:00Z"));
+  check("this day, Oct 2: two season openers, 1997 win first", oct2.length === 2 && oct2[0].date === "1997-10-02" && oct2.every((g) => g.facts.includes("Season opener")));
+  check("this day, Jul 20: nothing (no Bruins game ever on that date)", (await getThisDay(new Date("2026-07-20T15:00:00Z"))).length === 0);
+  check("this day, late evening ET still counts as that date", (await getThisDay(new Date("2026-10-03T03:30:00Z"))).every((g) => g.date.slice(5) === "10-02"));
 
   await pool.end();
   console.log(`\n${failed === 0 ? "All passed." : `${failed} failed.`}`);

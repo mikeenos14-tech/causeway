@@ -8,6 +8,7 @@
 // Usage: npx tsx --env-file=.env.local scripts/stats/build-game-labels.ts [--dry-run]
 
 import { Client } from "pg";
+import { roundName } from "../../lib/history-data";
 
 type G = { id: number; season: string; game_type: string; game_date: string; home: number; away: number; hs: number; as: number; final_state: string; ot_periods: number; home_code: string; away_code: string };
 type Label = { game_id: number; kind: string; label: string; fame_points: number };
@@ -25,6 +26,14 @@ function scoreline(g: G): string {
 
 // Playoff ids: SSSS 03 0 R S G (round, series, game).
 const series = (id: number) => ({ round: Math.floor(id / 100) % 10, series: Math.floor(id / 10) % 10, game: id % 10 });
+// The round's name as that era used it (lib/history-data.ts roundName: the
+// 1939 semifinal, not "Round 1"; quarterfinals filed under round 1 in
+// 1928-42); "Final" stays short in labels.
+const stageName = (g: { id: number; season: string }, maxRound: number) => {
+  const s = series(g.id);
+  const name = roundName(g.season, s.round, maxRound, s.series);
+  return name === "Stanley Cup Final" ? "Final" : name;
+};
 
 async function main() {
   const dry = process.argv.includes("--dry-run");
@@ -65,11 +74,11 @@ async function main() {
     const isFinal = round === finalRound.get(last.season);
     const year = yearOf(last.season);
     if (clinched && isFinal && last.season >= NHL_OWNS_CUP_FROM) add(last, "cup_clincher", `${year} Stanley Cup clincher: ${scoreline(last)}`, 6);
-    if (clinched && last.final_state === "OT") add(last, "series_clincher_ot", `${year} ${isFinal ? "Final" : `Round ${round}`}, Game ${series(last.id).game}: series ends in overtime, ${scoreline(last)}`, 5);
+    if (clinched && last.final_state === "OT") add(last, "series_clincher_ot", `${year} ${stageName(last, finalRound.get(last.season)!)}, Game ${series(last.id).game}: series ends in overtime, ${scoreline(last)}`, 5);
   }
   for (const g of playoff) {
     const { round, game } = series(g.id);
-    const stage = round === finalRound.get(g.season) ? "Final" : `Round ${round}`;
+    const stage = stageName(g, finalRound.get(g.season)!);
     if (game === 7) add(g, "game7", `${yearOf(g.season)} ${stage}, Game 7: ${scoreline(g)}`, 5);
     if (g.final_state === "OT" && g.ot_periods >= 3) add(g, "long_ot", `${yearOf(g.season)} ${stage}, Game ${game}: ${ordinal(g.ot_periods)} overtime, ${scoreline(g)}`, 4);
     else if (g.final_state === "OT") add(g, "playoff_ot", `${yearOf(g.season)} ${stage}, Game ${game}: ${scoreline(g)}`, 2);
