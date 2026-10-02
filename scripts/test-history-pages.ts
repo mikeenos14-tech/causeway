@@ -9,6 +9,7 @@ import { pool } from "../lib/db";
 import { getHistoricalStandings, getHistoricalStandingsSeasons } from "../lib/history-standings";
 import { teamNickname } from "../lib/team-names";
 import { getThisDay } from "../lib/this-day";
+import { getBruinsEloSeasons } from "../lib/elo-seasons";
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = "") => {
@@ -116,6 +117,15 @@ async function main() {
   check("this day, Oct 2: two season openers, 1997 win first", oct2.length === 2 && oct2[0].date === "1997-10-02" && oct2.every((g) => g.facts.includes("Season opener")));
   check("this day, Jul 20: nothing (no Bruins game ever on that date)", (await getThisDay(new Date("2026-07-20T15:00:00Z"))).length === 0);
   check("this day, late evening ET still counts as that date", (await getThisDay(new Date("2026-10-03T03:30:00Z"))).every((g) => g.date.slice(5) === "10-02"));
+
+  // Every Bruins season ranked by Elo
+  const elo = await getBruinsEloSeasons();
+  const done = elo.filter((x) => !x.current);
+  check("Elo seasons: 1970-71 has the highest peak, 1971-72 second", done[0]?.seasonId === "19701971" && done[1]?.seasonId === "19711972", done.slice(0, 2).map((x) => x.seasonId).join(","));
+  check("Elo seasons: outcomes match history (1970-71 lost QF, 1971-72 Cup, 1973-74 lost Final, 2010-11 Cup)",
+    elo.find((x) => x.seasonId === "19701971")?.outcome === "Lost in the Quarterfinal" && elo.find((x) => x.seasonId === "19711972")?.cup === true &&
+    elo.find((x) => x.seasonId === "19731974")?.outcome === "Lost in the Final" && elo.find((x) => x.seasonId === "20102011")?.cup === true);
+  check("Elo seasons: six Cups, one current season, every season present", elo.filter((x) => x.cup).length === 6 && elo.filter((x) => x.current).length === 1 && elo.length === (await getBruinsSeasons()).length);
 
   await pool.end();
   console.log(`\n${failed === 0 ? "All passed." : `${failed} failed.`}`);

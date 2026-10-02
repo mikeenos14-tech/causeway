@@ -48,6 +48,9 @@ export default async function HistoryPage() {
           Every Bruins game since the first one, December 1, 1924, from the NHL&apos;s official game records. {seasons.length} seasons, {iconic.length} iconic games, six Stanley Cups.{" "}
           <Link href="/teams/BOS/playoffs" style={{ color: "var(--gold)", textDecoration: "none", fontWeight: 600 }}>
             Every playoff series →
+          </Link>{" "}
+          <Link href="/history/elo" style={{ color: "var(--gold)", textDecoration: "none", fontWeight: 600 }}>
+            Every season, ranked →
           </Link>
         </p>
 

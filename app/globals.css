@@ -154,6 +154,8 @@ body {
     align-items: flex-end;
   }
   /* Roster-change rows: name, then the detail on its own line. */
+  /* Elo seasons: phones show rank, season, the ranked column and result. */
+  .elo-col-optional { display: none; }
   /* Past standings: GF/GA give way to the record on phones. */
   /* Hidden cells keep their grid slot (0px wide): display:none would pull
      every later cell one column left. */
