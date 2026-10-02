@@ -27,34 +27,37 @@ export type HistoryRow = {
   team: number;
   opp: number;
   finalState: "REG" | "OT" | "SO" | "TIE";
+  otEmptyNet: boolean; // lost in OT on an empty-net goal: no loser point
   notable: string | null; // iconic label, or a computed label (Game 7, comeback...)
 };
 
-export async function getHistorySeasonSchedule(seasonId: string): Promise<HistoryRow[]> {
+export async function getHistorySeasonSchedule(seasonId: string, teamId = BOS_TEAM_ID): Promise<HistoryRow[]> {
   const { rows } = await pool.query(
     `select g.id, g.game_date::text as date, g.game_type, g.home_team_id = $2 as is_home,
             case when g.home_team_id = $2 then at.tri_code else ht.tri_code end as opponent,
             case when g.home_team_id = $2 then g.home_score else g.away_score end as team,
             case when g.home_team_id = $2 then g.away_score else g.home_score end as opp,
             g.final_state,
+            exists (select 1 from nhl_goal_events e where e.game_id = g.id and e.period_type = 'OT' and e.empty_net) as ot_empty_net,
             coalesce(ig.label, (select l.label from game_labels l where l.game_id = g.id order by l.fame_points desc limit 1)) as notable
      from nhl_games g
      join nhl_teams ht on ht.id = g.home_team_id join nhl_teams at on at.id = g.away_team_id
      left join iconic_games ig on ig.game_id = g.id and ig.featurable
      where g.season = $1 and (g.home_team_id = $2 or g.away_team_id = $2)
      order by g.game_date, g.id`,
-    [seasonId, BOS_TEAM_ID],
+    [seasonId, teamId],
   );
-  return rows.map((r) => ({ id: r.id, date: r.date, gameType: r.game_type, isHome: r.is_home, opponent: r.opponent, team: r.team, opp: r.opp, finalState: r.final_state, notable: r.notable }));
+  return rows.map((r) => ({ id: r.id, date: r.date, gameType: r.game_type, isHome: r.is_home, opponent: r.opponent, team: r.team, opp: r.opp, finalState: r.final_state, otEmptyNet: r.ot_empty_net, notable: r.notable }));
 }
 
 // A team's record written the way that era's standings wrote it: ties
 // until 2004-05, overtime losses as their own column from 1999-2000, and
-// before that an OT loss was simply a loss.
-export function eraRecord(seasonId: string, games: { team: number; opp: number; finalState: string }[]): string {
+// before that an OT loss was simply a loss. An OT loss on an empty-net
+// goal (the loser had pulled its goalie) earns no point, so it's a loss.
+export function eraRecord(seasonId: string, games: { team: number; opp: number; finalState: string; otEmptyNet?: boolean }[]): string {
   const w = games.filter((g) => g.team > g.opp).length;
   const t = games.filter((g) => g.team === g.opp).length;
-  const otl = seasonId >= "19992000" ? games.filter((g) => g.team < g.opp && g.finalState !== "REG").length : 0;
+  const otl = seasonId >= "19992000" ? games.filter((g) => g.team < g.opp && g.finalState !== "REG" && !g.otEmptyNet).length : 0;
   const l = games.filter((g) => g.team < g.opp).length - otl;
   if (seasonId >= "20052006") return `${w}-${l}-${otl}`;
   if (seasonId >= "19992000") return `${w}-${l}-${t}-${otl}`;
@@ -63,10 +66,10 @@ export function eraRecord(seasonId: string, games: { team: number; opp: number; 
 
 // The result tag for one game in that era: OTL only once the column
 // existed (1999-2000), never in the playoffs.
-export function eraResult(seasonId: string, gameType: string, team: number, opp: number, finalState: string): "W" | "L" | "T" | "OTL" {
+export function eraResult(seasonId: string, gameType: string, team: number, opp: number, finalState: string, otEmptyNet = false): "W" | "L" | "T" | "OTL" {
   if (team > opp) return "W";
   if (team === opp) return "T";
-  return finalState !== "REG" && gameType === "regular" && seasonId >= "19992000" ? "OTL" : "L";
+  return finalState !== "REG" && !otEmptyNet && gameType === "regular" && seasonId >= "19992000" ? "OTL" : "L";
 }
 
 // Round names by era, counted back from the Final: the NHL's labels have

@@ -17,7 +17,7 @@ export async function getSeasonSchedule(teamAbbrev: string, seasonId: string) {
   // gets) — it marks "something notable happened," a stronger signal
   // than "there's some narration," which is what the recap kind means.
   const { rows } = await pool.query(
-    `select g.id, g.game_date, g.game_type, g.game_end_type,
+    `select g.id, g.game_date, g.game_type, g.game_end_type, g.ot_loser_point,
             case when ht.abbrev = $1 then true else false end as is_home,
             case when ht.abbrev = $1 then at.abbrev else ht.abbrev end as opponent,
             case when ht.abbrev = $1 then g.home_score else g.away_score end as team_score,

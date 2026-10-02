@@ -55,14 +55,15 @@ export async function getBruinsSeasonLines(cupSeasons: Set<string>): Promise<Sea
     `select g.season, g.game_type,
             case when g.home_team_id = $1 then g.home_score else g.away_score end as team,
             case when g.home_team_id = $1 then g.away_score else g.home_score end as opp,
-            g.final_state
+            g.final_state,
+            exists (select 1 from nhl_goal_events e where e.game_id = g.id and e.period_type = 'OT' and e.empty_net) as ot_empty_net
      from nhl_games g where (g.home_team_id = $1 or g.away_team_id = $1) and g.game_type in ('regular', 'playoff')`,
     [BOS_TEAM_ID],
   );
-  const bySeason = new Map<string, { reg: { team: number; opp: number; finalState: string }[]; playoffs: boolean }>();
+  const bySeason = new Map<string, { reg: { team: number; opp: number; finalState: string; otEmptyNet: boolean }[]; playoffs: boolean }>();
   for (const r of rows) {
     const e = bySeason.get(r.season) ?? { reg: [], playoffs: false };
-    if (r.game_type === "regular") e.reg.push({ team: r.team, opp: r.opp, finalState: r.final_state });
+    if (r.game_type === "regular") e.reg.push({ team: r.team, opp: r.opp, finalState: r.final_state, otEmptyNet: r.ot_empty_net });
     else e.playoffs = true;
     bySeason.set(r.season, e);
   }

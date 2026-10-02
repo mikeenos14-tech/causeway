@@ -31,7 +31,7 @@ export async function getAllSeasonSeriesForTeam(teamAbbrev: string, seasonId: st
               -- fans a game out into two rows and double-counts it under
               -- two different opponent names. team_id is the real key.
               case when ht.abbrev = $1 then g.away_team_id else g.home_team_id end as opp_team_id,
-              g.game_end_type
+              g.game_end_type, g.ot_loser_point
        from games g
        join teams ht on ht.id = g.home_team_id
        join teams at on at.id = g.away_team_id
@@ -41,8 +41,8 @@ export async function getAllSeasonSeriesForTeam(teamAbbrev: string, seasonId: st
      select t.abbrev as opp_abbrev, t.name as opp_name,
             count(*) as games,
             sum(case when pg.team_score > pg.opp_score then 1 else 0 end) as wins,
-            sum(case when pg.team_score < pg.opp_score and pg.game_end_type = 'regulation' then 1 else 0 end) as losses,
-            sum(case when pg.team_score < pg.opp_score and pg.game_end_type != 'regulation' then 1 else 0 end) as otl,
+            sum(case when pg.team_score < pg.opp_score and (pg.game_end_type = 'regulation' or not pg.ot_loser_point) then 1 else 0 end) as losses,
+            sum(case when pg.team_score < pg.opp_score and pg.game_end_type != 'regulation' and pg.ot_loser_point then 1 else 0 end) as otl,
             max(pg.game_date) as last_meeting,
             json_agg(json_build_object('id', pg.id, 'date', pg.game_date, 'team_score', pg.team_score, 'opp_score', pg.opp_score, 'end', pg.game_end_type) order by pg.game_date) as meetings
      from per_game pg
@@ -131,7 +131,7 @@ export async function getSeasonSeriesAsOfGame(gameId: number, teamAbbrev: string
     `with this_game as (
        select g.season_id, g.game_date, g.home_team_id, g.away_team_id from games g where g.id = $1
      ), meetings as (
-       select g.id, g.game_date, g.game_end_type,
+       select g.id, g.game_date, g.game_end_type, g.ot_loser_point,
               case when ht.abbrev = $2 then g.home_score else g.away_score end as team_score,
               case when ht.abbrev = $2 then g.away_score else g.home_score end as opp_score
        from games g
@@ -143,8 +143,8 @@ export async function getSeasonSeriesAsOfGame(gameId: number, teamAbbrev: string
      )
      select count(*)::int as games,
             count(*) filter (where team_score > opp_score)::int as wins,
-            count(*) filter (where team_score < opp_score and game_end_type = 'regulation')::int as losses,
-            count(*) filter (where team_score < opp_score and game_end_type <> 'regulation')::int as otl
+            count(*) filter (where team_score < opp_score and (game_end_type = 'regulation' or not ot_loser_point))::int as losses,
+            count(*) filter (where team_score < opp_score and game_end_type <> 'regulation' and ot_loser_point)::int as otl
      from meetings`,
     [gameId, teamAbbrev],
   );

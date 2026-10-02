@@ -107,8 +107,8 @@ export async function buildGameFacts(client: Client, gameId: number, targetAbbre
     // on the young season" — that was the series vs NSH; Boston was 2-0-0).
     const { rows: rec } = await client.query(
       `select count(*) filter (where (home_team_id = $1 and home_score > away_score) or (away_team_id = $1 and away_score > home_score))::int as w,
-              count(*) filter (where ((home_team_id = $1 and home_score < away_score) or (away_team_id = $1 and away_score < home_score)) and game_end_type = 'regulation')::int as l,
-              count(*) filter (where ((home_team_id = $1 and home_score < away_score) or (away_team_id = $1 and away_score < home_score)) and game_end_type <> 'regulation')::int as otl
+              count(*) filter (where ((home_team_id = $1 and home_score < away_score) or (away_team_id = $1 and away_score < home_score)) and (game_end_type = 'regulation' or not ot_loser_point))::int as l,
+              count(*) filter (where ((home_team_id = $1 and home_score < away_score) or (away_team_id = $1 and away_score < home_score)) and game_end_type <> 'regulation' and ot_loser_point)::int as otl
        from games where season_id = $2 and game_type = 'regular' and (home_team_id = $1 or away_team_id = $1) and game_date <= $3`,
       [targetId, g.season_id, g.game_date],
     );
@@ -116,8 +116,8 @@ export async function buildGameFacts(client: Client, gameId: number, targetAbbre
 
     const { rows: h2h } = await client.query(
       `select count(*) filter (where (home_team_id = $1 and home_score > away_score) or (away_team_id = $1 and away_score > home_score))::int as w,
-              count(*) filter (where ((home_team_id = $1 and home_score < away_score) or (away_team_id = $1 and away_score < home_score)) and game_end_type = 'regulation')::int as l,
-              count(*) filter (where ((home_team_id = $1 and home_score < away_score) or (away_team_id = $1 and away_score < home_score)) and game_end_type <> 'regulation')::int as otl,
+              count(*) filter (where ((home_team_id = $1 and home_score < away_score) or (away_team_id = $1 and away_score < home_score)) and (game_end_type = 'regulation' or not ot_loser_point))::int as l,
+              count(*) filter (where ((home_team_id = $1 and home_score < away_score) or (away_team_id = $1 and away_score < home_score)) and game_end_type <> 'regulation' and ot_loser_point)::int as otl,
               count(*)::int as games
        from games where season_id = $2 and game_type = 'regular' and game_date <= $3
          and ((home_team_id = $1 and away_team_id = $4) or (away_team_id = $1 and home_team_id = $4))`,

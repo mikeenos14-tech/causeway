@@ -20,7 +20,7 @@ type Row = {
   opponent: string;
   // Result from our database (linked, narrated) or, for a game the NHL has
   // finished but the hourly refresh hasn't loaded yet, straight from the API.
-  result: { team: number; opp: number; endType: string | null; loaded: boolean } | null;
+  result: { team: number; opp: number; endType: string | null; loaded: boolean; noLoserPoint?: boolean } | null;
   // Before 2007-08 (history tables): the era's result tag and any notable label.
   tag?: "W" | "L" | "T" | "OTL";
   notable?: string | null;
@@ -64,7 +64,7 @@ export default async function Schedule({ searchParams }: { searchParams: Promise
         tv: [],
         hasHighlight: !!h.notable,
         hasRecap: false,
-        tag: eraResult(seasonId!, h.gameType, h.team, h.opp, h.finalState),
+        tag: eraResult(seasonId!, h.gameType, h.team, h.opp, h.finalState, h.otEmptyNet),
         notable: h.notable,
       }))
     : club && seasonId === club.currentSeason
@@ -98,7 +98,7 @@ export default async function Schedule({ searchParams }: { searchParams: Promise
             gameType: s.game_type,
             isHome: s.is_home,
             opponent: s.opponent,
-            result: { team: s.team_score, opp: s.opp_score, endType: s.game_end_type, loaded: true },
+            result: { team: s.team_score, opp: s.opp_score, endType: s.game_end_type, loaded: true, noLoserPoint: s.ot_loser_point === false },
             live: false,
             startTimeUTC: null,
             tv: [],
@@ -108,10 +108,11 @@ export default async function Schedule({ searchParams }: { searchParams: Promise
 
   const played = rows.filter((r) => r.result && r.gameType === "regular");
   const w = played.filter((r) => r.result!.team > r.result!.opp).length;
-  const l = played.filter((r) => r.result!.team < r.result!.opp && r.result!.endType === "regulation").length;
+  // An OT loss on an empty-net goal earns no point: a loss, not an OTL.
+  const l = played.filter((r) => r.result!.team < r.result!.opp && (r.result!.endType === "regulation" || r.result!.noLoserPoint)).length;
   const otl = played.length - w - l;
   // Ties until 2004-05 and OTL from 1999-2000: the record as that era wrote it.
-  const record = historical ? eraRecord(seasonId!, history.filter((h) => h.gameType === "regular").map((h) => ({ team: h.team, opp: h.opp, finalState: h.finalState }))) : `${w}-${l}-${otl}`;
+  const record = historical ? eraRecord(seasonId!, history.filter((h) => h.gameType === "regular").map((h) => ({ team: h.team, opp: h.opp, finalState: h.finalState, otEmptyNet: h.otEmptyNet }))) : `${w}-${l}-${otl}`;
   const nextId = rows.find((r) => !r.result && !r.live)?.id;
   const regularCount = rows.filter((r) => r.gameType === "regular").length;
 

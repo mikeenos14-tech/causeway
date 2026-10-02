@@ -13,9 +13,9 @@ const check = (name: string, ok: boolean, detail = "") => {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${!ok && detail ? ` — ${detail}` : ""}`);
 };
 
-async function record(season: string) {
-  const rows = (await getHistorySeasonSchedule(season)).filter((r) => r.gameType === "regular");
-  return eraRecord(season, rows.map((r) => ({ team: r.team, opp: r.opp, finalState: r.finalState })));
+async function record(season: string, teamId = BOS_TEAM_ID) {
+  const rows = (await getHistorySeasonSchedule(season, teamId)).filter((r) => r.gameType === "regular");
+  return eraRecord(season, rows.map((r) => ({ team: r.team, opp: r.opp, finalState: r.finalState, otEmptyNet: r.otEmptyNet })));
 }
 
 async function main() {
@@ -24,6 +24,8 @@ async function main() {
   check("1999-2004 OT loss is OTL", eraResult("20002001", "regular", 3, 4, "OT") === "OTL");
   check("playoff OT loss is never OTL", eraResult("20102011", "playoff", 1, 2, "OT") === "L");
   check("tie is T", eraResult("19701971", "regular", 3, 3, "TIE") === "T");
+  check("OT loss on an empty-net goal is L, not OTL (no loser point)", eraResult("19992000", "regular", 3, 4, "OT", true) === "L");
+  check("VAN 1999-2000 is 30-29-15-8, as the NHL's standings", (await record("19992000", 23)) === "30-29-15-8", await record("19992000", 23));
   check("round names: 1970 final", roundName("19691970", 3, 3) === "Stanley Cup Final");
   check("round names: 1979 semifinal (4-round era)", roundName("19781979", 3, 4) === "Semifinal");
   check("round names: 2011 conference final", roundName("20102011", 3, 4) === "Conference Final");

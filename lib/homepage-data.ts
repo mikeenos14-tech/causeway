@@ -327,8 +327,8 @@ export async function getHomeRoadSplit(teamAbbrev: string, seasonId: string): Pr
   const { rows } = await pool.query(
     `select (g.home_team_id = t.id) as is_home,
             sum(case when (g.home_team_id = t.id and g.home_score > g.away_score) or (g.away_team_id = t.id and g.away_score > g.home_score) then 1 else 0 end)::int as wins,
-            sum(case when ((g.home_team_id = t.id and g.home_score < g.away_score) or (g.away_team_id = t.id and g.away_score < g.home_score)) and g.game_end_type = 'regulation' then 1 else 0 end)::int as losses,
-            sum(case when ((g.home_team_id = t.id and g.home_score < g.away_score) or (g.away_team_id = t.id and g.away_score < g.home_score)) and g.game_end_type != 'regulation' then 1 else 0 end)::int as otl,
+            sum(case when ((g.home_team_id = t.id and g.home_score < g.away_score) or (g.away_team_id = t.id and g.away_score < g.home_score)) and (g.game_end_type = 'regulation' or not g.ot_loser_point) then 1 else 0 end)::int as losses,
+            sum(case when ((g.home_team_id = t.id and g.home_score < g.away_score) or (g.away_team_id = t.id and g.away_score < g.home_score)) and g.game_end_type != 'regulation' and g.ot_loser_point then 1 else 0 end)::int as otl,
             count(*)::int as games
      from games g
      join teams t on t.id = g.home_team_id or t.id = g.away_team_id
