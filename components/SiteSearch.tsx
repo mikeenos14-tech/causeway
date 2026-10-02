@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { SearchIndex } from "@/app/api/search-index/route";
 import { search, type SearchHit } from "@/lib/search";
+import { TeamLogo } from "@/components/TeamLogo";
 
 // The header's search: players and teams appear as you type (searched in
 // the browser over a small index fetched once), and anything else is one
@@ -146,7 +147,10 @@ export function SiteSearch() {
                   }}
                   className="site-search-row"
                 >
-                  <span style={{ fontWeight: 600 }}>{h.title}</span>
+                  <span style={{ fontWeight: 600 }}>
+                    {h.kind === "team" && <TeamLogo abbrev={h.detail} size={20} gap={6} />}
+                    {h.title}
+                  </span>
                   <span style={{ fontSize: ".78rem", color: "#a8a69e" }}>{h.kind === "team" ? `Team · ${h.detail}` : h.detail}</span>
                 </li>
               ))}

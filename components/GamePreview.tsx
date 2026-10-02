@@ -5,6 +5,7 @@ import { formatGameDate } from "@/lib/format-date";
 import { milestoneText } from "@/lib/milestones-data";
 import { FormBars } from "@/components/Sparkline";
 import { AskAboutGame, gameQuestions } from "@/components/AskAboutGame";
+import { TeamLogo } from "@/components/TeamLogo";
 
 const H2 = { margin: "0 0 .9rem", fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "1.35rem", textTransform: "uppercase" as const, letterSpacing: ".02em" };
 const CARD = { background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, padding: "1.1rem 1.3rem" } as const;
@@ -26,6 +27,11 @@ export function GamePreview({ p }: { p: Preview }) {
         <span style={{ fontFamily: "var(--font-display)", fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: live ? "var(--loss)" : "var(--gold)", display: "block", marginBottom: ".6rem", fontSize: ".95rem" }}>
           {live ? "In progress" : final ? "Final — box score coming" : `${p.gameType === 3 ? "Playoffs · " : ""}${p.tag ? `${p.tag} · ` : ""}Preview`} · {formatStartTimeET(p.startTimeUTC)}
         </span>
+        <div aria-hidden="true" style={{ display: "flex", alignItems: "center", gap: 14, margin: "0 0 .6rem" }}>
+          <TeamLogo abbrev={p.away.abbrev} size={56} gap={0} />
+          <span style={{ fontFamily: "var(--font-display)", fontSize: "1.1rem", color: "var(--text-secondary)" }}>at</span>
+          <TeamLogo abbrev={p.home.abbrev} size={56} gap={0} />
+        </div>
         <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "clamp(2.2rem,5vw,3.6rem)", lineHeight: 0.96, textTransform: "uppercase", margin: "0 0 .8rem" }}>
           {p.away.name} at {p.home.name}
         </h1>
@@ -57,9 +63,15 @@ export function GamePreview({ p }: { p: Preview }) {
           </div>
           <div style={CARD}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", ...LABEL, marginBottom: 6 }}>
-              <span>{p.away.abbrev}</span>
+              <span>
+                <TeamLogo abbrev={p.away.abbrev} size={18} gap={4} />
+                {p.away.abbrev}
+              </span>
               <span />
-              <span style={{ textAlign: "right" }}>{p.home.abbrev}</span>
+              <span style={{ textAlign: "right" }}>
+                <TeamLogo abbrev={p.home.abbrev} size={18} gap={4} />
+                {p.home.abbrev}
+              </span>
             </div>
             {p.away.stats.map((s, i) => {
               const h = p.home.stats[i];
@@ -123,10 +135,12 @@ export function GamePreview({ p }: { p: Preview }) {
                   </span>
                   <span style={{ color: "var(--text-primary)", fontVariantNumeric: "tabular-nums" }}>
                     <span style={{ fontWeight: awayWon ? 700 : 400 }}>
+                      <TeamLogo abbrev={m.awayAbbrev} size={18} gap={3} />
                       {m.awayAbbrev} {m.awayScore}
                     </span>{" "}
                     @{" "}
                     <span style={{ fontWeight: awayWon ? 400 : 700 }}>
+                      <TeamLogo abbrev={m.homeAbbrev} size={18} gap={3} />
                       {m.homeAbbrev} {m.homeScore}
                     </span>
                     {m.endType !== "regulation" ? ` (${m.endType === "overtime" ? "OT" : "SO"})` : ""}

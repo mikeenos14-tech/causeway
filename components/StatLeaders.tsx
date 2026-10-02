@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Headshot } from "@/components/Headshot";
 
 type Leader = { id: number; full_name: string } & Record<string, unknown>;
 
@@ -12,7 +13,7 @@ export type StatLeadersData = {
   goalie: (Leader & { savePct: number }) | null;
 };
 
-function LeaderCard({ label, leader, value }: { label: string; leader: Leader; value: React.ReactNode }) {
+function LeaderCard({ label, leader, value, headshots }: { label: string; leader: Leader; value: React.ReactNode; headshots: Record<number, string> }) {
   return (
     <Link
       href={`/players/${leader.id}`}
@@ -28,16 +29,19 @@ function LeaderCard({ label, leader, value }: { label: string; leader: Leader; v
         color: "inherit",
       }}
     >
-      <div>
-        <div style={{ fontSize: ".68rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", marginBottom: 3 }}>{label}</div>
-        <div style={{ fontSize: ".92rem", fontWeight: 700 }}>{leader.full_name}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+        <Headshot url={headshots[leader.id]} name={leader.full_name} size={32} />
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: ".68rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", marginBottom: 3 }}>{label}</div>
+          <div style={{ fontSize: ".92rem", fontWeight: 700 }}>{leader.full_name}</div>
+        </div>
       </div>
       <div style={{ fontFamily: "var(--font-display)", fontSize: "1.8rem", color: "var(--gold)" }}>{value}</div>
     </Link>
   );
 }
 
-export function StatLeaders({ statLeaders, caption }: { statLeaders: StatLeadersData; caption?: string }) {
+export function StatLeaders({ statLeaders, caption, headshots = {} }: { statLeaders: StatLeadersData; caption?: string; headshots?: Record<number, string> }) {
   const anyLeader =
     statLeaders.points || statLeaders.goals || statLeaders.assists || statLeaders.plusMinus || statLeaders.hits || statLeaders.blocks || statLeaders.goalie;
 
@@ -48,19 +52,20 @@ export function StatLeaders({ statLeaders, caption }: { statLeaders: StatLeaders
         {caption && <span style={{ fontSize: ".78rem", color: "var(--text-secondary)" }}>{caption}</span>}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
-        {statLeaders.points && <LeaderCard label="Points" leader={statLeaders.points} value={statLeaders.points.points as number} />}
-        {statLeaders.goals && <LeaderCard label="Goals" leader={statLeaders.goals} value={statLeaders.goals.goals as number} />}
-        {statLeaders.assists && <LeaderCard label="Assists" leader={statLeaders.assists} value={statLeaders.assists.assists as number} />}
+        {statLeaders.points && <LeaderCard headshots={headshots} label="Points" leader={statLeaders.points} value={statLeaders.points.points as number} />}
+        {statLeaders.goals && <LeaderCard headshots={headshots} label="Goals" leader={statLeaders.goals} value={statLeaders.goals.goals as number} />}
+        {statLeaders.assists && <LeaderCard headshots={headshots} label="Assists" leader={statLeaders.assists} value={statLeaders.assists.assists as number} />}
         {statLeaders.plusMinus && (
           <LeaderCard
+            headshots={headshots}
             label="+/-"
             leader={statLeaders.plusMinus}
             value={`${(statLeaders.plusMinus.plus_minus as number) > 0 ? "+" : ""}${statLeaders.plusMinus.plus_minus}`}
           />
         )}
-        {statLeaders.hits && <LeaderCard label="Hits" leader={statLeaders.hits} value={statLeaders.hits.hits as number} />}
-        {statLeaders.blocks && <LeaderCard label="Blocks" leader={statLeaders.blocks} value={statLeaders.blocks.blocks as number} />}
-        {statLeaders.goalie && <LeaderCard label="Save %" leader={statLeaders.goalie} value={statLeaders.goalie.savePct.toFixed(3).replace(/^0/, "")} />}
+        {statLeaders.hits && <LeaderCard headshots={headshots} label="Hits" leader={statLeaders.hits} value={statLeaders.hits.hits as number} />}
+        {statLeaders.blocks && <LeaderCard headshots={headshots} label="Blocks" leader={statLeaders.blocks} value={statLeaders.blocks.blocks as number} />}
+        {statLeaders.goalie && <LeaderCard headshots={headshots} label="Save %" leader={statLeaders.goalie} value={statLeaders.goalie.savePct.toFixed(3).replace(/^0/, "")} />}
         {!anyLeader && <p style={{ color: "var(--text-secondary)", fontSize: ".9rem" }}>No stat leaders on file yet for this team&apos;s most recent loaded season.</p>}
       </div>
     </section>

@@ -3,6 +3,7 @@ import { getTeam } from "@/lib/homepage-data";
 import { Masthead, Footer } from "@/components/Masthead";
 import { TeamSubNav } from "@/components/TeamSubNav";
 import { TeamDashboard } from "@/components/TeamDashboard";
+import { TeamLogo } from "@/components/TeamLogo";
 
 export const revalidate = 300;
 
@@ -21,7 +22,8 @@ export default async function TeamDetail({ params }: { params: Promise<{ abbrev:
       <Masthead />
       <main style={{ maxWidth: 1160, margin: "0 auto", padding: "1.5rem 24px 3.5rem" }}>
         <TeamSubNav abbrev={abbrev} />
-        <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "clamp(2.4rem,5.5vw,4rem)", lineHeight: 0.98, textTransform: "uppercase", letterSpacing: ".01em", margin: "0 0 .5rem" }}>
+        <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "clamp(2.4rem,5.5vw,4rem)", lineHeight: 0.98, textTransform: "uppercase", letterSpacing: ".01em", margin: "0 0 .5rem", display: "flex", alignItems: "center", gap: 6 }}>
+          <TeamLogo abbrev={abbrev} size={64} gap={6} />
           {team.name}
         </h1>
         <TeamDashboard abbrev={abbrev} compact />

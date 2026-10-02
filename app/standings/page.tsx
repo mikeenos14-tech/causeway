@@ -3,6 +3,7 @@ import { teamNickname } from "@/lib/team-names";
 import { getLatestStandingsSeason, getFullStandings, getConferencePictures, type WildCardTeam } from "@/lib/standings-data";
 import { formatGameDate, formatSeasonLabel } from "@/lib/format-date";
 import { Masthead, Footer } from "@/components/Masthead";
+import { TeamLogo } from "@/components/TeamLogo";
 
 // Without this the page was prerendered once at build time and never
 // picked up the hourly data refresh (live it still read "As of Apr 16"
@@ -29,7 +30,10 @@ function PictureRow({ label, team, pointsBack }: { label: string; team: WildCard
       }}
     >
       <span style={{ color: isBos ? "var(--gold)" : "var(--text-secondary)", fontSize: ".72rem", fontWeight: 700 }}>{label}</span>
-      <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingRight: 8 }}>{team.name}</span>
+      <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingRight: 8 }}>
+        <TeamLogo abbrev={team.abbrev} />
+        {team.name}
+      </span>
       <span style={{ color: isBos ? "var(--gold)" : "inherit", fontWeight: 700 }}>{team.points}</span>
       <span style={{ fontSize: ".78rem" }}>{pointsBack != null ? (pointsBack === 0 ? "—" : `-${pointsBack}`) : ""}</span>
     </Link>
@@ -134,6 +138,7 @@ export default async function Standings() {
                   >
                     <span style={{ color: t.abbrev === "BOS" ? "var(--gold)" : "inherit" }}>{t.division_rank}</span>
                     <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingRight: 8 }}>
+                      <TeamLogo abbrev={t.abbrev} />
                       <span className="name-full">{t.name}</span>
                       <span className="name-short">{teamNickname(t.abbrev, t.name)}</span>
                     </span>

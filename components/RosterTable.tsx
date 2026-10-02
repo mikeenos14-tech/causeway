@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { SkaterRosterRow, GoalieRosterRow } from "@/lib/roster-data";
+import { Headshot } from "@/components/Headshot";
 
 type SortDir = "asc" | "desc";
 
@@ -50,7 +51,7 @@ function Badge({ b }: { b?: "C" | "A" }) {
   );
 }
 
-export function SkaterRosterTable({ rows, badges = {} }: { rows: SkaterRosterRow[]; badges?: Record<number, "C" | "A"> }) {
+export function SkaterRosterTable({ rows, badges = {}, headshots = {} }: { rows: SkaterRosterRow[]; badges?: Record<number, "C" | "A">; headshots?: Record<number, string> }) {
   const [sort, setSort] = useState<{ field: keyof SkaterRosterRow; dir: SortDir }>({ field: "points", dir: "desc" });
 
   const sorted = useMemo(() => {
@@ -95,9 +96,12 @@ export function SkaterRosterTable({ rows, badges = {} }: { rows: SkaterRosterRow
           {sorted.map((r) => (
             <tr key={r.id}>
               <td style={{ textAlign: "left" }}>
-                <Link href={`/players/${r.id}`} style={{ color: "var(--text-primary)", textDecoration: "none", fontWeight: 600 }}>
-                  {r.full_name}
-                </Link>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8, verticalAlign: "middle" }}>
+                  <Headshot url={headshots[r.id]} name={r.full_name} size={28} />
+                  <Link href={`/players/${r.id}`} style={{ color: "var(--text-primary)", textDecoration: "none", fontWeight: 600 }}>
+                    {r.full_name}
+                  </Link>
+                </span>
                 <Badge b={badges[r.id]} />
               </td>
               <td>{r.position ?? "—"}</td>
@@ -122,7 +126,7 @@ export function SkaterRosterTable({ rows, badges = {} }: { rows: SkaterRosterRow
   );
 }
 
-export function GoalieRosterTable({ rows, badges = {} }: { rows: GoalieRosterRow[]; badges?: Record<number, "C" | "A"> }) {
+export function GoalieRosterTable({ rows, badges = {}, headshots = {} }: { rows: GoalieRosterRow[]; badges?: Record<number, "C" | "A">; headshots?: Record<number, string> }) {
   const [sort, setSort] = useState<{ field: keyof GoalieRosterRow; dir: SortDir }>({ field: "wins", dir: "desc" });
 
   const sorted = useMemo(() => {
@@ -161,9 +165,12 @@ export function GoalieRosterTable({ rows, badges = {} }: { rows: GoalieRosterRow
           {sorted.map((r) => (
             <tr key={r.id}>
               <td style={{ textAlign: "left" }}>
-                <Link href={`/players/${r.id}`} style={{ color: "var(--text-primary)", textDecoration: "none", fontWeight: 600 }}>
-                  {r.full_name}
-                </Link>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8, verticalAlign: "middle" }}>
+                  <Headshot url={headshots[r.id]} name={r.full_name} size={28} />
+                  <Link href={`/players/${r.id}`} style={{ color: "var(--text-primary)", textDecoration: "none", fontWeight: 600 }}>
+                    {r.full_name}
+                  </Link>
+                </span>
                 <Badge b={badges[r.id]} />
               </td>
               <td>{r.games}</td>

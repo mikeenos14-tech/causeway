@@ -5,6 +5,7 @@ import { formatGameDate, formatSeasonLabel } from "@/lib/format-date";
 import { Masthead, Footer } from "@/components/Masthead";
 import { SeasonPicker } from "@/components/SeasonPicker";
 import { getBruinsSeasons, getHistorySeasonSchedule, eraRecord, eraResult, BOX_SCORES_FROM } from "@/lib/history-data";
+import { TeamLogo } from "@/components/TeamLogo";
 
 // Without this the page was prerendered once at build time and never
 // picked up the hourly data refresh — same 5-minute window as every
@@ -168,7 +169,8 @@ export default async function Schedule({ searchParams }: { searchParams: Promise
                   {r.gameType === "playoff" ? "Playoff" : isNext ? "Next" : ""}
                 </span>
                 <span style={{ color: "var(--text-primary)" }}>
-                  {r.isHome ? "vs" : "@"} {r.opponent}
+                  {r.isHome ? "vs" : "@"} <TeamLogo abbrev={r.opponent} size={20} gap={4} />
+                  {r.opponent}
                   {(r.hasHighlight || r.hasRecap) && (
                     <span style={{ color: "var(--gold)", marginLeft: 8, fontSize: ".75rem" }} aria-label={r.notable ?? (r.hasHighlight ? "Notable-game highlight" : "Recap")} title={r.notable ?? undefined}>
                       {r.hasHighlight ? "★" : "●"}

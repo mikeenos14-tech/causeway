@@ -9,6 +9,7 @@ import { getRosterMoves } from "@/lib/roster-moves";
 import { getClubSeason } from "@/lib/nhl-schedule";
 import { getCurrentCaptainName, leadershipBadge } from "@/lib/leadership";
 import { TeamSubNav } from "@/components/TeamSubNav";
+import { getHeadshots } from "@/lib/headshots";
 
 export const revalidate = 300;
 
@@ -30,6 +31,7 @@ export default async function TeamRoster({ params }: { params: Promise<{ abbrev:
     lastSeason ? getRosterMoves(abbrev, lastSeason) : Promise.resolve(null),
     getCurrentCaptainName(abbrev, club?.currentSeason ?? null),
   ]);
+  const headshots = await getHeadshots([...skaters, ...goalies].map((r) => r.id));
   // "C"/"A" only on the season the designation applies to.
   const badges = Object.fromEntries(
     seasonId ? [...skaters, ...goalies].map((r) => [r.id, leadershipBadge(abbrev, seasonId, r.id)]).filter(([, b]) => b) : [],
@@ -52,7 +54,7 @@ export default async function TeamRoster({ params }: { params: Promise<{ abbrev:
         <section style={{ marginBottom: "2.5rem" }}>
           <h2 style={{ margin: "0 0 1rem", fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "1.4rem", textTransform: "uppercase", letterSpacing: ".02em" }}>Skaters</h2>
           {skaters.length > 0 ? (
-            <SkaterRosterTable rows={skaters} badges={badges} />
+            <SkaterRosterTable rows={skaters} badges={badges} headshots={headshots} />
           ) : (
             <p style={{ color: "var(--text-secondary)", fontSize: ".9rem" }}>No skater stats on file yet for this season.</p>
           )}
@@ -61,7 +63,7 @@ export default async function TeamRoster({ params }: { params: Promise<{ abbrev:
         <section>
           <h2 style={{ margin: "0 0 1rem", fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "1.4rem", textTransform: "uppercase", letterSpacing: ".02em" }}>Goalies</h2>
           {goalies.length > 0 ? (
-            <GoalieRosterTable rows={goalies} badges={badges} />
+            <GoalieRosterTable rows={goalies} badges={badges} headshots={headshots} />
           ) : (
             <p style={{ color: "var(--text-secondary)", fontSize: ".9rem" }}>No goalie stats on file yet for this season.</p>
           )}

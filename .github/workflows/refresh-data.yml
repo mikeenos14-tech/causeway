@@ -106,6 +106,15 @@ jobs:
         run: npx tsx scripts/qa/cross-check-nhl.ts
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      # Official headshots for everyone on a current NHL roster (32 roster
+      # calls). Never blocks the rest of the run; a bad sync keeps
+      # yesterday's photos.
+      - name: Sync player headshots
+        timeout-minutes: 5
+        continue-on-error: true
+        run: npx tsx scripts/sync-headshots.ts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
       - name: Player-level xG/Corsi (MoneyPuck), current season only
         run: npx tsx scripts/backfill-moneypuck-players.ts ${{ steps.season.outputs.year }} ${{ steps.season.outputs.year }}
         env:

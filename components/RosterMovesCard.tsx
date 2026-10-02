@@ -1,15 +1,19 @@
 import Link from "next/link";
 import type { RosterMoves } from "@/lib/roster-moves";
 import { LEADERSHIP } from "@/lib/leadership";
+import { TeamLogo } from "@/components/TeamLogo";
 import { formatGameDate, formatSeasonLabel } from "@/lib/format-date";
+import { Headshot } from "@/components/Headshot";
+import { getHeadshots } from "@/lib/headshots";
 
-const ROW = { display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, padding: "9px 0", borderTop: "1px solid var(--border)", fontSize: ".9rem" } as const;
+const ROW = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "9px 0", borderTop: "1px solid var(--border)", fontSize: ".9rem" } as const;
 const SUB = { fontSize: ".8rem", color: "var(--text-secondary)", textAlign: "right" as const };
 
 // Who's new, who's gone, and who wears the C — the team's current NHL
 // roster against last season's. Rendered on the Roster tab always, and on
 // the team dashboard around the start of a season.
-export function RosterMovesCard({ teamAbbrev, moves, captainName }: { teamAbbrev: string; moves: RosterMoves; captainName: string | null }) {
+export async function RosterMovesCard({ teamAbbrev, moves, captainName }: { teamAbbrev: string; moves: RosterMoves; captainName: string | null }) {
+  const headshots = await getHeadshots([...moves.arrivals.map((a) => a.id), ...moves.departures.map((d) => d.id)]);
   const leadership = LEADERSHIP[teamAbbrev];
   const last = formatSeasonLabel(moves.lastSeason);
   if (moves.arrivals.length === 0 && moves.departures.length === 0 && !captainName) return null;
@@ -42,7 +46,9 @@ export function RosterMovesCard({ teamAbbrev, moves, captainName }: { teamAbbrev
           </div>
           {moves.arrivals.map((a) => (
             <div key={a.id} className="move-row" style={ROW}>
-              <span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                <Headshot url={headshots[a.id]} name={a.name} size={26} />
+                <span>
                 {a.number != null && <span style={{ color: "var(--text-secondary)", marginRight: 6 }}>#{a.number}</span>}
                 {a.previous ? (
                   <Link href={`/players/${a.id}`} style={{ color: "var(--text-primary)", fontWeight: 600, textDecoration: "none" }}>
@@ -52,13 +58,17 @@ export function RosterMovesCard({ teamAbbrev, moves, captainName }: { teamAbbrev
                   <span style={{ fontWeight: 600 }}>{a.name}</span>
                 )}{" "}
                 <span style={{ color: "var(--text-secondary)", fontSize: ".8rem" }}>{a.position}</span>
+                </span>
               </span>
               <span className="move-detail" style={SUB}>
                 {!a.previous
                   ? "no NHL games yet"
                   : a.previous.abbrev === teamAbbrev
                     ? `back with ${teamAbbrev} · ${a.previous.games} GP in ${formatSeasonLabel(a.previous.season)}`
-                    : `from ${a.previous.abbrev} · ${a.previous.games} GP in ${formatSeasonLabel(a.previous.season)}`}
+                    : <>
+                        from <TeamLogo abbrev={a.previous.abbrev} size={16} gap={3} />
+                        {a.previous.abbrev} · {a.previous.games} GP in {formatSeasonLabel(a.previous.season)}
+                      </>}
               </span>
             </div>
           ))}
@@ -71,17 +81,25 @@ export function RosterMovesCard({ teamAbbrev, moves, captainName }: { teamAbbrev
           </div>
           {moves.departures.map((d) => (
             <div key={d.id} className="move-row" style={ROW}>
-              <span>
-                <Link href={`/players/${d.id}`} style={{ color: "var(--text-primary)", fontWeight: 600, textDecoration: "none" }}>
-                  {d.name}
-                </Link>{" "}
-                <span style={{ color: "var(--text-secondary)", fontSize: ".8rem" }}>{d.position}</span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                <Headshot url={headshots[d.id]} name={d.name} size={26} />
+                <span>
+                  <Link href={`/players/${d.id}`} style={{ color: "var(--text-primary)", fontWeight: 600, textDecoration: "none" }}>
+                    {d.name}
+                  </Link>{" "}
+                  <span style={{ color: "var(--text-secondary)", fontSize: ".8rem" }}>{d.position}</span>
+                </span>
               </span>
               <span className="move-detail" style={SUB}>
                 {/* "system" = still this team's player per the NHL, but not on the
                     current roster list — injured, in the minors, or waived; the
                     API doesn't say which, so neither do we. */}
-                {d.now.kind === "team" ? `now with ${d.now.abbrev}` : d.now.kind === "system" ? `still with ${teamAbbrev}, off the current roster` : d.now.kind === "none" ? "not on an NHL roster" : "current status unavailable"} ·{" "}
+                {d.now.kind === "team" ? (
+                  <>
+                    now with <TeamLogo abbrev={d.now.abbrev} size={16} gap={3} />
+                    {d.now.abbrev}
+                  </>
+                ) : d.now.kind === "system" ? `still with ${teamAbbrev}, off the current roster` : d.now.kind === "none" ? "not on an NHL roster" : "current status unavailable"} ·{" "}
                 {d.games} GP here in {last}
               </span>
             </div>

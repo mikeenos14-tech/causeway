@@ -156,10 +156,12 @@ body {
   /* Roster-change rows: name, then the detail on its own line. */
   .move-row {
     flex-direction: column;
+    align-items: flex-start !important;
     gap: 2px !important;
   }
   .move-detail {
     text-align: left !important;
+    padding-left: 34px; /* in line with the name, past the photo */
   }
   .dash-hero {
     padding-top: 1.75rem !important;

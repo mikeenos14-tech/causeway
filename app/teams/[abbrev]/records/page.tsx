@@ -5,6 +5,7 @@ import { getAllRegularSeasonResults, longestWinStreak, longestPointStreak, bigge
 import { formatGameDate, formatSeasonLabel } from "@/lib/format-date";
 import { Masthead, Footer } from "@/components/Masthead";
 import { TeamSubNav } from "@/components/TeamSubNav";
+import { TeamLogo } from "@/components/TeamLogo";
 
 export const revalidate = 300;
 
@@ -91,7 +92,7 @@ export default async function TeamRecords({ params }: { params: Promise<{ abbrev
               label="Biggest Win"
               value={`${bigWin.team_score}-${bigWin.opp_score}`}
               href={`/games/${bigWin.id}`}
-              sub={`vs ${bigWin.opp_abbrev} · ${formatGameDate(bigWin.game_date, true)}`}
+              sub={<>vs <TeamLogo abbrev={bigWin.opp_abbrev} size={16} gap={3} />{bigWin.opp_abbrev} · {formatGameDate(bigWin.game_date, true)}</>}
             />
           )}
           {badLoss && (
@@ -99,7 +100,7 @@ export default async function TeamRecords({ params }: { params: Promise<{ abbrev
               label="Worst Loss"
               value={`${badLoss.team_score}-${badLoss.opp_score}`}
               href={`/games/${badLoss.id}`}
-              sub={`vs ${badLoss.opp_abbrev} · ${formatGameDate(badLoss.game_date, true)}`}
+              sub={<>vs <TeamLogo abbrev={badLoss.opp_abbrev} size={16} gap={3} />{badLoss.opp_abbrev} · {formatGameDate(badLoss.game_date, true)}</>}
             />
           )}
         </div>

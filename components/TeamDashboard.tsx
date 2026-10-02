@@ -37,6 +37,9 @@ import { RosterMovesCard } from "@/components/RosterMovesCard";
 import { getRosterMoves } from "@/lib/roster-moves";
 import { getCurrentCaptainName } from "@/lib/leadership";
 import { FormBars } from "@/components/Sparkline";
+import { TeamLogo } from "@/components/TeamLogo";
+import { Headshot } from "@/components/Headshot";
+import { getHeadshots } from "@/lib/headshots";
 
 const H2 = { margin: 0, fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "1.5rem", textTransform: "uppercase" as const, letterSpacing: ".02em" };
 const TILE_LABEL = { fontSize: ".78rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase" as const, letterSpacing: ".06em", marginBottom: 8 };
@@ -79,6 +82,11 @@ export async function TeamDashboard({ abbrev, compact = false }: { abbrev: strin
         getUpcomingMilestones(abbrev, seasonId),
       ])
     : [[] as FormResult[], [] as RecentCard[], null, null, null, []];
+
+  const headshots = await getHeadshots([
+    ...milestones.map((m) => m.playerId),
+    ...(statLeaders ? Object.values(statLeaders).flatMap((l) => (l ? [l.id] : [])) : []),
+  ]);
 
   // --- Where are we in the season? ------------------------------------
   const seasonLabel = seasonId ? formatSeasonLabel(seasonId) : null;
@@ -284,8 +292,11 @@ export async function TeamDashboard({ abbrev, compact = false }: { abbrev: strin
                   fontSize: ".9rem",
                 }}
               >
-                <span>
-                  <strong>{m.playerName}</strong> {milestoneText(m)}
+                <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <Headshot url={headshots[m.playerId]} name={m.playerName} size={32} />
+                  <span>
+                    <strong>{m.playerName}</strong> {milestoneText(m)}
+                  </span>
                 </span>
                 <span style={{ color: "var(--gold)", fontWeight: 700, fontFamily: "var(--font-display)", fontSize: "1.1rem", whiteSpace: "nowrap" }}>
                   {m.current}/{m.target}
@@ -360,6 +371,7 @@ export async function TeamDashboard({ abbrev, compact = false }: { abbrev: strin
                   >
                     <span style={{ color: own ? "var(--gold)" : "inherit" }}>{t.division_rank}</span>
                     <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingRight: 8 }}>
+                      <TeamLogo abbrev={t.abbrev} />
                       <span className="name-full">{t.name}</span>
                       <span className="name-short">{teamNickname(t.abbrev, t.name)}</span>
                     </span>
@@ -374,7 +386,7 @@ export async function TeamDashboard({ abbrev, compact = false }: { abbrev: strin
           </section>
         )}
 
-        {statLeaders && <StatLeaders statLeaders={statLeaders} caption={seasonCaption ?? undefined} />}
+        {statLeaders && <StatLeaders statLeaders={statLeaders} caption={seasonCaption ?? undefined} headshots={headshots} />}
       </div>
     </>
   );
@@ -412,6 +424,11 @@ function PreviewHero({
             {tag}
             {tag !== when && ` · ${when}`}
           </span>
+        </div>
+        <div aria-hidden="true" style={{ display: "flex", alignItems: "center", gap: 12, margin: "0 0 .5rem" }}>
+          <TeamLogo abbrev={game.isHome ? game.opponent : abbrev} size={48} gap={0} />
+          <span style={{ fontFamily: "var(--font-display)", fontSize: "1rem", color: "var(--text-secondary)" }}>at</span>
+          <TeamLogo abbrev={game.isHome ? abbrev : game.opponent} size={48} gap={0} />
         </div>
         <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: titleSize, lineHeight: 0.94, letterSpacing: ".01em", textTransform: "uppercase", margin: "0 0 1rem" }}>
           {teamName} {game.isHome ? "vs" : "at"} {game.opponentName}
@@ -552,7 +569,10 @@ function RecapHero({
 function ScoreLine({ label, score, strong, muted = false }: { label: string; score: number; strong: boolean; muted?: boolean }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 24 }}>
-      <span style={{ fontWeight: 700, fontSize: ".95rem", color: muted ? "var(--text-secondary)" : "var(--text-primary)" }}>{label}</span>
+      <span style={{ fontWeight: 700, fontSize: ".95rem", color: muted ? "var(--text-secondary)" : "var(--text-primary)", display: "flex", alignItems: "center" }}>
+        <TeamLogo abbrev={label} size={30} gap={8} />
+        {label}
+      </span>
       <span style={{ fontFamily: "var(--font-display)", fontSize: "2.6rem", lineHeight: 1, color: strong ? "var(--gold)" : "var(--text-secondary)" }}>{score}</span>
     </div>
   );
@@ -589,12 +609,16 @@ function GameCard({ card, abbrev }: { card: Extract<RecentCard, { kind: "game" }
         <span style={{ color: won ? "var(--win)" : "var(--loss)" }}>{resultLabel(card.team_score, card.opp_score, card.game_end_type)}</span>
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-        <span style={{ fontSize: ".88rem", fontWeight: 700 }}>{abbrev}</span>
+        <span style={{ fontSize: ".88rem", fontWeight: 700 }}>
+          <TeamLogo abbrev={abbrev} size={18} gap={4} />
+          {abbrev}
+        </span>
         <span style={{ fontSize: ".88rem", fontWeight: 700, color: won ? "var(--gold)" : "var(--text-secondary)" }}>{card.team_score}</span>
       </div>
       <div style={{ display: "flex", justifyContent: "space-between" }}>
         <span style={{ fontSize: ".88rem", color: "var(--text-secondary)" }}>
-          {card.is_home ? "vs" : "@"} {card.opp_abbrev}
+          {card.is_home ? "vs" : "@"} <TeamLogo abbrev={card.opp_abbrev} size={18} gap={4} />
+          {card.opp_abbrev}
         </span>
         <span style={{ fontSize: ".88rem", color: "var(--text-secondary)" }}>{card.opp_score}</span>
       </div>
@@ -621,7 +645,9 @@ function SeriesCard({ card, abbrev }: { card: Extract<RecentCard, { kind: "serie
         <span style={{ color: good ? "var(--win)" : "var(--loss)" }}>{status}</span>
       </div>
       <div style={{ fontSize: ".95rem", fontWeight: 700, marginBottom: 10 }}>
-        {abbrev} vs {card.opp_abbrev}
+        <TeamLogo abbrev={abbrev} size={20} gap={4} />
+        {abbrev} vs <TeamLogo abbrev={card.opp_abbrev} size={20} gap={4} />
+        {card.opp_abbrev}
       </div>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
         {card.games.map((g, i) => {

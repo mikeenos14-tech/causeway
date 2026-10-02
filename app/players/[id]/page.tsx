@@ -14,6 +14,9 @@ import { Masthead, Footer } from "@/components/Masthead";
 import { Sparkline } from "@/components/Sparkline";
 import { LEADERSHIP } from "@/lib/leadership";
 import { getClubSeason } from "@/lib/nhl-schedule";
+import { TeamLogo } from "@/components/TeamLogo";
+import { Headshot } from "@/components/Headshot";
+import { getHeadshots } from "@/lib/headshots";
 
 export default async function PlayerDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -24,6 +27,7 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
   if (!player) notFound();
 
   const isGoalie = player.position === "G";
+  const headshot = (await getHeadshots([playerId]))[playerId] ?? null;
   // Captaincy for the NHL's current season only (hand-maintained, sourced —
   // see lib/leadership.ts).
   const ledTeam = Object.entries(LEADERSHIP).find(([, l]) => l.captainId === playerId || l.alternateIds.includes(playerId));
@@ -64,37 +68,42 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
       <Masthead />
 
       <main style={{ maxWidth: 1160, margin: "0 auto", padding: "3rem 24px 3.5rem" }}>
-        <section style={{ marginBottom: "2.5rem" }}>
-          <span style={{ fontFamily: "var(--font-display)", fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--gold)", display: "block", marginBottom: ".6rem", fontSize: ".9rem" }}>
-            {({ C: "Center", L: "Left wing", R: "Right wing", D: "Defense", G: "Goalie" } as Record<string, string>)[player.position] ?? "Player"}
-            {role && ledTeam && (
-              <span style={{ marginLeft: 10, color: "var(--ink)", background: "var(--gold)", borderRadius: 4, padding: "1px 7px", fontSize: ".78rem" }}>
-                {role} · {ledTeam[0]}
-              </span>
+        <section style={{ marginBottom: "2.5rem", display: "flex", alignItems: "center", gap: 28, flexWrap: "wrap" }}>
+          {/* Players on a current NHL roster only (player_headshots). */}
+          {headshot && <Headshot url={headshot} name={player.full_name} size={132} zoom={1.1} eager />}
+          <div style={{ minWidth: 0, flex: "1 1 280px" }}>
+            <span style={{ fontFamily: "var(--font-display)", fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--gold)", display: "block", marginBottom: ".6rem", fontSize: ".9rem" }}>
+              {({ C: "Center", L: "Left wing", R: "Right wing", D: "Defense", G: "Goalie" } as Record<string, string>)[player.position] ?? "Player"}
+              {role && ledTeam && (
+                <span style={{ marginLeft: 10, color: "var(--ink)", background: "var(--gold)", borderRadius: 4, padding: "1px 7px", fontSize: ".78rem" }}>
+                  {role} · {ledTeam[0]}
+                </span>
+              )}
+            </span>
+            <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "clamp(2.4rem,5.5vw,4rem)", lineHeight: 0.98, textTransform: "uppercase", letterSpacing: ".01em", margin: "0 0 .6rem" }}>
+              {player.full_name}
+            </h1>
+            {/* A way back out: the player's most recent team and its roster. */}
+            {latestTeam && (
+              <p style={{ margin: "0 0 .4rem", fontSize: ".9rem" }}>
+                <Link href={`/teams/${latestTeam}/roster`} style={{ color: "var(--gold)", textDecoration: "none", fontWeight: 600 }}>
+                  <TeamLogo abbrev={latestTeam} size={20} gap={4} />
+                  {latestTeam} roster →
+                </Link>
+              </p>
             )}
-          </span>
-          <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "clamp(2.4rem,5.5vw,4rem)", lineHeight: 0.98, textTransform: "uppercase", letterSpacing: ".01em", margin: "0 0 .6rem" }}>
-            {player.full_name}
-          </h1>
-          {/* A way back out: the player's most recent team and its roster. */}
-          {latestTeam && (
-            <p style={{ margin: "0 0 .4rem", fontSize: ".9rem" }}>
-              <Link href={`/teams/${latestTeam}/roster`} style={{ color: "var(--gold)", textDecoration: "none", fontWeight: 600 }}>
-                {latestTeam} roster →
-              </Link>
-            </p>
-          )}
-          {player.birth_date ? (
-            <p style={{ color: "var(--text-secondary)", fontSize: ".95rem" }}>
-              Born {formatGameDate(player.birth_date, true)}
-              {player.birth_country ? `, ${player.birth_country}` : ""}
-              {player.shoots_catches ? ` · Shoots/catches ${player.shoots_catches}` : ""}
-            </p>
-          ) : (
-            <p style={{ color: "var(--text-secondary)", fontSize: ".9rem" }}>
-              No bio on file — this player joined a team after that season&apos;s roster was last fetched.
-            </p>
-          )}
+            {player.birth_date ? (
+              <p style={{ color: "var(--text-secondary)", fontSize: ".95rem" }}>
+                Born {formatGameDate(player.birth_date, true)}
+                {player.birth_country ? `, ${player.birth_country}` : ""}
+                {player.shoots_catches ? ` · Shoots/catches ${player.shoots_catches}` : ""}
+              </p>
+            ) : (
+              <p style={{ color: "var(--text-secondary)", fontSize: ".9rem" }}>
+                No bio on file — this player joined a team after that season&apos;s roster was last fetched.
+              </p>
+            )}
+          </div>
         </section>
 
         <section style={{ marginBottom: "2.5rem" }}>
@@ -184,7 +193,8 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
                     <tr key={`${s.season_id}-${s.team_abbrev}`}>
                       <td style={{ textAlign: "left" }}>{formatSeasonLabel(s.season_id)}</td>
                       <td style={{ textAlign: "left" }}>
-                        <Link href={`/teams/${s.team_abbrev}`} style={{ color: "inherit" }}>
+                        <Link href={`/teams/${s.team_abbrev}`} style={{ color: "inherit", whiteSpace: "nowrap" }}>
+                          <TeamLogo abbrev={s.team_abbrev} size={18} gap={4} />
                           {s.team_abbrev}
                         </Link>
                       </td>
@@ -258,7 +268,8 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
                     </td>
                     <td style={tdStyle("left")}>
                       {g.is_home ? "vs" : "@"}{" "}
-                      <Link href={`/teams/${g.opp_abbrev}`} style={{ color: "inherit" }}>
+                      <Link href={`/teams/${g.opp_abbrev}`} style={{ color: "inherit", whiteSpace: "nowrap" }}>
+                        <TeamLogo abbrev={g.opp_abbrev} size={18} gap={4} />
                         {g.opp_abbrev}
                       </Link>
                     </td>

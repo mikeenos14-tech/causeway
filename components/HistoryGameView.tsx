@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { HistoryGame } from "@/lib/history-data";
 import { formatGameDate } from "@/lib/format-date";
+import { TeamLogo } from "@/components/TeamLogo";
 
 // A game from before 2007-08, from the audited 1917-on history: the score,
 // who scored when, penalties, period scores and shots where they exist.
@@ -46,12 +47,15 @@ export function HistoryGameView({ g, nav }: { g: HistoryGame; nav: { prev: { id:
       t.code
     );
     return (
-      <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <TeamLogo abbrev={t.code} size={52} gap={0} />
+        <div>
         <div style={{ fontSize: ".78rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 4 }} title={t.name}>
           {code}
         </div>
         <div style={{ fontFamily: "var(--font-display)", fontSize: "2.6rem", color: won ? "var(--gold)" : "var(--text-secondary)" }}>{t.score}</div>
         {t.sog != null && <div style={{ fontSize: ".75rem", color: "var(--text-muted)" }}>{t.sog} shots</div>}
+        </div>
       </div>
     );
   };

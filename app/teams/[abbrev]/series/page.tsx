@@ -6,6 +6,7 @@ import { getAllSeasonSeriesForTeam } from "@/lib/season-series-data";
 import { formatGameDate, formatSeasonLabel } from "@/lib/format-date";
 import { Masthead, Footer } from "@/components/Masthead";
 import { TeamSubNav } from "@/components/TeamSubNav";
+import { TeamLogo } from "@/components/TeamLogo";
 
 export const revalidate = 300;
 
@@ -55,6 +56,7 @@ export default async function TeamSeasonSeries({ params }: { params: Promise<{ a
                   }}
                 >
                   <Link href={`/teams/${s.opp_abbrev}`} style={{ color: "var(--text-primary)", textDecoration: "none", fontWeight: 600 }}>
+                    <TeamLogo abbrev={s.opp_abbrev} />
                     {s.opp_name}
                   </Link>
                   <span style={{ color: "var(--text-secondary)" }}>{s.games}</span>

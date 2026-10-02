@@ -25,6 +25,7 @@ type Series = {
 import { formatSeasonLabel } from "@/lib/format-date";
 import { Masthead, Footer } from "@/components/Masthead";
 import { TeamSubNav } from "@/components/TeamSubNav";
+import { TeamLogo } from "@/components/TeamLogo";
 
 export const revalidate = 300;
 
@@ -98,7 +99,8 @@ export default async function TeamPlayoffs({ params }: { params: Promise<{ abbre
                           <span>
                             {r.linkable ? (
                               <Link href={`/teams/${r.opponentAbbrev}`} style={{ color: "var(--text-primary)", textDecoration: "none" }}>
-                                {r.won ? "beat" : "lost to"} {r.opponentName}
+                                {r.won ? "beat" : "lost to"} <TeamLogo abbrev={r.opponentAbbrev} size={18} gap={4} />
+                                {r.opponentName}
                               </Link>
                             ) : (
                               <span style={{ color: "var(--text-primary)" }}>
