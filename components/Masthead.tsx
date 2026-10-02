@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BannerMark } from "@/components/BannerMark";
+import { SiteSearch } from "@/components/SiteSearch";
 
 export function Masthead({ scoreline }: { scoreline?: React.ReactNode }) {
   return (
@@ -33,31 +34,7 @@ export function Masthead({ scoreline }: { scoreline?: React.ReactNode }) {
             Headlines
           </Link>
         </nav>
-        <Link
-          href="/ask"
-          className="masthead-ask"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            background: "rgba(255,255,255,0.06)",
-            border: "1px solid rgba(255,255,255,0.14)",
-            borderRadius: 999,
-            padding: "7px 16px 7px 13px",
-            fontFamily: "var(--font-body)",
-            fontSize: ".85rem",
-            fontWeight: 600,
-            color: "#f1eee5",
-            textDecoration: "none",
-            whiteSpace: "nowrap",
-          }}
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" strokeWidth="2.4" aria-hidden>
-            <circle cx="11" cy="11" r="7" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-          Ask Causeway
-        </Link>
+        <SiteSearch />
         {scoreline}
       </div>
     </header>
