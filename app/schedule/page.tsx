@@ -132,7 +132,7 @@ export default async function Schedule({ searchParams }: { searchParams: Promise
         </div>
         {historical ? (
           <p style={{ fontSize: ".78rem", color: "var(--text-secondary)", margin: "0 0 1rem", maxWidth: "70ch" }}>
-            <span style={{ color: "var(--gold)" }}>★</span> a notable game · Results and goal scorers from the NHL&apos;s official game records. Recaps and full box scores start in 2007-08.
+            <span style={{ color: "var(--gold)" }}>★</span> a notable game · Results, goal scorers and box scores from the NHL&apos;s official game records, with what each era kept. Written recaps start in 2007-08.
           </p>
         ) : (
           <p style={{ fontSize: ".78rem", color: "var(--text-secondary)", margin: "0 0 1rem" }}>

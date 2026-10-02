@@ -13,7 +13,7 @@ export default function Image() {
       <OgFrame label="Boston Bruins">
         <div style={{ fontSize: 96, fontWeight: 800, lineHeight: 1, letterSpacing: 1 }}>Every game.</div>
         <div style={{ fontSize: 96, fontWeight: 800, lineHeight: 1.05, color: GOLD }}>Every number.</div>
-        <div style={{ fontSize: 34, color: MUTED, marginTop: 28 }}>Recaps, stats, and a box that answers your Bruins questions, every game since 2007-08.</div>
+        <div style={{ fontSize: 34, color: MUTED, marginTop: 28 }}>Every Bruins game since 1924. Live scores, recaps, stats, and the biggest goals in team history.</div>
       </OgFrame>
     ),
     size,
