@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getGameDetail, getGameSkaters, getGameGoalies, getGameTeamLines, getTeamName, type TeamGameLine } from "@/lib/game-detail-data";
+import { getGameDetail, getGameSkaters, getGameGoalies, getGameTeamLines, getTeamName, getAdjacentGames, type TeamGameLine, type AdjacentGame } from "@/lib/game-detail-data";
+import { getClubSeason } from "@/lib/nhl-schedule";
 import { AskAboutGame, gameQuestions } from "@/components/AskAboutGame";
 import { getSeasonSeriesAsOfGame, getPlayoffSeriesForGame } from "@/lib/season-series-data";
 import { roundLabel } from "@/lib/playoff-data";
@@ -67,6 +68,15 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
     getGameTeamLines(gameId),
   ]);
   const opponentAbbrev = game.home_abbrev === TARGET_TEAM_ABBREV ? game.away_abbrev : game.home_abbrev;
+  // Previous / next arrows follow the Bruins in their games, the home team
+  // otherwise. The latest game's "next" is the upcoming game's preview.
+  const navTeam = bosInGame ? TARGET_TEAM_ABBREV : game.home_abbrev;
+  const adjacent = await getAdjacentGames(gameId, navTeam);
+  let next: AdjacentGame | null = adjacent.next;
+  if (!next) {
+    const upcoming = (await getClubSeason(navTeam))?.games.find((g) => g.state === "FUT" || g.state === "PRE" || g.state === "LIVE" || g.state === "CRIT");
+    if (upcoming) next = { id: upcoming.id, date: upcoming.gameDate, label: `${upcoming.isHome ? "vs" : "@"} ${upcoming.opponent}` };
+  }
   // Follow-up questions for the Ask box: tonight's top Bruins scorer and
   // goalie against this opponent, and the head-to-head record.
   const askQuestions = bosInGame
@@ -102,6 +112,20 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
       <Masthead />
 
       <main style={{ maxWidth: 1160, margin: "0 auto", padding: "3rem 24px 3.5rem" }}>
+        <nav aria-label={`${navTeam} games`} style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: "1.5rem", fontSize: ".85rem" }}>
+          {adjacent.prev ? (
+            <Link href={`/games/${adjacent.prev.id}`} style={{ color: "var(--text-secondary)", textDecoration: "none" }}>
+              ← {navTeam} {adjacent.prev.label} · {formatGameDate(adjacent.prev.date)}
+            </Link>
+          ) : (
+            <span />
+          )}
+          {next && (
+            <Link href={`/games/${next.id}`} style={{ color: "var(--text-secondary)", textDecoration: "none", textAlign: "right" }}>
+              {navTeam} {next.label} · {formatGameDate(next.date)} →
+            </Link>
+          )}
+        </nav>
         <section style={{ marginBottom: "2.5rem", paddingBottom: "2.5rem", borderBottom: "1px solid var(--border)" }}>
           <span style={{ fontFamily: "var(--font-display)", fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--text-secondary)", display: "block", marginBottom: ".6rem", fontSize: ".9rem" }}>
             {game.game_type === "playoff" ? "Playoff" : game.game_type === "preseason" ? "Preseason" : "Final"} ·{" "}
@@ -119,11 +143,15 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
 
           <div style={{ display: "flex", gap: 40, marginTop: "1.75rem" }}>
             <div>
-              <div style={{ fontSize: ".78rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 4 }}>{game.away_abbrev}</div>
+              <Link href={`/teams/${game.away_abbrev}`} style={{ display: "block", fontSize: ".78rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 4 }}>
+                {game.away_abbrev}
+              </Link>
               <div style={{ fontFamily: "var(--font-display)", fontSize: "2.6rem", color: awayWon ? "var(--gold)" : "var(--text-secondary)" }}>{game.away_score}</div>
             </div>
             <div>
-              <div style={{ fontSize: ".78rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 4 }}>{game.home_abbrev}</div>
+              <Link href={`/teams/${game.home_abbrev}`} style={{ display: "block", fontSize: ".78rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 4 }}>
+                {game.home_abbrev}
+              </Link>
               <div style={{ fontFamily: "var(--font-display)", fontSize: "2.6rem", color: homeWon ? "var(--gold)" : "var(--text-secondary)" }}>{game.home_score}</div>
             </div>
             {game.game_end_type !== "regulation" && (

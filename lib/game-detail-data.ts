@@ -89,3 +89,29 @@ export async function getTeamName(abbrev: string): Promise<string> {
   const { rows } = await pool.query(`select name from teams where abbrev = $1 order by is_active desc limit 1`, [abbrev]);
   return rows[0]?.name ?? abbrev;
 }
+
+export type AdjacentGame = { id: number; date: string | Date; label: string };
+
+// The team's previous and next games around this one (regular season and
+// playoffs, by date), for the arrows on a game page. Only games we have;
+// the page fills in an upcoming preview when there's no next one yet.
+export async function getAdjacentGames(gameId: number, teamAbbrev: string): Promise<{ prev: AdjacentGame | null; next: AdjacentGame | null }> {
+  const { rows } = await pool.query(
+    `with team_games as (
+       select g.id, g.game_date,
+              case when ht.abbrev = $2 then 'vs ' || at.abbrev else '@ ' || ht.abbrev end as label,
+              lag(g.id) over w as prev_id, lead(g.id) over w as next_id
+       from games g join teams ht on ht.id = g.home_team_id join teams at on at.id = g.away_team_id
+       where (ht.abbrev = $2 or at.abbrev = $2) and g.game_type in ('regular', 'playoff')
+       window w as (order by g.game_date, g.id))
+     select t.id, t.game_date, t.label, (t.id = c.prev_id) as is_prev
+     from team_games c join team_games t on t.id in (c.prev_id, c.next_id)
+     where c.id = $1`,
+    [gameId, teamAbbrev],
+  );
+  const pick = (prev: boolean) => {
+    const r = rows.find((x) => x.is_prev === prev);
+    return r ? { id: r.id, date: r.game_date, label: r.label } : null;
+  };
+  return { prev: pick(true), next: pick(false) };
+}

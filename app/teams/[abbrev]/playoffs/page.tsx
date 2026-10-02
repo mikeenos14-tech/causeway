@@ -70,7 +70,7 @@ export default async function TeamPlayoffs({ params }: { params: Promise<{ abbre
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                       {sorted.map((r) => (
-                        <div key={r.round} style={{ display: "flex", justifyContent: "space-between", fontSize: ".88rem", padding: "6px 0", borderTop: "1px solid var(--border)" }}>
+                        <div key={r.round} style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", rowGap: 6, fontSize: ".88rem", padding: "6px 0", borderTop: "1px solid var(--border)" }}>
                           <span style={{ color: "var(--text-secondary)" }}>{roundLabel(r.round, r.maxRoundThatSeason)}</span>
                           <span>
                             <Link href={`/teams/${r.opponentAbbrev}`} style={{ color: "var(--text-primary)", textDecoration: "none" }}>
@@ -79,6 +79,22 @@ export default async function TeamPlayoffs({ params }: { params: Promise<{ abbre
                           </span>
                           <span style={{ fontWeight: 700, color: r.won ? "var(--win)" : "var(--loss)" }}>
                             {r.teamWins}-{r.opponentWins}
+                          </span>
+                          {/* Every game of the series, linked. */}
+                          <span style={{ flexBasis: "100%", display: "flex", flexWrap: "wrap", gap: 6 }}>
+                            {r.games.map((g, i) => {
+                              const won = g.teamScore > g.oppScore;
+                              return (
+                                <Link
+                                  key={g.id}
+                                  href={`/games/${g.id}`}
+                                  style={{ fontSize: ".72rem", padding: "2px 8px", borderRadius: 999, border: "1px solid var(--border)", textDecoration: "none", color: "var(--text-secondary)", fontVariantNumeric: "tabular-nums" }}
+                                >
+                                  G{i + 1} <span style={{ fontWeight: 700, color: won ? "var(--win)" : "var(--loss)" }}>{won ? "W" : "L"}</span> {g.teamScore}-{g.oppScore}
+                                  {g.end !== "regulation" ? " OT" : ""}
+                                </Link>
+                              );
+                            })}
                           </span>
                         </div>
                       ))}

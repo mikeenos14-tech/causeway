@@ -8,6 +8,8 @@ export type SeasonSeriesRow = {
   losses: number;
   otl: number;
   last_meeting: string;
+  // Each meeting, oldest first, so the page can link every game.
+  meetings: { id: number; date: string; team_score: number; opp_score: number; end: string }[];
 };
 
 // Regular-season head-to-head record against every opponent actually
@@ -41,7 +43,8 @@ export async function getAllSeasonSeriesForTeam(teamAbbrev: string, seasonId: st
             sum(case when pg.team_score > pg.opp_score then 1 else 0 end) as wins,
             sum(case when pg.team_score < pg.opp_score and pg.game_end_type = 'regulation' then 1 else 0 end) as losses,
             sum(case when pg.team_score < pg.opp_score and pg.game_end_type != 'regulation' then 1 else 0 end) as otl,
-            max(pg.game_date) as last_meeting
+            max(pg.game_date) as last_meeting,
+            json_agg(json_build_object('id', pg.id, 'date', pg.game_date, 'team_score', pg.team_score, 'opp_score', pg.opp_score, 'end', pg.game_end_type) order by pg.game_date) as meetings
      from per_game pg
      join teams t on t.id = pg.opp_team_id
      group by pg.opp_team_id, t.abbrev, t.name

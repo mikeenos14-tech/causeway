@@ -62,6 +62,22 @@ export default async function TeamSeasonSeries({ params }: { params: Promise<{ a
                     {s.wins}-{s.losses}-{s.otl}
                   </span>
                   <span style={{ color: "var(--text-secondary)" }}>{formatGameDate(s.last_meeting)}</span>
+                  {/* Every meeting, linked: the record above is just these games. */}
+                  <span style={{ gridColumn: "1 / -1", display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+                    {s.meetings.map((m) => {
+                      const won = m.team_score > m.opp_score;
+                      const tag = won ? "W" : m.end === "regulation" ? "L" : m.end === "overtime" ? "OTL" : "SOL";
+                      return (
+                        <Link
+                          key={m.id}
+                          href={`/games/${m.id}`}
+                          style={{ fontSize: ".75rem", padding: "3px 9px", borderRadius: 999, border: "1px solid var(--border)", textDecoration: "none", color: "var(--text-secondary)", fontVariantNumeric: "tabular-nums" }}
+                        >
+                          <span style={{ fontWeight: 700, color: won ? "var(--win)" : "var(--loss)" }}>{tag}</span> {m.team_score}-{m.opp_score} · {formatGameDate(m.date)}
+                        </Link>
+                      );
+                    })}
+                  </span>
                 </div>
               );
             })}

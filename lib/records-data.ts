@@ -31,7 +31,7 @@ export async function getAllRegularSeasonResults(teamAbbrev: string): Promise<Te
   return rows;
 }
 
-export type Streak = { length: number; startDate: string | Date; endDate: string | Date; seasonId: string };
+export type Streak = { length: number; startDate: string | Date; endDate: string | Date; seasonId: string; startId: number; endId: number };
 
 // Streaks reset at a season boundary — otherwise the last win of one
 // regular season and the first win of the next chain together into one
@@ -48,8 +48,9 @@ export function longestWinStreak(results: TeamResult[]): Streak | null {
       if (cur) {
         cur.length += 1;
         cur.endDate = r.game_date;
+        cur.endId = r.id;
       } else {
-        cur = { length: 1, startDate: r.game_date, endDate: r.game_date, seasonId: r.season_id };
+        cur = { length: 1, startDate: r.game_date, endDate: r.game_date, seasonId: r.season_id, startId: r.id, endId: r.id };
       }
       if (!best || cur.length > best.length) best = { ...cur };
     } else {
@@ -72,8 +73,9 @@ export function longestPointStreak(results: TeamResult[]): Streak | null {
       if (cur) {
         cur.length += 1;
         cur.endDate = r.game_date;
+        cur.endId = r.id;
       } else {
-        cur = { length: 1, startDate: r.game_date, endDate: r.game_date, seasonId: r.season_id };
+        cur = { length: 1, startDate: r.game_date, endDate: r.game_date, seasonId: r.season_id, startId: r.id, endId: r.id };
       }
       if (!best || cur.length > best.length) best = { ...cur };
     } else {
@@ -99,7 +101,7 @@ export function worstLoss(results: TeamResult[]): TeamResult | null {
   return worst;
 }
 
-export type MonthRecord = { label: string; points: number; wins: number; losses: number; otl: number; games: number };
+export type MonthRecord = { label: string; seasonId: string; points: number; wins: number; losses: number; otl: number; games: number };
 
 // Points-per-game, not raw points, decides "best month" — otherwise a
 // 4-game December would always lose to an 8-game January regardless of
@@ -110,7 +112,7 @@ export function bestAndWorstMonth(results: TeamResult[]): { best: MonthRecord | 
     const d = r.game_date instanceof Date ? r.game_date : new Date(r.game_date);
     const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
     const label = d.toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
-    const entry = byMonth.get(key) ?? { label, points: 0, wins: 0, losses: 0, otl: 0, games: 0 };
+    const entry = byMonth.get(key) ?? { label, seasonId: r.season_id, points: 0, wins: 0, losses: 0, otl: 0, games: 0 };
     entry.games++;
     if (r.team_score > r.opp_score) {
       entry.wins++;
