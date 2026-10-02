@@ -13,6 +13,10 @@ export type EloGame = {
   homeScore: number;
   awayScore: number;
   finalState: "REG" | "OT" | "SO" | "TIE";
+  // Empty-net goals by each side (null = unknown, before 2009-10), for the
+  // experimental margin that leaves them out.
+  enHome?: number | null;
+  enAway?: number | null;
 };
 
 export type EloParams = {
@@ -25,6 +29,10 @@ export type EloParams = {
   marginCoef: number; // M = 1 + marginCoef * ln(margin)
   reversion: number; // share pulled toward leagueMean each offseason
   otWinnerScore: number; // S for an OT/SO winner (loser gets 1 - this)
+  // Experimental options (scripts/stats/experiment-elo.ts), off by default:
+  soWinnerScore?: number; // separate S for a shootout winner
+  autocorr?: boolean; // damp big wins by heavy favorites (2.2 / (gap * 0.001 + 2.2))
+  marginExcludesEmptyNet?: boolean; // margin without the winner's empty-net goals, where known
 };
 
 export type EloRow = { gameId: number; team: number; date: string; before: number; after: number; expected: number; result: number };
@@ -36,6 +44,7 @@ export function expectedHome(rHome: number, rAway: number, homeIce: number): num
 export function resultScore(g: EloGame, p: EloParams): number {
   if (g.finalState === "TIE" || g.homeScore === g.awayScore) return 0.5;
   const homeWon = g.homeScore > g.awayScore;
+  if (g.finalState === "SO" && p.soWinnerScore != null) return homeWon ? p.soWinnerScore : 1 - p.soWinnerScore;
   if (g.finalState === "OT" || g.finalState === "SO") return homeWon ? p.otWinnerScore : 1 - p.otWinnerScore;
   return homeWon ? 1 : 0;
 }
@@ -44,8 +53,19 @@ export function marginMultiplier(g: EloGame, p: EloParams): number {
   // OT and shootout games are one-goal games by definition (the shootout
   // "goal" isn't a margin), and a tie has no margin.
   if (g.finalState !== "REG") return 1;
-  const margin = Math.abs(g.homeScore - g.awayScore);
+  let margin = Math.abs(g.homeScore - g.awayScore);
+  if (p.marginExcludesEmptyNet) {
+    const en = g.homeScore > g.awayScore ? g.enHome : g.enAway;
+    if (en != null) margin = Math.max(1, margin - en);
+  }
   return margin >= 1 ? 1 + p.marginCoef * Math.log(margin) : 1;
+}
+
+// Damping for a favorite's big win (the margin multiplier otherwise
+// inflates good teams, who win big more often): 1 for an even matchup,
+// smaller as the winner's pregame edge grows, larger for an upset.
+export function autocorrFactor(winnerGap: number): number {
+  return 2.2 / (winnerGap * 0.001 + 2.2);
 }
 
 /**
@@ -83,7 +103,11 @@ export function runElo(input: EloGame[], p: EloParams, eraOf: (season: string) =
     const ra = rating.get(g.away)!;
     const e = expectedHome(rh, ra, p.homeIce[eraOf(g.season)] ?? 0);
     const s = resultScore(g, p);
-    const k = (g.playoff ? p.kPlayoff : p.kRegular) * marginMultiplier(g, p);
+    let k = (g.playoff ? p.kPlayoff : p.kRegular) * marginMultiplier(g, p);
+    if (p.autocorr && g.finalState === "REG" && g.homeScore !== g.awayScore) {
+      const gap = (rh + (p.homeIce[eraOf(g.season)] ?? 0) - ra) * (g.homeScore > g.awayScore ? 1 : -1);
+      k *= autocorrFactor(gap);
+    }
     const delta = k * (s - e);
     rating.set(g.home, rh + delta);
     rating.set(g.away, ra - delta);
