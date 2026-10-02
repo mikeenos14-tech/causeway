@@ -60,6 +60,15 @@ export function wpContext(model: { params: WpParams; table: Map<string, WpCell> 
   };
 }
 
+// Where a finished game's curve ends: an overtime decided by a goal ends
+// there; otherwise the curve runs to the end of overtime (a tie, or the
+// shootout). 1928-42: every overtime ran the full ten minutes.
+export function finishedGameEnd(ctx: WpGameContext, finalState: string, goalTimes: number[]): number {
+  const lastGoal = Math.max(3600, ...goalTimes);
+  const wentToOt = finalState === "SO" || (finalState === "TIE" && (ctx.tenMinuteOt || ctx.suddenDeathTies)) || (ctx.tenMinuteOt && lastGoal > 3600);
+  return wentToOt ? Math.max(lastGoal, 3600 + ctx.otLength) : lastGoal;
+}
+
 // Every minute up to `end`, a point just before and after each goal, and a
 // last point at `end`: the result if the game is over (`final`: 1, 0, or
 // 0.5 for a tie), else the chance right now.

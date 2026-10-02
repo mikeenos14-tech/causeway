@@ -1,6 +1,6 @@
 import { pool } from "./db";
 import { getWpModel, type WpMetrics } from "./wp-model";
-import { wpContext, buildCurve, type WpPoint, type WpSwing } from "./wp-curve";
+import { wpContext, buildCurve, finishedGameEnd, type WpPoint, type WpSwing } from "./wp-curve";
 import { ELO, otFormat } from "../config/stats";
 
 // A finished game's win-probability curve from the home side: the pregame
@@ -61,12 +61,7 @@ export async function getGameWpTimeline(gameId: number): Promise<WpTimeline | nu
   const gap = g.rh - (g.b2b_h ? pen : 0) - (g.ra - (g.b2b_a ? pen : 0));
   const ctx = wpContext(model, g.season, g.playoff, gap);
   const curveGoals = goals.map((x) => ({ t: Number(x.time_elapsed_sec), home: Number(x.team_id) === Number(g.home_team_id), scorer: x.scorer }));
-  const lastGoal = Math.max(3600, ...curveGoals.map((x) => x.t));
-  // An overtime decided by a goal ends there; otherwise the curve runs to
-  // the end of overtime (a tie, or the shootout). 1928-42: every overtime
-  // ran the full ten minutes.
-  const wentToOt = g.final_state === "SO" || (g.final_state === "TIE" && (ctx.tenMinuteOt || ctx.suddenDeathTies)) || (ctx.tenMinuteOt && lastGoal > 3600);
-  const end = wentToOt ? Math.max(lastGoal, 3600 + ctx.otLength) : lastGoal;
+  const end = finishedGameEnd(ctx, g.final_state, curveGoals.map((x) => x.t));
   // The final: who won (a tie is half).
   const { points, biggestSwing } = buildCurve(ctx, curveGoals, end, g.home_score > g.away_score ? 1 : g.home_score < g.away_score ? 0 : 0.5);
   return { gameId, homeCode: g.home_code, awayCode: g.away_code, points, biggestSwing, tiesPossible: otFormat(g.season).tiesPossible && !g.playoff, playoff: g.playoff, modelVersion: model.version, pregame: points[0].p, endT: end, metrics: model.metrics };

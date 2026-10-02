@@ -137,6 +137,8 @@ jobs:
           npx tsx scripts/stats/verify-elo-sql.ts
           npx tsx scripts/stats/build-wp.ts
           npx tsx scripts/stats/test-wp.ts
+          npx tsx scripts/stats/build-leverage.ts
+          npx tsx scripts/stats/test-leverage.ts
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
       # Reliability guard (docs/verification.md, layer 6): the site's data
