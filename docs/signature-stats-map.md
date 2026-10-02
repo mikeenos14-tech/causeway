@@ -141,17 +141,17 @@ Owner decisions so far (2026-10-01): history back to **1917**; Utah inherits Ari
 
 | Item | Status | Notes |
 | --- | --- | --- |
-| WPA per goal, OT goals, playoff stakes, assist credit | Planned | Needs WP |
-| Player metrics (LG, per goal, garbage %, assist, playoff, era-adjusted) | Planned | Goal times back to 1917 mean all-time rankings include early stars |
-| goal_wpa / player_leverage storage | Planned | |
-| Live WPA badge, Biggest Goal of the Night | Planned | |
-| UI: leaderboards, clutch card, Bruins top 50 | Planned | |
-| V2 Cup Leverage | Planned | |
+| WPA per goal, OT goals, playoff stakes, assist credit | **Built** | 425,363 goals in 70,292 games; stakes from Elo + binomial; total-goals and irregular series get no stakes (scripts/stats/build-leverage.ts) |
+| Player metrics (LG, per goal, garbage %, assist, playoff, era-adjusted) | **Built** (Changed) | Era adjustment is per season (league average WPA per goal in the seasons he scored), finer than eras. Shown as "wins added", not "clutch" |
+| goal_wpa / player_leverage storage | **Built** | Plus leverage_games (per-game reconciliation); goal_wpa kept lean (DB near plan limit) |
+| Live WPA badge, Biggest Goal of the Night | **Built** | Badge on the live goal list; "Biggest goal" marked in the scoring summary and chart |
+| UI: leaderboards, clutch card, Bruins top 50 | **Built** | /history/leverage, /history/leverage/league, player card |
+| V2 Cup Leverage | Planned | Next; needs a rule for future-round opponents (owner decision) |
 | V2 manpower-aware WPA | Planned | |
 | V2 goalie save leverage | Planned | Shot events with outcomes, 2009-10 on |
 | V2 leverage for early eras (estimated times) | **Not needed** | Real goal times exist back to 1917 |
 | V2 clutch vs expected | Planned | |
-| Acceptance: WPA + drift reconciles, OT winners 0.4–0.6, Orr/2011/Bergeron smell tests, badge < 20 s | Planned | |
+| Acceptance: WPA + drift reconciles, OT winners 0.4–0.6, Orr/2011/Bergeron smell tests, badge < 20 s | Partial | Reconciles in all games; sudden-death OT winners 90% within 0.35-0.65; Bergeron 2013 #1 Bruins playoff goal. Orr 1970 ranks low by design (series 97% decided; see notes); 2011 needs Cup Leverage; badge timing measured on the first live game |
 
 ## Section 9: Grudge Index
 
