@@ -14,6 +14,8 @@ import { HistoryGameView } from "@/components/HistoryGameView";
 import { getHistoryGame, getHistoryAdjacent, BOX_SCORES_FROM, BOS_TEAM_ID } from "@/lib/history-data";
 import { getPreview } from "@/lib/preview-data";
 import { TeamLogo } from "@/components/TeamLogo";
+import { formatSavePct } from "@/lib/util/save-pct";
+import { ScoringSummary, scoringIsComplete } from "@/components/ScoringSummary";
 
 function toi(seconds: number | null) {
   if (seconds == null) return "—";
@@ -87,12 +89,14 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
   // only meaningful relative to one team's perspective.
   const bosInGame = game.home_abbrev === TARGET_TEAM_ABBREV || game.away_abbrev === TARGET_TEAM_ABBREV;
 
-  const [skaters, goalies, seasonSeries, playoffSeries, teamLines] = await Promise.all([
+  const [skaters, goalies, seasonSeries, playoffSeries, teamLines, scoring] = await Promise.all([
     getGameSkaters(gameId),
     getGameGoalies(gameId),
     bosInGame && game.game_type === "regular" ? getSeasonSeriesAsOfGame(gameId, TARGET_TEAM_ABBREV) : Promise.resolve(null),
     bosInGame && game.game_type === "playoff" ? getPlayoffSeriesForGame(gameId, TARGET_TEAM_ABBREV) : Promise.resolve(null),
     getGameTeamLines(gameId),
+    // Goal-by-goal from the audited NHL history tables (same game ids).
+    getHistoryGame(gameId).catch(() => null),
   ]);
   const opponentAbbrev = game.home_abbrev === TARGET_TEAM_ABBREV ? game.away_abbrev : game.home_abbrev;
   // Previous / next arrows follow the Bruins in their games, the home team
@@ -198,6 +202,9 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
           <AskAboutGame title="Ask about this game" questions={askQuestions} />
         </section>
 
+        {/* Only when it adds up to the final score; never a partial list. */}
+        {scoring && scoringIsComplete(scoring) && <ScoringSummary g={scoring} linkPlayers />}
+
         {thisSeries && (
           <section style={{ marginBottom: "2.5rem", background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, padding: "1.25rem 1.5rem" }}>
             <div style={{ fontSize: ".78rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 6 }}>
@@ -256,7 +263,8 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
         {teamLines.length === 2 && <TeamStats lines={teamLines} />}
 
         <div id="box-score" />
-        {["away", "home"].map((side) => {
+        {/* The Bruins' box score first on their games; away-then-home otherwise. */}
+        {(game.home_abbrev === TARGET_TEAM_ABBREV ? ["home", "away"] : ["away", "home"]).map((side) => {
           const abbrev = side === "away" ? game.away_abbrev : game.home_abbrev;
           const teamSkaters = skaters.filter((s) => s.team_abbrev === abbrev);
           const teamGoalies = goalies.filter((g) => g.team_abbrev === abbrev);
@@ -328,7 +336,7 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
                           <td style={tdStyle()}>{g.decision ?? "—"}</td>
                           <td style={tdStyle()}>{g.saves ?? "—"}</td>
                           <td style={tdStyle()}>{g.shots_against ?? "—"}</td>
-                          <td style={tdStyle()}>{g.save_pct != null ? Number(g.save_pct).toFixed(3) : "—"}</td>
+                          <td style={tdStyle()}>{formatSavePct(g.save_pct)}</td>
                           <td style={tdStyle()}>{toi(g.toi_seconds)}</td>
                         </tr>
                       ))}

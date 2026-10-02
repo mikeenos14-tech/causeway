@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { SkaterRosterRow, GoalieRosterRow } from "@/lib/roster-data";
 import { Headshot } from "@/components/Headshot";
+import { formatSavePct } from "@/lib/util/save-pct";
 
 type SortDir = "asc" | "desc";
 
@@ -178,7 +179,7 @@ export function GoalieRosterTable({ rows, badges = {}, headshots = {} }: { rows:
               <td>{r.losses}</td>
               <td>{r.otl}</td>
               <td>{r.shutouts}</td>
-              <td style={{ fontWeight: 700, color: "var(--gold)" }}>{r.savePct != null ? r.savePct.toFixed(3).replace(/^0/, "") : "—"}</td>
+              <td style={{ fontWeight: 700, color: "var(--gold)" }}>{formatSavePct(r.savePct)}</td>
               <td>{r.gaa != null ? r.gaa.toFixed(2) : "—"}</td>
             </tr>
           ))}

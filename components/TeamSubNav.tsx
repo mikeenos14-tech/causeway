@@ -19,8 +19,9 @@ const TABS = [
   { label: "Records", path: "/records" },
   { label: "Head-to-head", path: "/series" },
   { label: "Playoffs", path: "/playoffs" },
-  { label: "Advanced", path: "/advanced" },
 ];
+// Advanced is a view inside Roster now (RosterViewToggle), not its own tab.
+const ALSO_ACTIVE: Record<string, string[]> = { "/roster": ["/advanced"] };
 
 export function TeamSubNav({ abbrev }: { abbrev: string }) {
   const pathname = usePathname();
@@ -104,7 +105,10 @@ export function TeamSubNav({ abbrev }: { abbrev: string }) {
           // Overview also matches the homepage itself when that's BOS, so a
           // Bruins visitor sees it highlighted from "/" too, not just
           // "/teams/BOS".
-          const active = tab.path === "" ? pathname === base || (pathname === "/" && abbrev === "BOS") : pathname === href;
+          const active =
+            tab.path === ""
+              ? pathname === base || (pathname === "/" && abbrev === "BOS")
+              : pathname === href || (ALSO_ACTIVE[tab.path] ?? []).some((p) => pathname === `${base}${p}`);
           return (
             <Link
               key={tab.label}

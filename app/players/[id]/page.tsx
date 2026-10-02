@@ -17,6 +17,7 @@ import { getClubSeason } from "@/lib/nhl-schedule";
 import { TeamLogo } from "@/components/TeamLogo";
 import { Headshot } from "@/components/Headshot";
 import { getHeadshots } from "@/lib/headshots";
+import { formatSavePct } from "@/lib/util/save-pct";
 
 export default async function PlayerDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -125,7 +126,7 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
                 <StatTile label="Losses" value={totals.losses} />
                 <StatTile label="OT Losses" value={totals.otl} />
                 <StatTile label="Shutouts" value={totals.shutouts} />
-                <StatTile label="SV%" value={totals.save_pct ?? "—"} />
+                <StatTile label="SV%" value={formatSavePct(totals.save_pct)} />
               </>
             ) : (
               <>
@@ -140,7 +141,7 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
             <p style={{ fontSize: ".85rem", color: "var(--text-secondary)", marginTop: ".9rem" }}>
               <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>Playoffs: </span>
               {isGoalie
-                ? `${playoffTotals.games} GP · ${playoffTotals.wins}-${playoffTotals.losses} · ${playoffTotals.shutouts} SO${playoffTotals.save_pct != null ? ` · ${String(playoffTotals.save_pct).replace(/^0/, "")} SV%` : ""}`
+                ? `${playoffTotals.games} GP · ${playoffTotals.wins}-${playoffTotals.losses} · ${playoffTotals.shutouts} SO${playoffTotals.save_pct != null ? ` · ${formatSavePct(playoffTotals.save_pct)} SV%` : ""}`
                 : `${playoffTotals.games} GP · ${playoffTotals.goals} G · ${playoffTotals.assists} A · ${playoffTotals.points} P`}
             </p>
           )}
@@ -206,7 +207,7 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
                           <td>{s.losses}</td>
                           <td>{s.otl}</td>
                           <td>{s.shutouts}</td>
-                          <td style={{ fontWeight: 700, color: "var(--gold)" }}>{s.savePct != null ? s.savePct.toFixed(3) : "—"}</td>
+                          <td style={{ fontWeight: 700, color: "var(--gold)" }}>{formatSavePct(s.savePct)}</td>
                         </>
                       ) : (
                         <>

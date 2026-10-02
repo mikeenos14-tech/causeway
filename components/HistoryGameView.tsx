@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { HistoryGame } from "@/lib/history-data";
 import { formatGameDate } from "@/lib/format-date";
 import { TeamLogo } from "@/components/TeamLogo";
+import { ScoringSummary, periodName } from "@/components/ScoringSummary";
 
 // A game from before 2007-08, from the audited 1917-on history: the score,
 // who scored when, penalties, period scores and shots where they exist.
@@ -16,10 +17,6 @@ const ACTIVE_CODES = new Set(["ANA", "BOS", "BUF", "CAR", "CBJ", "CGY", "CHI", "
 // only codes of active teams and only for games since that club existed.
 const teamHref = (code: string) => (ACTIVE_CODES.has(code) ? `/teams/${code}` : null);
 
-function periodName(n: number, type: string, reg = 3) {
-  if (type === "OT" || n > reg) return n - reg > 1 ? `${n - reg}OT` : "OT";
-  return ["", "1st", "2nd", "3rd"][n] ?? `${n}th`;
-}
 
 function coverageNote(g: HistoryGame): string {
   const parts = ["Goals, scorers and penalties are from the NHL's official game records."];
@@ -35,7 +32,6 @@ export function HistoryGameView({ g, nav }: { g: HistoryGame; nav: { prev: { id:
   const awayWon = g.away.score > g.home.score;
   const end = g.finalState === "OT" ? (g.otPeriods > 1 ? `${g.otPeriods}OT` : "OT") : g.finalState === "SO" ? "SO" : g.finalState === "TIE" ? "Tie" : "";
   const headline = g.iconic?.label ?? (g.finalState === "TIE" ? `${g.away.code} and ${g.home.code} tie, ${g.away.score}-${g.home.score}` : homeWon ? `${g.home.code} beat ${g.away.code}, ${g.home.score}-${g.away.score}` : `${g.away.code} beat ${g.home.code}, ${g.away.score}-${g.home.score}`);
-  const byPeriod = [...new Set(g.goals.map((x) => `${x.period}|${x.periodType}`))];
 
   const team = (t: HistoryGame["home"], won: boolean) => {
     const href = teamHref(t.code);
@@ -94,39 +90,7 @@ export function HistoryGameView({ g, nav }: { g: HistoryGame; nav: { prev: { id:
         )}
       </section>
 
-      <section style={{ marginBottom: "2.25rem" }}>
-        <h2 style={H2}>Scoring</h2>
-        <div style={CARD}>
-          {g.goals.length === 0 && <p style={{ margin: 0, color: "var(--text-secondary)" }}>No goals.</p>}
-          {byPeriod.map((key) => {
-            const [n, type] = key.split("|");
-            const goals = g.goals.filter((x) => `${x.period}|${x.periodType}` === key);
-            return (
-              <div key={key} style={{ marginBottom: ".8rem" }}>
-                <div style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".05em", margin: ".3rem 0" }}>{periodName(Number(n), type)}</div>
-                {goals.map((x, i) => (
-                  <div key={i} style={{ display: "grid", gridTemplateColumns: "3.4rem 1fr auto", gap: 10, padding: "6px 0", borderTop: "1px solid var(--border)", fontSize: ".88rem" }}>
-                    <span style={{ color: "var(--text-muted)", fontVariantNumeric: "tabular-nums" }}>{x.time}</span>
-                    <span>
-                      <span style={{ fontWeight: 700, color: "var(--gold)", marginRight: 6 }}>{x.team}</span>
-                      <span style={{ fontWeight: 600 }}>{x.scorer ?? "Unknown scorer"}</span>
-                      {(x.strength === "PP" || x.strength === "SH" || x.strength === "PS" || x.emptyNet) && g.hasStrength && (
-                        <span style={{ fontSize: ".7rem", fontWeight: 700, color: "var(--text-secondary)", border: "1px solid var(--border)", borderRadius: 4, padding: "0 5px", marginLeft: 6 }}>
-                          {[x.strength === "EV" ? null : x.strength, x.emptyNet ? "EN" : null].filter(Boolean).join(" · ")}
-                        </span>
-                      )}
-                      <span style={{ display: "block", color: "var(--text-secondary)", fontSize: ".78rem" }}>{x.assists.length ? `from ${x.assists.join(", ")}` : "unassisted"}</span>
-                    </span>
-                    <span style={{ color: "var(--text-secondary)", fontVariantNumeric: "tabular-nums", fontSize: ".82rem" }}>
-                      {g.away.code} {x.awayAfter}, {g.home.code} {x.homeAfter}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            );
-          })}
-        </div>
-      </section>
+      <ScoringSummary g={g} />
 
       {g.periods.some((p) => p.homeShots != null) && (
         <section style={{ marginBottom: "2.25rem" }}>

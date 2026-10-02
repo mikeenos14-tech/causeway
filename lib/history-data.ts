@@ -103,7 +103,7 @@ export type HistoryGame = {
   tier: string | null;
   hasStrength: boolean;
   stage: string | null; // "1970 Stanley Cup Final, Game 4"
-  goals: { period: number; periodType: string; time: string; team: string; scorer: string | null; scorerId: number | null; assists: string[]; strength: string | null; emptyNet: boolean | null; homeAfter: number; awayAfter: number }[];
+  goals: { period: number; periodType: string; time: string; team: string; scorer: string | null; scorerId: number | null; assists: string[]; assistIds: number[]; strength: string | null; emptyNet: boolean | null; homeAfter: number; awayAfter: number }[];
   penalties: { period: number; time: string; team: string | null; player: string | null; minutes: number | null; infraction: string | null }[];
   periods: { period: number; periodType: string; home: number; away: number; homeShots: number | null; awayShots: number | null }[];
   iconic: { label: string; story: string; featurable: boolean } | null;
@@ -125,7 +125,7 @@ export async function getHistoryGame(gameId: number): Promise<HistoryGame | null
   const [{ rows: goals }, { rows: pens }, { rows: periods }, { rows: iconic }, { rows: labels }, { rows: maxRound }] = await Promise.all([
     pool.query(
       `select e.period, e.period_type, e.time_in_period_sec, t.tri_code as team, ${name} as scorer, e.scorer_id,
-              a1.full_name as a1, a2.full_name as a2, e.strength, e.empty_net, e.score_before_home, e.score_before_away, e.team_id
+              a1.full_name as a1, a2.full_name as a2, e.assist1_id, e.assist2_id, e.strength, e.empty_net, e.score_before_home, e.score_before_away, e.team_id
        from nhl_goal_events e join nhl_teams t on t.id = e.team_id
        left join nhl_players p on p.id = e.scorer_id left join nhl_players a1 on a1.id = e.assist1_id left join nhl_players a2 on a2.id = e.assist2_id
        where e.game_id = $1 order by e.period, e.time_in_period_sec, e.event_id`,
@@ -166,6 +166,7 @@ export async function getHistoryGame(gameId: number): Promise<HistoryGame | null
       scorer: r.scorer,
       scorerId: r.scorer_id,
       assists: [r.a1, r.a2].filter(Boolean),
+      assistIds: [r.a1 ? r.assist1_id : null, r.a2 ? r.assist2_id : null].filter((x): x is number => x != null),
       strength: r.strength,
       emptyNet: r.empty_net,
       homeAfter: r.score_before_home + (r.team_id === g.home_team_id ? 1 : 0),

@@ -28,7 +28,9 @@ export function Masthead({ scoreline }: { scoreline?: React.ReactNode }) {
           </span>
         </Link>
         <nav className="masthead-nav" style={{ fontFamily: "var(--font-display)", fontSize: "1.15rem" }}>
-          <Link href="/" style={{ color: "#d8d6cc", textDecoration: "none" }}>
+          {/* Hidden on phones, where the logo is the way home and the row
+              needs the room for History and Ask. */}
+          <Link href="/" className="nav-home" style={{ color: "#d8d6cc", textDecoration: "none" }}>
             Home
           </Link>
           <Link href="/schedule" style={{ color: "#d8d6cc", textDecoration: "none" }}>
@@ -36,6 +38,14 @@ export function Masthead({ scoreline }: { scoreline?: React.ReactNode }) {
           </Link>
           <Link href="/standings" style={{ color: "#d8d6cc", textDecoration: "none" }}>
             Standings
+          </Link>
+          <Link href="/history" style={{ color: "#d8d6cc", textDecoration: "none" }}>
+            History
+          </Link>
+          {/* The signature feature gets its own spot (and the gold), not
+              just the search box's "or ask". */}
+          <Link href="/ask" style={{ color: "var(--gold)", textDecoration: "none" }}>
+            Ask
           </Link>
           <Link href="/headlines" style={{ color: "#d8d6cc", textDecoration: "none" }}>
             Headlines

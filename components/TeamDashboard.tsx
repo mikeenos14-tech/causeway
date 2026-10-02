@@ -243,10 +243,6 @@ export async function TeamDashboard({ abbrev, compact = false }: { abbrev: strin
         </section>
       )}
 
-      {moves && <RosterMovesCard teamAbbrev={abbrev} moves={moves} captainName={captainName} />}
-
-      {!compact && <AskBand qotd={qotd} />}
-
       {/* RECENT RESULTS */}
       {recent.length > 0 && (
         <section style={{ marginBottom: "2.5rem" }}>
@@ -266,6 +262,66 @@ export async function TeamDashboard({ abbrev, compact = false }: { abbrev: strin
           </div>
         </section>
       )}
+
+      {/* STANDINGS + STAT LEADERS */}
+      <div className="homepage-lower-grid" style={{ marginBottom: "2.5rem" }}>
+        {standings && (
+          <section>
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: "1rem" }}>
+              <h2 style={H2}>{standings.division}</h2>
+              <Link href="/standings" style={{ fontSize: ".82rem", fontWeight: 600, color: "var(--gold)", textDecoration: "none" }}>
+                {seasonLabel && `${seasonLabel}${newSeasonPending || regularSeasonDone ? " final" : ""} · `}Full standings →
+              </Link>
+            </div>
+            <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden" }}>
+              <div className="standings-row standings-row--compact" style={{ padding: "10px 18px", fontSize: ".68rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".04em", borderBottom: "1px solid var(--border)" }}>
+                <span>#</span>
+                <span>Team</span>
+                <span>W</span>
+                <span>L</span>
+                <span className="standings-col-otl">OTL</span>
+                <span>PTS</span>
+              </div>
+              {standings.teams.map((t) => {
+                const own = t.abbrev === abbrev;
+                return (
+                  <Link
+                    key={t.abbrev}
+                    href={`/teams/${t.abbrev}`}
+                    className="standings-row standings-row--compact"
+                    style={{
+                      padding: "12px 18px",
+                      alignItems: "center",
+                      fontSize: ".88rem",
+                      borderTop: "1px solid var(--border)",
+                      textDecoration: "none",
+                      background: own ? "rgba(255,184,28,0.08)" : "transparent",
+                      borderLeft: own ? "3px solid var(--gold)" : "3px solid transparent",
+                      color: own ? "var(--text-primary)" : "var(--text-secondary)",
+                      fontWeight: own ? 700 : 400,
+                    }}
+                  >
+                    <span style={{ color: own ? "var(--gold)" : "inherit" }}>{t.division_rank}</span>
+                    <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingRight: 8 }}>
+                      <TeamLogo abbrev={t.abbrev} />
+                      <span className="name-full">{t.name}</span>
+                      <span className="name-short">{teamNickname(t.abbrev, t.name)}</span>
+                    </span>
+                    <span>{t.wins}</span>
+                    <span>{t.losses}</span>
+                    <span className="standings-col-otl">{t.ot_losses}</span>
+                    <span style={{ color: own ? "var(--gold)" : "inherit" }}>{t.points}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {statLeaders && <StatLeaders statLeaders={statLeaders} caption={seasonCaption ?? undefined} headshots={headshots} />}
+      </div>
+
+      {!compact && <AskBand qotd={qotd} />}
 
       {milestones.length > 0 && (
         <section style={{ marginBottom: "2.5rem" }}>
@@ -323,7 +379,7 @@ export async function TeamDashboard({ abbrev, compact = false }: { abbrev: strin
                   {homeRoadSplit[side].wins}-{homeRoadSplit[side].losses}-{homeRoadSplit[side].otl}
                 </div>
                 <div style={{ fontSize: ".78rem", color: "var(--text-secondary)", marginTop: 4 }}>
-                  {homeRoadSplit[side].points} pts in {homeRoadSplit[side].games} games
+                  {homeRoadSplit[side].points} {homeRoadSplit[side].points === 1 ? "pt" : "pts"} in {homeRoadSplit[side].games} {homeRoadSplit[side].games === 1 ? "game" : "games"}
                 </div>
               </div>
             ))}
@@ -331,63 +387,9 @@ export async function TeamDashboard({ abbrev, compact = false }: { abbrev: strin
         </section>
       )}
 
-      {/* STANDINGS + STAT LEADERS */}
-      <div className="homepage-lower-grid">
-        {standings && (
-          <section>
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: "1rem" }}>
-              <h2 style={H2}>{standings.division}</h2>
-              <Link href="/standings" style={{ fontSize: ".82rem", fontWeight: 600, color: "var(--gold)", textDecoration: "none" }}>
-                {seasonLabel && `${seasonLabel}${newSeasonPending || regularSeasonDone ? " final" : ""} · `}Full standings →
-              </Link>
-            </div>
-            <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden" }}>
-              <div className="standings-row standings-row--compact" style={{ padding: "10px 18px", fontSize: ".68rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".04em", borderBottom: "1px solid var(--border)" }}>
-                <span>#</span>
-                <span>Team</span>
-                <span>W</span>
-                <span>L</span>
-                <span className="standings-col-otl">OTL</span>
-                <span>PTS</span>
-              </div>
-              {standings.teams.map((t) => {
-                const own = t.abbrev === abbrev;
-                return (
-                  <Link
-                    key={t.abbrev}
-                    href={`/teams/${t.abbrev}`}
-                    className="standings-row standings-row--compact"
-                    style={{
-                      padding: "12px 18px",
-                      alignItems: "center",
-                      fontSize: ".88rem",
-                      borderTop: "1px solid var(--border)",
-                      textDecoration: "none",
-                      background: own ? "rgba(255,184,28,0.08)" : "transparent",
-                      borderLeft: own ? "3px solid var(--gold)" : "3px solid transparent",
-                      color: own ? "var(--text-primary)" : "var(--text-secondary)",
-                      fontWeight: own ? 700 : 400,
-                    }}
-                  >
-                    <span style={{ color: own ? "var(--gold)" : "inherit" }}>{t.division_rank}</span>
-                    <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingRight: 8 }}>
-                      <TeamLogo abbrev={t.abbrev} />
-                      <span className="name-full">{t.name}</span>
-                      <span className="name-short">{teamNickname(t.abbrev, t.name)}</span>
-                    </span>
-                    <span>{t.wins}</span>
-                    <span>{t.losses}</span>
-                    <span className="standings-col-otl">{t.ot_losses}</span>
-                    <span style={{ color: own ? "var(--gold)" : "inherit" }}>{t.points}</span>
-                  </Link>
-                );
-              })}
-            </div>
-          </section>
-        )}
-
-        {statLeaders && <StatLeaders statLeaders={statLeaders} caption={seasonCaption ?? undefined} headshots={headshots} />}
-      </div>
+      {/* Roster changes matter in the first weeks; after ~10 games they
+          live on the Roster tab only. */}
+      {moves && (ownStanding?.games_played ?? 0) < 10 && <RosterMovesCard teamAbbrev={abbrev} moves={moves} captainName={captainName} />}
     </>
   );
 }

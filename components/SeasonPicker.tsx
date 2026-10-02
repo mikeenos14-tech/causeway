@@ -20,7 +20,8 @@ export function SeasonPicker({ seasons, current, basePath }: { seasons: string[]
 
   const decades = new Map<string, string[]>();
   for (const s of sorted) {
-    const d = `${s.slice(0, 3)}0s`;
+    // By the year the season ended (1969-70 is in the 1970s), as fans count Cups.
+    const d = `${s.slice(4, 7)}0s`;
     decades.set(d, [...(decades.get(d) ?? []), s]);
   }
 

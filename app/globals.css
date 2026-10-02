@@ -135,6 +135,9 @@ body {
   .masthead-ask {
     margin-left: auto;
   }
+  .nav-home {
+    display: none;
+  }
   .masthead-nav {
     order: 3;
     width: 100%;
@@ -300,4 +303,16 @@ html:not([data-banner-raised]) .banner-raise { animation: banner-raise 900ms cub
 }
 @media (max-width: 480px) {
   .tagline-long { display: none; }
+}
+
+/* Playoff History: one collapsible section per decade. */
+.decade { border-top: 1px solid var(--border); }
+.decade-summary { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 14px 2px; cursor: pointer; list-style: none; }
+.decade-summary::-webkit-details-marker { display: none; }
+.decade-summary > span:nth-child(2) { margin-left: auto; }
+.decade-summary::after { content: "+"; color: var(--gold); font-weight: 700; margin-left: 12px; }
+.decade[open] > .decade-summary::after { content: "–"; }
+/* The smallest phones (320px): tighter nav spacing so all five links fit. */
+@media (max-width: 359px) {
+  .masthead-nav { gap: 12px !important; }
 }

@@ -6,6 +6,7 @@ import { Masthead, Footer } from "@/components/Masthead";
 import { TeamSubNav } from "@/components/TeamSubNav";
 import { StatsKey } from "@/components/StatsKey";
 import { AdvancedTable } from "./AdvancedTable";
+import { RosterViewToggle } from "@/components/RosterViewToggle";
 
 export const revalidate = 300;
 
@@ -47,12 +48,13 @@ export default async function TeamAdvancedStats({ params }: { params: Promise<{ 
         <TeamSubNav abbrev={abbrev} />
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
           <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "clamp(2.2rem,4.5vw,3rem)", textTransform: "uppercase", letterSpacing: ".01em", margin: "0 0 .4rem" }}>
-            Advanced Stats
+            Roster &amp; Stats
           </h1>
           <div style={{ marginTop: 6 }}>
             <StatsKey items={STAT_DEFINITIONS} />
           </div>
         </div>
+        <RosterViewToggle abbrev={abbrev} view="advanced" />
         <p style={{ color: "var(--text-secondary)", fontSize: ".9rem", marginBottom: "2rem" }}>
           {seasonId ? `${formatSeasonLabel(seasonId)} regular season${showingPrevious ? " · final" : ""} · individual expected goals & on-ice possession` : "No season loaded yet"}
         </p>

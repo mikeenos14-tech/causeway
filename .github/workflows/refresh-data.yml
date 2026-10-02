@@ -49,6 +49,14 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      # A brand-new player can land as "A. Smits" (box-score short name)
+      # when his team's roster lags; this fills in the real name hourly.
+      - name: Repair abbreviated player names
+        timeout-minutes: 3
+        continue-on-error: true
+        run: npx tsx scripts/repair-abbreviated-names.ts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
       # The homepage's question of the day, answered ahead of time. Calls
       # the model only when today's answer is missing or older than the
       # newest Bruins game (about once a day); never fails the run.

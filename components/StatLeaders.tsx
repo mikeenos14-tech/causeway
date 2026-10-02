@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Headshot } from "@/components/Headshot";
+import { formatSavePct } from "@/lib/util/save-pct";
 
 type Leader = { id: number; full_name: string } & Record<string, unknown>;
 
@@ -65,7 +66,7 @@ export function StatLeaders({ statLeaders, caption, headshots = {} }: { statLead
         )}
         {statLeaders.hits && <LeaderCard headshots={headshots} label="Hits" leader={statLeaders.hits} value={statLeaders.hits.hits as number} />}
         {statLeaders.blocks && <LeaderCard headshots={headshots} label="Blocks" leader={statLeaders.blocks} value={statLeaders.blocks.blocks as number} />}
-        {statLeaders.goalie && <LeaderCard headshots={headshots} label="Save %" leader={statLeaders.goalie} value={statLeaders.goalie.savePct.toFixed(3).replace(/^0/, "")} />}
+        {statLeaders.goalie && <LeaderCard headshots={headshots} label="Save %" leader={statLeaders.goalie} value={formatSavePct(statLeaders.goalie.savePct)} />}
         {!anyLeader && <p style={{ color: "var(--text-secondary)", fontSize: ".9rem" }}>No stat leaders on file yet for this team&apos;s most recent loaded season.</p>}
       </div>
     </section>

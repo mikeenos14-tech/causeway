@@ -10,6 +10,7 @@ import { getClubSeason } from "@/lib/nhl-schedule";
 import { getCurrentCaptainName, leadershipBadge } from "@/lib/leadership";
 import { TeamSubNav } from "@/components/TeamSubNav";
 import { getHeadshots } from "@/lib/headshots";
+import { RosterViewToggle } from "@/components/RosterViewToggle";
 
 export const revalidate = 300;
 
@@ -45,6 +46,7 @@ export default async function TeamRoster({ params }: { params: Promise<{ abbrev:
         <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "clamp(2.2rem,4.5vw,3rem)", textTransform: "uppercase", letterSpacing: ".01em", margin: "0 0 .4rem" }}>
           Roster &amp; Stats
         </h1>
+        <RosterViewToggle abbrev={abbrev} view="standard" />
         <p style={{ color: "var(--text-secondary)", fontSize: ".9rem", marginBottom: "2rem" }}>
           {seasonId ? `${formatSeasonLabel(seasonId)} regular season · tap or click a column to sort` : "No season loaded yet"}
         </p>
