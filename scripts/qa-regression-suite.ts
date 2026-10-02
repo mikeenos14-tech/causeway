@@ -131,10 +131,12 @@ const cases: TestCase[] = [
       // for the metric as an imperative ("Tell me the metric and I'll get
       // you real numbers") instead of a literal question mark or one of
       // the specific hedge phrases — just as clearly a clarification
-      // request, in a shape the original check didn't anticipate.
+      // request, in a shape the original check didn't anticipate. Again
+      // 2026-10-02: "do you want ... ? Give me the metric and I'll pull
+      // real numbers." ended in a period.
       const asksToClarify =
         /\?\s*$/.test(r.answer.trim()) ||
-        /mean by|which (metric|stat|angle)|do you mean|could mean|tell me (the|which|what)|let me know (the|which|what)/i.test(r.answer);
+        /mean by|which (metric|stat|angle)|do you mean|could mean|do you want|tell me (the|which|what)|let me know (the|which|what)|give me the (metric|stat|angle)/i.test(r.answer);
       const suggestsMetrics = /(points|goals|assists|plus.?minus|save percentage|wins|penalty minutes|hits\b)/i.test(r.answer);
       const pass = asksToClarify && suggestsMetrics;
       return {
@@ -150,7 +152,8 @@ const cases: TestCase[] = [
       // Broadened after another false positive: "can't be answered" and
       // "isn't any [data]" are both clear declines the narrower phrase
       // list missed.
-      const declines = /don'?t have|no draft|not track|isn'?t (any|data|available|tracked)|doesn'?t (track|exist)|can'?t be answered|hasn'?t been loaded/i.test(r.answer);
+      // Again 2026-10-02: "The database doesn't have any draft data loaded".
+      const declines = /don'?t have|doesn'?t have|no draft|not track|isn'?t (any|data|available|tracked|loaded)|doesn'?t (track|exist)|can'?t be answered|hasn'?t been loaded/i.test(r.answer);
       return { pass: declines, reason: declines ? undefined : "expected an honest decline — no draft data exists in the schema" };
     },
   },
