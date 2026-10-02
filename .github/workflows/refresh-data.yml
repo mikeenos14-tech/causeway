@@ -96,6 +96,16 @@ jobs:
         run: npx tsx scripts/backfill-moneypuck.ts
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      # Reliability guard (docs/verification.md, layer 6): the site's data
+      # against the NHL's own, every morning, with a fresh random sample of
+      # box scores and careers plus standings and the Bruins' season. Runs
+      # at 10 AM ET, when no games are in progress. Fails the run (GitHub
+      # emails) on any difference.
+      - name: Cross-check the site's data against the NHL
+        timeout-minutes: 15
+        run: npx tsx scripts/qa/cross-check-nhl.ts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
       - name: Player-level xG/Corsi (MoneyPuck), current season only
         run: npx tsx scripts/backfill-moneypuck-players.ts ${{ steps.season.outputs.year }} ${{ steps.season.outputs.year }}
         env:
