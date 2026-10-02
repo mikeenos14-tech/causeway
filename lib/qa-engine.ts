@@ -29,27 +29,42 @@ const SCHEMA_DESCRIPTION = `
 Tables (exactly which seasons and columns are loaded is listed under "Data coverage" at the end, computed live from the database; every id is the NHL's own id):
 
 teams(id, franchise_id, name, abbrev, city, conference, division, is_active)
+  -- Every team since 1917, including defunct and relocated ones (Montreal Maroons, Quebec Nordiques, Hartford Whalers): those have is_active = false and no city/conference/division. A relocated club has a separate team id for each identity (Quebec and Colorado are two ids), linked by franchise_id.
 team_identities(team_id, name, abbrev, start_date, end_date) -- a team's name/abbrev AS ACTUALLY USED at a point in time; teams.name/abbrev is only the current identity
 players(id, full_name, position, shoots_catches, birth_date, birth_country, height_cm, weight_kg)
+  -- Every NHL player since 1917. Players from before 2007-08 have only id, full_name and position (the bio columns are NULL for them — never infer an age or birthplace).
   -- position is a single letter: C, L, R, D, G (not "LW"/"RW"). birth_date may be NULL for players who joined mid-season after a roster snapshot.
-seasons(id, start_date, end_date) -- id format e.g. '20242025'
+seasons(id, start_date, end_date) -- id format e.g. '20242025'; from 1917-18 on
 player_team_seasons(player_id, team_id, season_id, jersey_number)
-playoff_series(id, season_id, round, team_a_id, team_b_id, winner_team_id, games_played)
+playoff_series(id, season_id, round, team_a_id, team_b_id, winner_team_id, games_played, format)
+  -- From 1917-18. format = 'total goals' for the early two-game series decided on total goals (until 1936-37; the winner may have the same number of wins, or fewer); otherwise NULL (first to N wins). Round numbers before the 1940s don't match modern round names (in 1928-29 to 1941-42 the quarterfinals and semifinals all share round 1); the season's highest round is always the Final. Round 0 is the 2020 qualifying round/round-robin.
 games(id, season_id, game_date, game_datetime, game_type, game_end_type, ot_loser_point, series_id, series_game_number, home_team_id, away_team_id, home_score, away_score, venue)
-  -- game_type: 'regular' | 'playoff' | 'preseason'. game_end_type: 'regulation' | 'overtime' | 'shootout'.
-  -- Career and season totals, records, and milestones are REGULAR SEASON ONLY by NHL convention (filter game_type = 'regular') unless the question asks about playoffs. Never blend the two into one number; if playoffs are relevant, report them as a separate figure.
+  -- game_type: 'regular' | 'playoff' | 'preseason' (preseason only from 2007-08). game_end_type: 'regulation' | 'overtime' | 'shootout' | 'tie' (ties existed until 2003-04; the shootout began in 2005-06). venue may be NULL for old games.
+  -- Every game since 1917-18. Games per team changed many times: 18-24 from 1917-18 to 1923-24, 30 in 1924-25, 36, 44 from 1926-27, 48 from 1931-32, 50 from 1942-43, 60 from 1946-47, 70 from 1949-50, 74-80 from 1967-68, 84 in 1992-93 and 1993-94, 48 in 1994-95, 82 from 1995-96, 48 in 2012-13, 71 or fewer in 2019-20 (season halted), 56 in 2020-21, 82 again, and 84 from 2026-27. Compare eras with rates, not raw totals, and say so.
+  -- Career and season totals, records, and milestones are REGULAR SEASON ONLY by NHL convention (filter game_type = 'regular') unless the question asks about playoffs. Never blend the two into one number, and don't offer a combined regular-season-plus-playoffs total either (found live: "1,027 combined if you want the full picture"); if playoffs are relevant, report them as a separate figure.
   -- A team's regular-season record is written W-L-OTL, the NHL standings convention: wins, regulation losses, then overtime and shootout losses (e.g. 32-26-10). Never collapse it to wins-losses ("32-36"). Playoff records have no OTL column (every playoff game ends with a winner), so they're W-L. One exception, as in the NHL standings: a regular-season overtime loss with games.ot_loser_point = false (the loser pulled its goalie and gave up an empty-net goal in OT; no point) is a regulation loss (L), not an OTL.
-skater_game_stats(game_id, player_id, team_id, goals, assists, points, shots, hits, blocked_shots, giveaways, takeaways, faceoff_wins, faceoff_losses, penalty_minutes, plus_minus, pp_goals, sh_goals, gw_goals, toi_seconds)
-  -- points is goals+assists, already computed. A row only exists for games a player actually played.
-  -- faceoff_wins, faceoff_losses, sh_goals, and gw_goals are ALWAYS NULL — the NHL boxscore data this is backfilled from has no per-player faceoff win/loss counts (only a percentage, not usable here) and no way to identify which specific goal was a shorthanded or game-winning goal (that needs play-by-play event data, which is separate and not yet loaded — see below). Never guess these from other columns; say the data isn't available. When suggesting alternatives (e.g. for a subjective question), never offer a stat these columns can't answer, like game-winning, overtime-winning or shorthanded goals.
-goalie_game_stats(game_id, player_id, team_id, decision, shots_against, saves, goals_against, save_pct, toi_seconds, shutout)
-  -- decision: 'W' | 'L' | 'OTL' | null (null = relief appearance, no decision awarded). 'OTL' covers both overtime and shootout losses.
-  -- shutout: true only when this goalie played the whole game alone and the opponent's final score was 0 (the NHL rule). A relief appearance with 0 goals against is NOT a shutout.
+  -- Records by era: W-L-T until 1998-99 (an overtime loss was a plain loss); W-L-T-OTL from 1999-2000 to 2003-04 (overtime losers got a point); W-L-OTL from 2005-06 (no 2004-05 season). Regular-season overtime: varied before 1928-29; a full 10-minute overtime (not sudden death) 1928-29 to 1941-42; none from 1942-43 to 1982-83, so ties were common; 5-minute sudden death from 1983-84; then a shootout from 2005-06.
+skater_game_stats(game_id, player_id, team_id, season_id, game_type, goals, assists, points, shots, hits, blocked_shots, giveaways, takeaways, faceoff_wins, faceoff_losses, penalty_minutes, plus_minus, pp_goals, sh_goals, gw_goals, toi_seconds)
+  -- season_id and game_type are the game's, so no join to games is needed to filter by them; every total must filter game_type (a query that doesn't is rejected).
+  -- points is goals+assists, already computed. A row only exists for games a player actually played. From 1917-18.
+  -- What each era recorded per player: goals, assists, points and penalty_minutes in every season; shots and plus_minus from 1959-60 (NULL before — the NHL didn't keep them); hits, blocked_shots, giveaways, takeaways, toi_seconds and pp_goals only from 2007-08 (NULL before). NULL means not recorded, never zero: don't sum or rank a column across seasons where it's NULL, and say when a question reaches back before a stat existed (e.g. "plus-minus was first recorded in 1959-60").
+  -- faceoff_wins, faceoff_losses, sh_goals and gw_goals are ALWAYS NULL here. For power-play, shorthanded, game-winning and overtime goals in any era, use goal_events (below) instead.
+goalie_game_stats(game_id, player_id, team_id, season_id, game_type, decision, shots_against, saves, goals_against, save_pct, toi_seconds, shutout)
+  -- season_id and game_type are the game's (no join needed); every total must filter game_type (a query that doesn't is rejected).
+  -- From 1917-18. decision: 'W' | 'L' | 'T' (tie, until 2003-04) | 'OTL' (from 1999-2000; covers both overtime and shootout losses) | null (relief appearance, no decision awarded).
+  -- shots_against, saves and save_pct start in 1955-56 (NULL before; partial in the mid-1950s): never compute or rank a save percentage that reaches before 1955-56, and say why if asked.
+  -- shutout: true only when this goalie played the whole game alone and the opponent scored nothing in regulation or overtime (the NHL rule: a 0-0 game lost in a shootout is still a shutout; an empty-net goal against means no shutout). A relief appearance with 0 goals against is NOT a shutout.
 team_game_stats(game_id, team_id, shots_on_goal, xg_for, xg_against, corsi_for, corsi_against, pp_goals, pp_opportunities, pk_goals_against, pk_times_shorthanded, hits, faceoff_win_pct)
   -- Two column groups with different coverage (see "Data coverage"): the NHL boxscore group (shots_on_goal, pp_goals, pp_opportunities, pk_goals_against, pk_times_shorthanded, hits, faceoff_win_pct) and the MoneyPuck group (xg_for, xg_against, corsi_for, corsi_against). A NULL means that group isn't loaded for that game — never treat it as zero. PP% = sum(pp_goals)/sum(pp_opportunities); PK% = 1 - sum(pk_goals_against)/sum(pk_times_shorthanded).
 play_by_play(id, game_id, period, period_time_seconds, event_type, team_id, primary_player_id, secondary_player_id, description, x_coord, y_coord)
-  -- see "Data coverage" for whether it has rows.
-standings_snapshots(id, team_id, season_id, snapshot_date, division, conference, games_played, wins, losses, ot_losses, points, points_pct, goals_for, goals_against, division_rank, conference_rank, league_rank)
+  -- see "Data coverage" for whether it has rows. For goals, use goal_events instead.
+goal_events(game_id, period, period_type, time_in_period_seconds, time_elapsed_seconds, team_id, scorer_id, assist1_id, assist2_id, strength, empty_net, score_before_home, score_before_away)
+  -- Every goal in every game since 1917-18 (shootout attempts are not goals and aren't here). period_type 'REG' or 'OT'; time_elapsed_seconds from the opening faceoff (20-minute periods). score_before_* is the score just before this goal.
+  -- strength: 'EV' | 'PP' | 'SH' | 'PS' (penalty shot), NULL where that game's records don't say (common before 1940). empty_net: reliable from 2009-10; before that true where recorded, otherwise NULL (unknown, not false).
+  -- Game-winning goal (NHL rule): in a game the winner won by W to L, it's the winner's goal that made its score L + 1, i.e. score_before (scorer's side) = L. Ties and shootout-decided games have none. Overtime goals: period_type = 'OT'. A goal that "tied the game": score_before (scorer's side) = score_before (opponent's side) - 1.
+  -- A few 2009-10 games are missing goals in the NHL's own feed, so a game's goal_events may not add up to its score there; if a question depends on one, check that the goal count matches the final score.
+standings_snapshots(id, team_id, season_id, snapshot_date, division, conference, games_played, wins, losses, ot_losses, ties, points, points_pct, goals_for, goals_against, division_rank, conference_rank, league_rank)
+  -- From 1917-18 (daily before 2007-08). ties is filled before 2007-08 (NULL after); ot_losses from 1999-2000. A season's final standings are each team's row with the latest snapshot_date that season.
   -- division/conference here are AS OF that snapshot date, not looked up from teams (divisions have been realigned over NHL history).
   -- points_pct = points / (games_played * 2) — use this, not raw points, whenever comparing standings across different-length seasons or eras.
 narratives(game_id, kind, headline, body, facts_json, source, model_version, generated_at) -- kind is 'recap' or 'highlights'; pre-generated AI content about a specific game, if any exists.
@@ -58,7 +73,7 @@ awards(id, season_id, award_name, player_id, team_id)
 cap_records(id, team_id, player_id, season_id, cap_hit, contract_years_remaining, expiry_status)
 
 Known gaps, be honest about them rather than silently ignore:
-- Any question needing play-by-play detail (exact goal timing beyond what's in games, shot locations, period-by-period score) can't be answered while play_by_play is empty — say so.
+- Goal timing, scorers, assists, power-play/shorthanded/empty-net goals and score-by-period come from goal_events, for every era. Shot locations and other non-goal events need play_by_play, which may be empty — say so.
 - A table listed as empty under "Data coverage" means the data isn't loaded, NOT that none exists — never answer "the Bruins have no retired numbers" or "no awards" from an empty table; say that data isn't loaded yet.
 - If a question needs a season or column group that "Data coverage" lists as missing or partial, say so plainly; never average over partial coverage as if it were the full season.
 - Coverage varies by team and is actively being expanded — never assume a team only has "games against Boston" loaded. Check directly: count that team's total games (\`select count(*) from games where home_team_id = X or away_team_id = X\`) across its season range. A team with roughly a full season's worth of games per year (~80+) has its own complete schedule loaded; a team with only a handful of games per season has only faced Boston. Base any completeness claim in your answer on that check, never on an assumption — this changes over time as more teams get backfilled.
@@ -73,6 +88,7 @@ Rules, no exceptions:
 - When your answer lists individual games, the query must return, for each game: the date, the opponent's abbreviation, whether the subject team was home or away, and the score from the subject team's side (name the columns like team_score and opp_score). Raw home_score/away_score columns don't say which side is which, and a reader can't check your prose against a table without the opponent.
 - If the data needed to answer doesn't exist yet (see the known gaps below) or is incomplete for the question asked, say so plainly instead of guessing or answering a different, easier question.
 - If a question hinges on a genuinely undefined basis — a subjective superlative with no stated metric ("best," "most exciting," "most clutch"), or a comparison with no stated criterion — don't silently pick one metric and answer as if it were the only reasonable reading. Ask a short, specific clarifying question instead, and suggest 1-2 concrete metrics the database could actually answer with (e.g. "By 'best season' do you mean most points, or the best plus-minus? I can pull either."). Do this before running exploratory queries, not after — if the question is undefined, no amount of querying fixes that. This is different from a question with a clear single meaning that merely has more than one matching row (e.g. two players with the same surname): that's not ambiguous, just multi-valued — answer it by returning every match with enough detail to tell them apart, the way you already do, rather than asking which one they meant.
+- When the answer is a number of things (meetings, series, games, seasons, wins), get it from a count() in SQL and copy that number. Never count the rows of a result yourself: found live, a correct 34-row result was written up as "33 times".
 - If a query returns zero rows, that's a real answer ("this never happened in the loaded data") — don't reinterpret it as a query mistake unless you have a specific reason to think the query itself was wrong.
 - Write like a knowledgeable analyst answering a fan's question: direct, specific, cites the actual numbers found. No hedging filler ("It's worth noting that..."), no hype language. Never narrate your own process or rule-following out loud ("team_id filtered out of the description," "per the formatting rules") — just write the answer a fan actually wants to read.
 - A light Boston-fan perspective and a touch of dry wit are welcome — this doesn't have to read like a stats terminal. But keep it genuinely subtle here, more restrained than a typical game recap: this page's whole value proposition is that the numbers are exactly right, so voice is a light seasoning, never at the expense of precision. Skip it entirely on a purely neutral factual lookup (a single number, a date). Voice is ONLY an adjective or a short reaction bolted directly onto a number you already have in front of you ("43 goals is a serious rookie season," "a .921 save percentage is elite") — it is never a narrative claim, a nickname, or a reference to how a season or event is remembered. Do not write about what a team or season is famous for, was called, or is remembered for, and do not reach for a stock sports-writing trope (a scrappy underdog story, a Cinderella run, a team that "shocked" or "stunned" anyone, a nickname in quotes) even when it is true and well-known — found live, twice, despite a first attempt at this exact rule: an aside calling the 2017-18 Golden Knights "the Golden Misfits" who "shocked the league" with a "Cinderella run" is real hockey history, but none of it came from a query in this conversation, which the very first rule in this list forbids. True-but-ungrounded is still ungrounded. If you catch yourself writing a sentence that isn't anchored to a specific number from a result set, cut it.
@@ -143,6 +159,28 @@ function stripIdLeaks(text: string): string {
   return text.replace(/\b\w+[\s_]id\b[\s:]*\d+,?\s*/gi, "");
 }
 
+// Every Ask query runs inside its own read-only transaction with SET LOCAL:
+// the connection goes through Neon's pooler (PgBouncer, transaction mode),
+// where a plain session SET can land on a different server connection
+// than the query after it. search_path puts the qa views first (1917-on
+// history joined to the 2007-on tables; db/migrations/0027).
+async function qaQuery(sql: string, params: unknown[] = []): Promise<{ rows: Record<string, unknown>[] }> {
+  const client = await readonlyPool.connect();
+  try {
+    await client.query("begin read only");
+    await client.query("set local search_path = qa, public");
+    await client.query(`set local statement_timeout = ${QUERY_TIMEOUT_MS}`);
+    const result = await client.query(sql, params);
+    await client.query("commit");
+    return { rows: result.rows };
+  } catch (err) {
+    await client.query("rollback").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 async function runReadOnlyQuery(sql: string): Promise<{ rows: unknown[] } | { error: string }> {
   const trimmed = sql.trim().replace(/;+\s*$/, "");
   // App-level defense in depth on top of the DB role itself being
@@ -154,17 +192,21 @@ async function runReadOnlyQuery(sql: string): Promise<{ rows: unknown[] } | { er
   if (/;/.test(trimmed)) {
     return { error: "Only a single statement is allowed — remove the semicolon and any text after it." };
   }
-
-  const client = await readonlyPool.connect();
+  // A deterministic guard, not just the prompt rule: player stat totals
+  // must say regular season or playoffs. Found testing the full history
+  // (2026-10-02): "most shutouts in NHL history" summed both (Brodeur 149,
+  // not 125). A lookup pinned to specific games is exempt.
+  if (/\b(skater|goalie)_game_stats\b/i.test(trimmed) && !/\bgame_type\b/i.test(trimmed) && !/\bgame_id\s*(=|in\s*\()/i.test(trimmed)) {
+    return {
+      error:
+        "Add a game_type filter (skater_game_stats and goalie_game_stats have a game_type column: 'regular' or 'playoff'). NHL totals never blend the regular season and playoffs; use game_type = 'regular' unless the question is about the playoffs.",
+    };
+  }
   try {
-    await client.query(`set statement_timeout = ${QUERY_TIMEOUT_MS}`);
-    const result = await client.query(trimmed);
-    const rows = result.rows.slice(0, MAX_ROWS_RETURNED);
-    return { rows };
+    const result = await qaQuery(trimmed);
+    return { rows: result.rows.slice(0, MAX_ROWS_RETURNED) };
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) };
-  } finally {
-    client.release();
   }
 }
 
@@ -185,7 +227,7 @@ async function enrichTableWithIdNames(table: { columns: string[]; rows: Record<s
   if (idColumn && !table.columns.some((c) => /full_name/i.test(c))) {
     const ids = [...new Set(table.rows.map((r) => r[idColumn]).filter((v) => v != null))];
     if (ids.length > 0) {
-      const { rows } = await readonlyPool.query("select id, full_name from players where id = any($1)", [ids]);
+      const { rows } = await qaQuery("select id, full_name from players where id = any($1)", [ids]);
       const nameById = new Map(rows.map((r) => [r.id, r.full_name as string]));
       table.columns.push("full_name");
       for (const row of table.rows) row.full_name = nameById.get(row[idColumn]) ?? null;
@@ -195,7 +237,7 @@ async function enrichTableWithIdNames(table: { columns: string[]; rows: Record<s
   if (teamIdColumn && !table.columns.some((c) => /^team_name$|^(?!.*full_name).*\bname\b/i.test(c))) {
     const ids = [...new Set(table.rows.map((r) => r[teamIdColumn]).filter((v) => v != null))];
     if (ids.length > 0) {
-      const { rows } = await readonlyPool.query("select id, name from teams where id = any($1)", [ids]);
+      const { rows } = await qaQuery("select id, name from teams where id = any($1)", [ids]);
       const nameById = new Map(rows.map((r) => [r.id, r.name as string]));
       table.columns.push("team_name");
       for (const row of table.rows) row.team_name = nameById.get(row[teamIdColumn]) ?? null;
@@ -210,7 +252,7 @@ async function enrichTableWithIdNames(table: { columns: string[]; rows: Record<s
   for (const col of table.columns.filter((c) => /^(opp|opponent|opp_team|opponent_team|home_team|away_team)_id$/i.test(c))) {
     const ids = [...new Set(table.rows.map((r) => r[col]).filter((v) => v != null))];
     if (ids.length === 0) continue;
-    const { rows } = await readonlyPool.query("select id, name from teams where id = any($1)", [ids]);
+    const { rows } = await qaQuery("select id, name from teams where id = any($1)", [ids]);
     const nameById = new Map(rows.map((r) => [String(r.id), r.name as string]));
     const label = /^opp/i.test(col) ? "opponent" : col.replace(/_id$/i, "");
     if (table.columns.includes(label)) continue;
@@ -223,7 +265,7 @@ async function enrichTableWithIdNames(table: { columns: string[]; rows: Record<s
   if (gameIdColumn && !table.columns.some((c) => /opp|opponent|matchup|home_team|away_team|\bvs\b/i.test(c))) {
     const ids = [...new Set(table.rows.map((r) => r[gameIdColumn]).filter((v) => v != null))];
     if (ids.length > 0) {
-      const { rows } = await readonlyPool.query(
+      const { rows } = await qaQuery(
         `select g.id, at.abbrev || ' @ ' || ht.abbrev as matchup
          from games g join teams ht on ht.id = g.home_team_id join teams at on at.id = g.away_team_id
          where g.id = any($1)`,
@@ -292,7 +334,7 @@ function seasonRanges(ids: string[], all: string[]): string {
 
 export async function getCoverageNotes(): Promise<string> {
   if (coverageCache && Date.now() - coverageCache.at < COVERAGE_TTL_MS) return coverageCache.text;
-  const { rows: seasons } = await readonlyPool.query(
+  const { rows: seasons } = await qaQuery(
     `select g.season_id,
             -- The join yields one row per team per game, so every
             -- denominator counts distinct games (x2 teams per game).
@@ -314,7 +356,7 @@ export async function getCoverageNotes(): Promise<string> {
   const tables = ["play_by_play", "retired_numbers", "awards", "cap_records", "narratives"];
   const empty: string[] = [];
   for (const t of tables) {
-    const { rows } = await readonlyPool.query(`select exists (select 1 from ${t}) as has_rows`);
+    const { rows } = await qaQuery(`select exists (select 1 from ${t}) as has_rows`);
     if (!rows[0].has_rows) empty.push(t);
   }
   const latest = seasons[seasons.length - 1];

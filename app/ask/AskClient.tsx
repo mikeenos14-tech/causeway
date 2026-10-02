@@ -162,8 +162,9 @@ export function AskClient({ initialQuestion }: { initialQuestion: string }) {
           Ask Causeway
         </h1>
         <p style={{ color: "var(--text-secondary)", fontSize: ".95rem", marginBottom: "1.75rem", maxWidth: 560 }}>
-          Ask about any NHL team, player, or game since 2007-08 — every game for all 32 teams is in the
-          database. Every answer is generated live from it, and every query behind it is shown below the answer.
+          Ask about any NHL team, player, or game since 1917 — every game in league history is in the database
+          (with what each era recorded: no ice time before 2007-08, no shots or plus-minus before 1959-60). Every
+          answer is generated live from it, and every query behind it is shown below the answer.
         </p>
 
         <form

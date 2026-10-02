@@ -731,9 +731,9 @@ function AskBand({ qotd }: { qotd: { question: string; answer: string | null } |
         <div style={{ maxWidth: 460 }}>
           <div style={{ fontSize: ".72rem", fontWeight: 700, color: "var(--gold)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 8 }}>Ask Causeway</div>
           <h2 style={{ margin: "0 0 6px", fontSize: "1.4rem", fontFamily: "var(--font-body)", fontWeight: 700 }}>Got a stat question? Just ask.</h2>
-          {/* Scope stated plainly: the database starts in 2007-08. It once
-              said "Full NHL history", which the answers themselves contradict. */}
-          <p style={{ margin: 0, fontSize: ".9rem", color: "var(--text-secondary)" }}>Every NHL game since 2007-08, every team, straight from the database. Every answer shows its work.</p>
+          {/* Scope stated plainly. Since 2026-10-02 Ask reads the full history
+              (qa views, 1917-18 on); before that it said 2007-08, which was then true. */}
+          <p style={{ margin: 0, fontSize: ".9rem", color: "var(--text-secondary)" }}>Every NHL game since 1917, every team, straight from the database. Every answer shows its work.</p>
         </div>
       )}
       <Link

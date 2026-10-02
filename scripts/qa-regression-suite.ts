@@ -79,19 +79,13 @@ const cases: TestCase[] = [
     // enumerated list — this case is the regression guard for both.
     name: "never leaks a franchise/team id when explaining a data-boundary or lineage detail",
     question: "What was the original Winnipeg Jets' record before they moved to Phoenix?",
+    // Updated 2026-10-02: Ask now has the full history (1917-18 on), so
+    // the honest answer is the record itself, 506-660-172 in 1,338 games
+    // (checked against the database); the id-leak check still runs in
+    // globalChecks on this answer.
     check: (r) => {
-      // Broad on purpose — this is checking for one underlying idea (the
-      // question reaches before the data starts) that the model phrases
-      // differently every run; require just "predates/before/outside/
-      // doesn't cover" type language anywhere near a mention of the data
-      // itself, rather than a specific sentence shape.
-      const explainsBoundary =
-        /\b(predates?|before|prior to|outside|doesn'?t (cover|include|go back)|only covers?|not (loaded|in the data|in this database)|isn'?t (loaded|in the data))\b/i.test(r.answer) &&
-        /\b(2007|data|database|dataset)\b/i.test(r.answer);
-      return {
-        pass: explainsBoundary,
-        reason: explainsBoundary ? undefined : "expected an honest explanation of the 2007-08 data boundary",
-      };
+      const record = /506/.test(r.answer) && /660/.test(r.answer) && /172/.test(r.answer);
+      return { pass: record, reason: record ? undefined : "expected the original Jets' record, 506-660-172" };
     },
   },
   {
@@ -178,7 +172,7 @@ const cases: TestCase[] = [
     question: "What was the Bruins' power play percentage in the 2023-24 regular season?",
     check: (r) => {
       // Ground truth: 54 PPG on 243 opportunities = 22.2%.
-      const right = /22\.2\s*%/.test(r.answer);
+      const right = /22\.2\d?\s*%/.test(r.answer); // 22.2% or 22.22%
       const usedTable = r.queries.some((q) => /team_game_stats/i.test(q.sql));
       return { pass: right && usedTable, reason: !usedTable ? "never queried team_game_stats" : !right ? "expected 22.2% (54/243)" : undefined };
     },
@@ -199,7 +193,9 @@ const cases: TestCase[] = [
     name: "never reads an empty table as 'none exist'",
     question: "Which numbers have the Bruins retired?",
     check: (r) => {
-      const claimsNone = /(have|has) (not|never) retired|no (retired )?numbers (have been )?retired|haven'?t retired any/i.test(r.answer);
+      // A negated denial ("it's not that the Bruins haven't retired any")
+      // is the right answer, not a claim of none (a false alarm, 2026-10-02).
+      const claimsNone = /(have|has) (not|never) retired|no (retired )?numbers (have been )?retired|haven'?t retired any/i.test(r.answer.replace(/not that[^.]*/gi, ""));
       // "is empty ... I can't answer this" is the same correct decline (seen 2026-10-01).
       const saysNotLoaded = /isn'?t (loaded|available)|not (loaded|available|in (the|this) (data|database))|don'?t have|no data|hasn'?t been loaded|(table|data) is (simply )?empty|can'?t answer this/i.test(r.answer);
       return { pass: !claimsNone && saysNotLoaded, reason: claimsNone ? "treated an empty table as 'no retired numbers'" : !saysNotLoaded ? "expected 'that data isn't loaded'" : undefined };
@@ -259,11 +255,13 @@ const cases: TestCase[] = [
     },
   },
   {
-    name: "respects the 2007-08 data boundary (Bergeron rookie years)",
+    // Updated 2026-10-02: Bergeron's rookie years (2003-04: +5 in 71
+    // games; 2005-06: +3) are loaded now, so the answer should use them.
+    name: "reaches before 2007-08 now (Bergeron rookie years)",
     question: "How does Patrice Bergeron's plus-minus in his final three seasons compare to his rookie years?",
     check: (r) => {
-      const flagsBoundary = /2007|rookie years?.{0,40}(don't|isn't|not (in|available|loaded))|can't (responsibly )?compare/i.test(r.answer);
-      return { pass: flagsBoundary, reason: flagsBoundary ? undefined : "expected the answer to flag that rookie-year data predates 2007-08" };
+      const usesRookie = /\+5\b|plus[- ]5\b|\b5\b.{0,40}(2003|rookie)|(2003|rookie).{0,60}\b5\b/i.test(r.answer);
+      return { pass: usesRookie, reason: usesRookie ? undefined : "expected his rookie-year plus-minus (+5 in 2003-04) from the full history" };
     },
   },
   {
@@ -392,9 +390,17 @@ const cases: TestCase[] = [
     // summing to 933). The NHL's career totals are regular season only.
     name: "career totals default to regular season, not blended with playoffs",
     question: "How many career points does David Pastrnak have?",
+    // Updated 2026-10-02: the stat views carry game_type, so a query may
+    // group by it (regular and playoffs side by side) instead of filtering;
+    // either is fine as long as the answer leads with the regular-season
+    // total and never offers a blended one.
     check: (r) => {
-      const scoped = r.queries.some((q) => /game_type\s*=\s*'regular'/i.test(q.sql));
-      return { pass: scoped, reason: scoped ? undefined : "no query filtered game_type = 'regular' for a career total" };
+      const scoped = r.queries.some((q) => /game_type\s*=\s*'regular'|group by[^)]*game_type/i.test(q.sql));
+      const blended = /\b1,?0[0-9]{2}\b[^.]{0,40}(combined|total|overall|all told)|(combined|overall|all told)[^.]{0,40}\b1,?0[0-9]{2}\b/i.test(r.answer);
+      return {
+        pass: scoped && !blended,
+        reason: !scoped ? "no query separated regular season from playoffs for a career total" : blended ? "offered a blended regular + playoff total" : undefined,
+      };
     },
   },
   {
@@ -475,7 +481,9 @@ const cases: TestCase[] = [
 ];
 
 async function main() {
-  const { rows } = await pool.query(`select full_name from players where full_name ~ '[Aa]nderson'`);
+  // Every stored name Ask can see (qa.players: 1917-on history plus the
+  // site's players), so a real historical Anderson isn't "invented".
+  const { rows } = await pool.query(`select full_name from qa.players where full_name ~ '[Aa]nderson'`);
   realFullNames = new Set(rows.map((r) => r.full_name as string));
 
   let failures = 0;
