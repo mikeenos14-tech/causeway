@@ -8,7 +8,6 @@ import {
   getGoalieSeasonSplits,
   getRecentGameLog,
 } from "@/lib/player-detail-data";
-import { hasFullCareerLoaded } from "@/lib/significance-checks";
 import { formatGameDate, formatSeasonLabel } from "@/lib/format-date";
 import { Masthead, Footer } from "@/components/Masthead";
 import { Sparkline } from "@/components/Sparkline";
@@ -46,10 +45,9 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
     isGoalie ? Promise.resolve(null) : getClutchCard(playerId).catch(() => null),
   ]);
 
-  // Reuses the exact guard from the significance checks — a "career total"
-  // is only an honest claim if we can verify we have this player's whole
-  // career loaded, not just what happens to be in this database.
-  const fullCareer = hasFullCareerLoaded(player.birth_date);
+  // Careers are complete: the NHL's history tables (1917-18 on) joined to
+  // the site's (lib/player-detail-data.ts), checked against the NHL's own
+  // career totals by scripts/qa/check-player-careers.ts.
   // The team of the player's most recent game (the log is newest first).
   const latestTeam: string | undefined = gameLog[0]?.team_abbrev ?? seasonSplits.at(-1)?.team_abbrev;
 
@@ -63,6 +61,8 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
       : null
     : seasonByDate(new Date());
   const trend = buildCareerTrend(seasonSplits, isGoalie, inProgressSeason);
+  // A ties column only for goalies who had any (ties ended in 2003-04).
+  const hasTies = isGoalie && seasonSplits.some((r) => Number((r as { ties?: number }).ties ?? 0) > 0);
 
   // "On pace for" during the regular season, from 20 GP (lib/pace.ts):
   // his totals so far plus his rate over his team's remaining games.
@@ -129,20 +129,16 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
 
         <section style={{ marginBottom: "2.5rem" }}>
           <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".02em", fontSize: "1.4rem", marginBottom: ".2rem" }}>
-            {fullCareer ? "Career Totals" : "Totals Since 2007-08"}
+            Career Totals
             <span style={{ fontSize: ".8rem", color: "var(--text-secondary)", marginLeft: ".6rem", letterSpacing: ".04em" }}>Regular season</span>
           </h2>
-          {!fullCareer && (
-            <p style={{ fontSize: ".82rem", color: "var(--text-secondary)", marginBottom: "1rem", maxWidth: "60ch" }}>
-              Not labeled as a career total — we can&apos;t verify this player&apos;s entire NHL history is loaded (no birth date on file, or he could plausibly have played before our data begins).
-            </p>
-          )}
           <div className="card-row" style={{ marginTop: "1rem" }}>
             {isGoalie ? (
               <>
                 <StatTile label="Games" value={totals.games} />
                 <StatTile label="Wins" value={totals.wins} />
                 <StatTile label="Losses" value={totals.losses} />
+                {totals.ties > 0 && <StatTile label="Ties" value={totals.ties} />}
                 <StatTile label="OT Losses" value={totals.otl} />
                 <StatTile label="Shutouts" value={totals.shutouts} />
                 <StatTile label="SV%" value={formatSavePct(totals.save_pct)} />
@@ -218,6 +214,7 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
                       <>
                         <th>W</th>
                         <th>L</th>
+                        {hasTies && <th>T</th>}
                         <th>OTL</th>
                         <th>SO</th>
                         <th>SV%</th>
@@ -240,16 +237,24 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
                     <tr key={`${s.season_id}-${s.team_abbrev}`}>
                       <td style={{ textAlign: "left" }}>{formatSeasonLabel(s.season_id)}</td>
                       <td style={{ textAlign: "left" }}>
-                        <Link href={`/teams/${s.team_abbrev}`} style={{ color: "inherit", whiteSpace: "nowrap" }}>
-                          <TeamLogo abbrev={s.team_abbrev} size={18} gap={4} />
-                          {s.team_abbrev}
-                        </Link>
+                        {s.team_active ? (
+                          <Link href={`/teams/${s.team_abbrev}`} style={{ color: "inherit", whiteSpace: "nowrap" }}>
+                            <TeamLogo abbrev={s.team_abbrev} size={18} gap={4} />
+                            {s.team_abbrev}
+                          </Link>
+                        ) : (
+                          <span style={{ whiteSpace: "nowrap" }}>
+                            <TeamLogo abbrev={s.team_abbrev} size={18} gap={4} />
+                            {s.team_abbrev}
+                          </span>
+                        )}
                       </td>
                       <td>{s.games}</td>
                       {isGoalie ? (
                         <>
                           <td>{s.wins}</td>
                           <td>{s.losses}</td>
+                          {hasTies && <td>{s.ties}</td>}
                           <td>{s.otl}</td>
                           <td>{s.shutouts}</td>
                           <td style={{ fontWeight: 700, color: "var(--gold)" }}>{formatSavePct(s.savePct)}</td>
@@ -259,7 +264,7 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
                           <td>{s.goals}</td>
                           <td>{s.assists}</td>
                           <td style={{ fontWeight: 700, color: "var(--gold)" }}>{s.points}</td>
-                          <td>{s.plus_minus > 0 ? `+${s.plus_minus}` : s.plus_minus}</td>
+                          <td>{s.plus_minus == null ? "—" : s.plus_minus > 0 ? `+${s.plus_minus}` : s.plus_minus}</td>
                           <td>{s.pim}</td>
                           <td>{s.shootingPct != null ? `${(s.shootingPct * 100).toFixed(1)}%` : "—"}</td>
                           <td>{toi(s.toiSecondsPerGame)}</td>
@@ -349,7 +354,9 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
   );
 }
 
-function toi(seconds: number) {
+// "—" for seasons before 2007-08, when ice time wasn't kept.
+function toi(seconds: number | null) {
+  if (seconds == null) return "—";
   const m = Math.floor(seconds / 60);
   const s = Math.round(seconds % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
