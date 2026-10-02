@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { teamNickname } from "@/lib/team-names";
 import { getLatestStandingsSeason, getFullStandings, getConferencePictures, type WildCardTeam } from "@/lib/standings-data";
 import { formatGameDate, formatSeasonLabel } from "@/lib/format-date";
 import { Masthead, Footer } from "@/components/Masthead";
@@ -15,7 +16,7 @@ function PictureRow({ label, team, pointsBack }: { label: string; team: WildCard
       href={`/teams/${team.abbrev}`}
       className="standings-row"
       style={{
-        gridTemplateColumns: "34px 1fr 60px 60px",
+        gridTemplateColumns: "34px 1fr 44px 44px",
         padding: "10px 18px",
         alignItems: "center",
         fontSize: ".85rem",
@@ -64,7 +65,7 @@ export default async function Standings() {
             <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".02em", fontSize: "1.4rem", margin: "0 0 1rem" }}>
               Playoff Picture
             </h2>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: "1.75rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(360px, 100%), 1fr))", gap: "1.75rem" }}>
               {pictures.map((pic) => {
                 const cutoff = pic.wildCard[1]?.points ?? 0;
                 return (
@@ -99,7 +100,7 @@ export default async function Standings() {
         <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".02em", fontSize: "1.4rem", margin: "0 0 1rem" }}>
           By Division
         </h2>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: "1.75rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(360px, 100%), 1fr))", gap: "1.75rem" }}>
           {[...byDivision.entries()].map(([division, teams]) => (
             <section key={division}>
               <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: ".9rem" }}>
@@ -132,7 +133,10 @@ export default async function Standings() {
                     }}
                   >
                     <span style={{ color: t.abbrev === "BOS" ? "var(--gold)" : "inherit" }}>{t.division_rank}</span>
-                    <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingRight: 8 }}>{t.name}</span>
+                    <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingRight: 8 }}>
+                      <span className="name-full">{t.name}</span>
+                      <span className="name-short">{teamNickname(t.abbrev, t.name)}</span>
+                    </span>
                     <span className="standings-col-gp">{t.games_played}</span>
                     <span>{t.wins}</span>
                     <span>{t.losses}</span>
