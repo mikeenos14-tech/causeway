@@ -13,11 +13,12 @@ import { formatGameDate, formatSeasonLabel } from "@/lib/format-date";
 import { Masthead, Footer } from "@/components/Masthead";
 import { Sparkline } from "@/components/Sparkline";
 import { LEADERSHIP } from "@/lib/leadership";
-import { getClubSeason } from "@/lib/nhl-schedule";
+import { getClubSeason, isFinal } from "@/lib/nhl-schedule";
 import { TeamLogo } from "@/components/TeamLogo";
 import { Headshot } from "@/components/Headshot";
 import { getHeadshots } from "@/lib/headshots";
 import { formatSavePct } from "@/lib/util/save-pct";
+import { buildCareerTrend, seasonByDate, MIN_GAMES } from "@/lib/career-trend";
 
 export default async function PlayerDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -48,21 +49,18 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
   // The team of the player's most recent game (the log is newest first).
   const latestTeam: string | undefined = gameLog[0]?.team_abbrev ?? seasonSplits.at(-1)?.team_abbrev;
 
-  // One value per season for the career-trajectory sparkline — a mid-season
-  // trade already gets its own row per team in the table above, but a trend
-  // line reads as one point per season, so trade years get combined back
-  // into a single season total here (points summed; save% properly
-  // re-weighted by shots against, not just averaged team to team).
-  const seasonIds = [...new Set(seasonSplits.map((s) => s.season_id))];
-  const careerTrend = seasonIds.map((seasonId) => {
-    const rowsThisSeason = seasonSplits.filter((s) => s.season_id === seasonId);
-    if (isGoalie) {
-      const saves = rowsThisSeason.reduce((sum, r) => sum + (r as { saves: number }).saves, 0);
-      const shotsAgainst = rowsThisSeason.reduce((sum, r) => sum + (r as { shots_against: number }).shots_against, 0);
-      return shotsAgainst > 0 ? saves / shotsAgainst : 0;
-    }
-    return rowsThisSeason.reduce((sum, r) => sum + (r as { points: number }).points, 0);
-  });
+  // Career trend as a rate, one point per season of 10+ games; the season
+  // in progress joins as a hollow "so far" point at 10 games (see
+  // lib/career-trend.ts for why totals were misleading).
+  const club = latestTeam ? await getClubSeason(latestTeam).catch(() => null) : null;
+  const inProgressSeason = club
+    ? club.games.some((g) => g.season === club.currentSeason && g.gameType === 2 && !isFinal(g))
+      ? club.currentSeason
+      : null
+    : seasonByDate(new Date());
+  const trend = buildCareerTrend(seasonSplits, isGoalie, inProgressSeason);
+  const trendLabel = (p: (typeof trend.points)[number]) =>
+    `${formatSeasonLabel(p.seasonId)}${p.inProgress ? " so far" : ""}: ${isGoalie ? `${formatSavePct(p.value)} SV%` : `${p.value.toFixed(2)} pts/game`} (${p.games} GP)`;
 
   return (
     <>
@@ -153,12 +151,19 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
               <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".02em", fontSize: "1.4rem", margin: 0 }}>
                 Season by Season
               </h2>
-              {careerTrend.length > 1 && (
+              {trend.points.length > 1 && (
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span style={{ fontSize: ".7rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".04em" }}>
-                    {isGoalie ? "SV% by season" : "Points by season"}
+                  <span style={{ fontSize: ".7rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".04em", textAlign: "right", lineHeight: 1.35 }}>
+                    {isGoalie ? "SV% by season" : "Points per game"}
+                    <span style={{ display: "block", fontWeight: 500, textTransform: "none", letterSpacing: 0, color: "var(--text-muted)" }}>
+                      {trend.pending
+                        ? `${formatSeasonLabel(trend.pending.seasonId)} joins at ${MIN_GAMES} GP`
+                        : trend.points.at(-1)?.inProgress
+                          ? `○ ${formatSeasonLabel(trend.points.at(-1)!.seasonId)} so far (${trend.points.at(-1)!.games} GP)`
+                          : `seasons of ${MIN_GAMES}+ GP`}
+                    </span>
                   </span>
-                  <Sparkline values={careerTrend} />
+                  <Sparkline values={trend.points.map((p) => p.value)} labels={trend.points.map(trendLabel)} lastHollow={!!trend.points.at(-1)?.inProgress} />
                 </div>
               )}
             </div>

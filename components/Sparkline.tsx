@@ -39,16 +39,24 @@ export function FormBars({ results, height = 28 }: { results: ("W" | "L" | "OT")
 // season across a career). Values are normalized to the series' own
 // min/max, not a fixed scale, so a rookie-to-prime arc and a steady
 // role-player line both fill the same box meaningfully.
+//
+// `labels` (one per value) become hover titles on each point; `lastHollow`
+// draws the last point as an open circle with a dashed final segment, for
+// a season still in progress.
 export function Sparkline({
   values,
   width = 140,
   height = 36,
   color = "var(--gold)",
+  labels,
+  lastHollow = false,
 }: {
   values: number[];
   width?: number;
   height?: number;
   color?: string;
+  labels?: string[];
+  lastHollow?: boolean;
 }) {
   if (values.length < 2) return null;
   const min = Math.min(...values);
@@ -62,6 +70,11 @@ export function Sparkline({
   });
   const linePath = points.map(([x, y], i) => `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`).join(" ");
   const areaPath = `${linePath} L ${width} ${height} L 0 ${height} Z`;
+  // Solid line through the finished seasons; dashed into an in-progress one.
+  const solidPoints = lastHollow ? points.slice(0, -1) : points;
+  const solidPath = solidPoints.map(([x, y], i) => `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`).join(" ");
+  const [lx, ly] = points[points.length - 1];
+  const [px, py] = points[points.length - 2];
   const gradientId = "sparkline-fill";
 
   return (
@@ -73,8 +86,15 @@ export function Sparkline({
         </linearGradient>
       </defs>
       <path d={areaPath} fill={`url(#${gradientId})`} stroke="none" />
-      <path d={linePath} fill="none" stroke={color} strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={points[points.length - 1][0]} cy={points[points.length - 1][1]} r={2.5} fill={color} />
+      {solidPoints.length > 1 && <path d={solidPath} fill="none" stroke={color} strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" />}
+      {lastHollow && <path d={`M ${px.toFixed(1)} ${py.toFixed(1)} L ${lx.toFixed(1)} ${ly.toFixed(1)}`} fill="none" stroke={color} strokeWidth={1.5} strokeDasharray="2.5 2.5" />}
+      <circle cx={lx} cy={ly} r={lastHollow ? 3 : 2.5} fill={lastHollow ? "var(--bg)" : color} stroke={color} strokeWidth={lastHollow ? 1.5 : 0} />
+      {labels &&
+        points.map(([x, y], i) => (
+          <circle key={i} cx={x} cy={y} r={6} fill="transparent">
+            <title>{labels[i]}</title>
+          </circle>
+        ))}
     </svg>
   );
 }

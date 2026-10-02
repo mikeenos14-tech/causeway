@@ -429,7 +429,14 @@ async function backfillOnce(teamAbbrev: string, seasonId: string) {
         const stats = box.playerByGameStats?.[side];
         if (!stats) continue;
 
+        // A skater "played" only with real ice time, like goalies below. A
+        // dressed skater who never took a shift is listed with 0:00 and no
+        // stats; the NHL doesn't count it as a game played (63 such rows
+        // once each added a phantom GP, all checked against the NHL's game
+        // logs on 2026-10-01).
+        const skated = (p: { toi?: string | null }) => !!p.toi && p.toi !== "00:00";
         for (const p of [...stats.forwards, ...stats.defense]) {
+          if (!skated(p)) continue;
           await upsertPlayerFromBoxscore(p, teamId);
           skaterRows.push([
             g.id,
