@@ -12,9 +12,10 @@ import { usePathname } from "next/navigation";
 const TABS = [
   { label: "Overview", path: "" },
   { label: "Roster", path: "/roster" },
-  { label: "League", path: "/league" },
+  // Labels say what's there; paths kept so existing links still work.
+  { label: "League ranks", path: "/league" },
   { label: "Records", path: "/records" },
-  { label: "Series", path: "/series" },
+  { label: "Head-to-head", path: "/series" },
   { label: "Playoffs", path: "/playoffs" },
   { label: "Advanced", path: "/advanced" },
 ];
