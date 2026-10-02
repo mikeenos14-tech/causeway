@@ -50,7 +50,13 @@ export default async function TeamRoster({ params }: { params: Promise<{ abbrev:
         </p>
         {!roster.rosterAvailable && (
           <p style={{ color: "var(--text-secondary)", fontSize: ".85rem", margin: "-1.25rem 0 2rem" }}>
-            The NHL&apos;s roster couldn&apos;t be reached just now, so this lists players who&apos;ve played this season.
+            The NHL&apos;s roster couldn&apos;t be loaded just now, so this lists players who&apos;ve played this season.
+          </p>
+        )}
+        {roster.syncedAt && (
+          <p style={{ color: "var(--text-muted)", fontSize: ".78rem", margin: "-1.5rem 0 2rem" }}>
+            Roster from the NHL, updated hourly · last updated{" "}
+            {new Date(roster.syncedAt).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} ET
           </p>
         )}
 

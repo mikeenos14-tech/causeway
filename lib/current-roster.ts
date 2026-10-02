@@ -24,7 +24,8 @@ export type GoalieLine = GoalieRosterRow & RosterFlags;
 export type CurrentRoster = {
   seasonId: string;
   teamGamesPlayed: number;
-  rosterAvailable: boolean; // false: the NHL roster couldn't be reached; list is players who've played
+  rosterAvailable: boolean; // false: no roster synced and the NHL couldn't be reached; list is players who've played
+  syncedAt: string | null; // when the roster was last synced from the NHL
   skaters: SkaterLine[];
   goalies: GoalieLine[];
 };
@@ -70,14 +71,30 @@ export async function getCurrentRoster(abbrev: string): Promise<CurrentRoster> {
   const seasonId = club?.currentSeason ?? seasonByDate(new Date());
   const teamGamesPlayed = club ? club.games.filter((g) => g.season === seasonId && g.gameType === 2 && isFinal(g)).length : 0;
 
-  let api: { forwards?: ApiPlayer[]; defensemen?: ApiPlayer[]; goalies?: ApiPlayer[] } | null = null;
-  try {
-    api = await nhlJson(`${API}/roster/${abbrev}/current`, 3600);
-  } catch {
-    api = null;
+  // The roster as synced hourly into current_rosters (scripts/sync-rosters.ts),
+  // so the page never waits on the NHL; the live call is only a fallback for
+  // a team with nothing synced yet.
+  let rosterSkaters: ApiPlayer[] = [];
+  let rosterGoalies: ApiPlayer[] = [];
+  let syncedAt: string | null = null;
+  const { rows: synced } = await pool.query(`select player_id, full_name, position, synced_at from current_rosters where team_abbrev = $1`, [abbrev]);
+  if (synced.length > 0) {
+    const asApi = (r: { player_id: number; full_name: string; position: string }): ApiPlayer => {
+      const [first, ...rest] = r.full_name.split(" ");
+      return { id: Number(r.player_id), firstName: { default: first }, lastName: { default: rest.join(" ") }, positionCode: r.position };
+    };
+    rosterSkaters = synced.filter((r) => r.position !== "G").map(asApi);
+    rosterGoalies = synced.filter((r) => r.position === "G").map(asApi);
+    syncedAt = new Date(Math.min(...synced.map((r) => new Date(r.synced_at).getTime()))).toISOString();
+  } else {
+    try {
+      const api = await nhlJson<{ forwards?: ApiPlayer[]; defensemen?: ApiPlayer[]; goalies?: ApiPlayer[] }>(`${API}/roster/${abbrev}/current`, 3600);
+      rosterSkaters = api ? [...(api.forwards ?? []), ...(api.defensemen ?? [])] : [];
+      rosterGoalies = api?.goalies ?? [];
+    } catch {
+      // stays empty: the page says the roster couldn't be loaded
+    }
   }
-  const rosterSkaters = api ? [...(api.forwards ?? []), ...(api.defensemen ?? [])] : [];
-  const rosterGoalies = api?.goalies ?? [];
   const rosterAvailable = rosterSkaters.length + rosterGoalies.length > 0;
 
   const [skaterStats, goalieStats] = await Promise.all([getSkaterRosterStats(abbrev, seasonId), getGoalieRosterStats(abbrev, seasonId)]);
@@ -95,6 +112,7 @@ export async function getCurrentRoster(abbrev: string): Promise<CurrentRoster> {
       seasonId,
       teamGamesPlayed,
       rosterAvailable,
+      syncedAt,
       skaters: skaterStats.map((r) => ({ ...r, ...flags(r.id, true) })),
       goalies: goalieStats.map((r) => ({ ...r, ...flags(r.id, true) })),
     };
@@ -102,12 +120,12 @@ export async function getCurrentRoster(abbrev: string): Promise<CurrentRoster> {
   const skaters: SkaterLine[] = [
     // Roster names come from the NHL's roster (always the full name); a
     // goalie listed as a skater, or vice versa, can't happen in its feed.
-    ...rosterSkaters.map((p) => ({ ...(skaterById.get(p.id) ?? emptySkater(p)), full_name: `${p.firstName.default} ${p.lastName.default}`, ...flags(p.id, true) })),
+    ...rosterSkaters.map((p) => ({ ...(skaterById.get(p.id) ?? emptySkater(p)), full_name: `${p.firstName.default} ${p.lastName.default}`.trim(), ...flags(p.id, true) })),
     ...skaterStats.filter((r) => !rosterIds.has(r.id)).map((r) => ({ ...r, ...flags(r.id, false) })),
   ];
   const goalies: GoalieLine[] = [
     ...rosterGoalies.map((p) => ({ ...(goalieById.get(p.id) ?? emptyGoalie(p)), full_name: `${p.firstName.default} ${p.lastName.default}`, ...flags(p.id, true) })),
     ...goalieStats.filter((r) => !rosterIds.has(r.id)).map((r) => ({ ...r, ...flags(r.id, false) })),
   ];
-  return { seasonId, teamGamesPlayed, rosterAvailable, skaters, goalies };
+  return { seasonId, teamGamesPlayed, rosterAvailable, syncedAt, skaters, goalies };
 }

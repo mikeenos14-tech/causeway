@@ -49,6 +49,16 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      # Every club's current roster and headshots (32 calls). The Roster
+      # pages read this instead of calling the NHL at page-load time. A
+      # team whose roster doesn't come back complete keeps its last good
+      # roster; never blocks the rest of the run.
+      - name: Sync current rosters and headshots
+        timeout-minutes: 5
+        continue-on-error: true
+        run: npx tsx scripts/sync-rosters.ts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
       # A brand-new player can land as "A. Smits" (box-score short name)
       # when his team's roster lags; this fills in the real name hourly.
       - name: Repair abbreviated player names
@@ -112,15 +122,6 @@ jobs:
       - name: Cross-check the site's data against the NHL
         timeout-minutes: 15
         run: npx tsx scripts/qa/cross-check-nhl.ts
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      # Official headshots for everyone on a current NHL roster (32 roster
-      # calls). Never blocks the rest of the run; a bad sync keeps
-      # yesterday's photos.
-      - name: Sync player headshots
-        timeout-minutes: 5
-        continue-on-error: true
-        run: npx tsx scripts/sync-headshots.ts
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
       # Every team's live Roster page against the NHL's current roster:

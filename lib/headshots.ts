@@ -1,6 +1,6 @@
 import { pool } from "./db";
 
-// Official NHL headshot URLs (player_headshots, synced daily from current
+// Official NHL headshot URLs (player_headshots, synced hourly from current
 // rosters) for a set of players, keyed by player id. Players with no photo
 // on file are simply absent; <Headshot> shows their initials instead.
 export async function getHeadshots(ids: number[]): Promise<Record<number, string>> {

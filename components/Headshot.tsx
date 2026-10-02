@@ -2,7 +2,7 @@ import Image from "next/image";
 
 // A player's official NHL headshot, cropped to a circle on the card colour.
 // Only players on a current NHL roster have one (player_headshots, synced
-// daily); everyone else gets their initials, so lists keep their rhythm.
+// hourly); everyone else gets their initials, so lists keep their rhythm.
 //
 // The NHL's photos are head-and-shoulders, so at list sizes the face would
 // be a few pixels wide; the image is drawn larger than the circle and
