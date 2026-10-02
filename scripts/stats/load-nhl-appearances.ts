@@ -9,6 +9,12 @@
 // A row whose player's log is missing stays null, and nothing from that
 // game or season is shown (see lib/history-data.ts, lib/roster-seasons.ts).
 //
+// One exception, found 2026-10-02: the NHL's game log for Rick Wilson
+// (8452477, 1973-77) is empty though he played 239 games. When a player's
+// season log is empty but his box rows have stats, the rows are marked
+// played only if their count equals his official games played (player
+// page); otherwise they stay unmarked.
+//
 // Usage: npx tsx --env-file=.env.local scripts/stats/load-nhl-appearances.ts
 
 import { Client } from "pg";
@@ -41,11 +47,32 @@ async function main() {
       }
       return logs.get(k)!;
     };
+    // Empty logs for a player with stats in the box: count-check against the
+    // official games played instead (see header).
+    const emptyLogWithStats = new Map<number, typeof rows>();
+    for (const r of rows) {
+      if (r.game_type !== "regular") continue;
+      const log = logFor(Number(r.player_id), 2);
+      if (log && log.size === 0) emptyLogWithStats.set(Number(r.player_id), [...(emptyLogWithStats.get(Number(r.player_id)) ?? []), r]);
+    }
+    const countVerified = new Set<number>();
+    for (const [pid, prs] of emptyLogWithStats) {
+      if (!prs.some((r) => r.goals || r.assists || r.pim || r.sog || r.pm)) continue;
+      const land = await fetch(`https://api-web.nhle.com/v1/player/${pid}/landing`).then((x) => (x.ok ? x.json() : null)).catch(() => null);
+      const gp = (land?.seasonTotals ?? []).filter((t: { season: number; leagueAbbrev: string; gameTypeId: number }) => String(t.season) === season && t.leagueAbbrev === "NHL" && t.gameTypeId === 2).reduce((a: number, t: { gamesPlayed?: number }) => a + (t.gamesPlayed ?? 0), 0);
+      if (gp > 0 && gp === prs.length) countVerified.add(pid);
+      console.log(`  ${season} player ${pid}: empty game log, ${prs.length} box rows, official GP ${gp} -> ${gp === prs.length ? "all played" : "left unmarked"}`);
+    }
     const played: [number, number][] = [], notPlayed: [number, number][] = [];
     const conflictGames = new Set<number>();
     const boxKeys = new Set(rows.map((r) => `${r.game_id}|${r.player_id}`));
     for (const r of rows) {
       const log = logFor(Number(r.player_id), r.game_type === "playoff" ? 3 : 2);
+      if (r.game_type === "regular" && emptyLogWithStats.has(Number(r.player_id)) && emptyLogWithStats.get(Number(r.player_id))!.some((x) => x.goals || x.assists || x.pim || x.sog || x.pm)) {
+        if (countVerified.has(Number(r.player_id))) played.push([Number(r.game_id), Number(r.player_id)]);
+        else totals.unmarked++;
+        continue;
+      }
       if (!log) {
         totals.unmarked++;
         continue;
@@ -80,7 +107,9 @@ async function main() {
     await mark(notPlayed, false);
     if (conflictGames.size) {
       await db.query(
-        `update nhl_box_checks set ok = false, sog_ok = false, reason = 'appearance: a player the NHL says didn''t play has stats in the box' where game_id = any($1)`,
+        // Only games that passed every other check: a game already failing
+        // keeps its original reason.
+        `update nhl_box_checks set ok = false, sog_ok = false, reason = 'appearance: a player the NHL says didn''t play has stats in the box' where game_id = any($1) and ok`,
         [[...conflictGames]],
       );
     }

@@ -13,6 +13,10 @@ const KNOWN = new Map([
   // NHL player page and game log: 1 NHL game (1927-28, otherwise with the
   // Can-Pro Toronto Ravinas); the stats API summary says 2. Ours: 1.
   ["19271928|8448197", "NHL sources disagree (player page and game log: 1 GP; stats summary: 2)"],
+  // Rick Wilson's NHL game logs are empty; where his box rows don't match his
+  // official GP the rows stay unmarked and the team-season isn't shown.
+  ["19731974|8452477", "game log empty at the NHL; rows unmarked, MTL 1973-74 not offered"],
+  ["19751976|8452477", "game log empty at the NHL; rows unmarked, STL 1975-76 not offered"],
 ]);
 
 const DEFAULT = ["19251926", "19371938", "19501951", "19591960", "19661967", "19701971", "19801981", "19871988", "19951996", "20022003", "20052006"];
@@ -24,14 +28,15 @@ async function nhlSeason(season: string): Promise<any[]> {
   const sort = encodeURIComponent(JSON.stringify([{ property: "playerId", direction: "ASC" }]));
   for (let start = 0; ; start += 100) {
     let r: any = null;
-    for (let i = 0; i < 5 && !r; i++) {
+    for (let i = 0; i < 8 && !r; i++) {
       const res = await fetch(`https://api.nhle.com/stats/rest/en/skater/summary?isAggregate=false&isGame=false&start=${start}&limit=100&sort=${sort}&cayenneExp=${encodeURIComponent(`seasonId=${season} and gameTypeId=2`)}`);
       if (res.ok) r = await res.json();
-      else await new Promise((x) => setTimeout(x, 2000 * (i + 1)));
+      else await new Promise((x) => setTimeout(x, 5000 * (i + 1)));
     }
     if (!r) throw new Error(`NHL stats unavailable for ${season}`);
     out.push(...r.data);
     if (r.data.length < 100) break;
+    await new Promise((x) => setTimeout(x, 250));
   }
   return out;
 }
