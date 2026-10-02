@@ -97,6 +97,14 @@ export const ELO = {
     reversion: 0.4,
     otWinnerScore: 0.75,
   },
+  // Pregame win chance (OT and shootouts count as wins) from the pregame
+  // rating gap incl. era home ice: p = 1 / (1 + exp(-(intercept + slope *
+  // gap))). Fitted by scripts/stats/calibrate-elo-winprob.ts on 2005-06 on
+  // training seasons (20,464 games); on the held-out seasons (4,854 games)
+  // log loss 0.6737 vs 0.6882 for the no-skill baseline, Brier 0.2405 vs
+  // 0.2475, average calibration error 2.7 points. Refit if the Elo
+  // parameters change. Regular season only.
+  winProb: { intercept: 0.0404, slope: 0.005443, calibrationErrorPts: 2.7, heldOutGames: 4854 },
   // Games that aren't real results: the 1918 Montreal Wanderers forfeits
   // (their arena burned down; Montreal and Toronto were credited 1-0 wins).
   excludeGameIds: [1917020035, 1917020036],

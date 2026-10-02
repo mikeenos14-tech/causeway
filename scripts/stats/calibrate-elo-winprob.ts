@@ -9,7 +9,7 @@
 // Usage: npx tsx --env-file=.env.local scripts/stats/calibrate-elo-winprob.ts
 
 import { pool } from "../../lib/db";
-import { ELO, isHeldOutSeason } from "../../config/stats";
+import { ELO, eraOf, isHeldOutSeason } from "../../config/stats";
 
 type G = { season: string; diff: number; homeWin: number };
 
@@ -23,7 +23,8 @@ async function main() {
      where g.game_type = 'regular' and g.season >= '20052006' and g.home_score <> g.away_score`,
   );
   const homeIce = ELO.params.homeIce;
-  const games: G[] = rows.map((r) => ({ season: r.season, diff: r.rh - r.ra + (r.season >= "20132014" ? homeIce.modern : homeIce["cap-shootout"]), homeWin: r.home_win }));
+  // Home ice exactly as the Elo model applies it (by era, config ERAS).
+  const games: G[] = rows.map((r) => ({ season: r.season, diff: r.rh - r.ra + (homeIce[eraOf(r.season).id] ?? 0), homeWin: r.home_win }));
   const train = games.filter((g) => !isHeldOutSeason(g.season));
   const test = games.filter((g) => isHeldOutSeason(g.season));
 
@@ -56,6 +57,15 @@ async function main() {
   for (const g of test) { const p = prob(g.diff); const k = Math.min(9, Math.floor(p * 20) - 5); const e = buckets.get(k) ?? { n: 0, p: 0, w: 0 }; e.n++; e.p += p; e.w += g.homeWin; buckets.set(k, e); }
   for (const [, e] of [...buckets.entries()].sort((x, y) => x[0] - y[0])) if (e.n >= 30) console.log(`  predicted ${(100 * e.p / e.n).toFixed(1)}%  actual ${(100 * e.w / e.n).toFixed(1)}%  (n=${e.n})`);
   const spread = test.map((g) => prob(g.diff));
+  let ece = 0;
+  const sorted = test.map((g) => ({ p: prob(g.diff), w: g.homeWin })).sort((x, y) => x.p - y.p);
+  for (let i = 0; i < 10; i++) {
+    const s = sorted.slice(Math.floor((i * sorted.length) / 10), Math.floor(((i + 1) * sorted.length) / 10));
+    const p = s.reduce((t, x) => t + x.p, 0) / s.length, w = s.reduce((t, x) => t + x.w, 0) / s.length;
+    ece += (Math.abs(p - w) * s.length) / sorted.length;
+    console.log(`  decile ${i + 1}: predicted ${(100 * p).toFixed(1)}%  actual ${(100 * w).toFixed(1)}%`);
+  }
+  console.log(`expected calibration error: ${(100 * ece).toFixed(2)} points`);
   console.log(`range of predictions: ${(100 * Math.min(...spread)).toFixed(0)}%–${(100 * Math.max(...spread)).toFixed(0)}%`);
   await pool.end();
 }

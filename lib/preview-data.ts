@@ -10,6 +10,7 @@ import { nhlJson } from "./nhl-fetch";
 import { getLeagueComparisonSeason, getLeagueTeamStats, rankTeam, type LeagueTeamStats } from "./league-data";
 import { getUpcomingMilestones, type Milestone } from "./milestones-data";
 import { getClubSeason, openerTag } from "./nhl-schedule";
+import { getEloOdds, type EloOdds } from "./elo-odds";
 
 const API = "https://api-web.nhle.com/v1";
 
@@ -40,6 +41,7 @@ export type Preview = {
   statsSeasonLabel: string;
   tag: string | null; // "Opening Night" / "Home Opener", from the home team's schedule
   meetings: { id: number; date: Date; gameType: string; awayAbbrev: string; homeAbbrev: string; awayScore: number; homeScore: number; endType: string }[];
+  odds: EloOdds | null; // pregame Elo win chances, regular season only
 };
 
 const seasonLabel = (id: string) => `${id.slice(0, 4)}-${id.slice(6, 8)}`;
@@ -106,6 +108,8 @@ export async function getPreview(gameId: number): Promise<Preview | null> {
     home,
     statsSeasonLabel,
     meetings,
+    // Never blocks the preview: no odds rather than an error.
+    odds: await getEloOdds(awayApi.id, homeApi.id, season, landing.gameType).catch(() => null),
   };
 }
 

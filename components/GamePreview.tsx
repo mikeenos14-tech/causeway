@@ -8,6 +8,7 @@ import { LiveScoreboard } from "@/components/LiveScoreboard";
 
 import { AskAboutGame, gameQuestions } from "@/components/AskAboutGame";
 import { TeamLogo } from "@/components/TeamLogo";
+import { EloOddsBar } from "@/components/EloOdds";
 
 const H2 = { margin: "0 0 .9rem", fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "1.35rem", textTransform: "uppercase" as const, letterSpacing: ".02em" };
 const CARD = { background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, padding: "1.1rem 1.3rem" } as const;
@@ -58,6 +59,10 @@ export function GamePreview({ p }: { p: Preview }) {
           )}
         </LiveScoreboard>
       </section>
+
+      {p.odds && !(p.state === "LIVE" || p.state === "CRIT" || p.state === "FINAL" || p.state === "OFF") && (
+        <EloOddsBar odds={p.odds} away={{ abbrev: p.away.abbrev, name: p.away.name }} home={{ abbrev: p.home.abbrev, name: p.home.name }} />
+      )}
 
       {/* Tale of the tape */}
       {(p.away.stats.length > 0 || p.home.stats.length > 0) && (

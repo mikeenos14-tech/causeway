@@ -27,7 +27,7 @@ import { getLatestSeasonId } from "@/lib/schedule-data";
 import { getAllSeasonSeriesForTeam } from "@/lib/season-series-data";
 import { getUpcomingMilestones, milestoneText } from "@/lib/milestones-data";
 import { LiveScoreboard } from "@/components/LiveScoreboard";
-import { teamNickname } from "@/lib/team-names";
+import { teamNickname, TEAM_NICKNAMES } from "@/lib/team-names";
 import { questionOfTheDay, getCachedAnswer, answerTeaser, etDate } from "@/lib/question-of-the-day";
 import { getClubSeason, isFinal, isInProgress, formatStartTimeET, openerTag, chooseHero, type ClubGame } from "@/lib/nhl-schedule";
 import { nextGameFlavor } from "@/lib/next-game";
@@ -42,6 +42,7 @@ import { TeamLogo } from "@/components/TeamLogo";
 import { Headshot } from "@/components/Headshot";
 import { getHeadshots } from "@/lib/headshots";
 import { ThisDay } from "@/components/ThisDay";
+import { getEloOddsByAbbrev } from "@/lib/elo-odds";
 
 const H2 = { margin: 0, fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "1.5rem", textTransform: "uppercase" as const, letterSpacing: ".02em" };
 const TILE_LABEL = { fontSize: ".78rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase" as const, letterSpacing: ".06em", marginBottom: 8 };
@@ -118,6 +119,10 @@ export async function TeamDashboard({ abbrev, compact = false }: { abbrev: strin
       ? await Promise.all([getAllSeasonSeriesForTeam(abbrev, seasonId), newSeasonPending ? getSeasonSummary(abbrev, seasonId) : Promise.resolve(null)])
       : [[], null];
   const h2h = next ? h2hRows.find((r) => r.opp_abbrev === next.opponent) : undefined;
+  // Pregame Elo win chance for the next game (regular season), this team's side.
+  const odds =
+    hero === "preview" && next ? await getEloOddsByAbbrev(next.isHome ? next.opponent : abbrev, next.isHome ? abbrev : next.opponent, next.season, next.gameType).catch(() => null) : null;
+  const oddsLine = odds && next ? `Win chance (Elo): ${TEAM_NICKNAMES[abbrev] ?? abbrev} ${Math.round((next.isHome ? odds.home : odds.away) * 100)}%` : null;
 
   // Roster changes matter most around the turn of a season: before this
   // team's first game and through its first 10.
@@ -180,6 +185,7 @@ export async function TeamDashboard({ abbrev, compact = false }: { abbrev: strin
                       ? null
                       : `First meeting with ${next.opponent} this season`
                 }
+                oddsLine={oddsLine}
                 lastSeasonLine={
                   lastSeason
                     ? `${formatSeasonLabel(lastSeason.seasonId)}: ${lastSeason.wins}-${lastSeason.losses}-${lastSeason.otl}, ${lastSeason.points} pts · ${
@@ -417,6 +423,7 @@ function PreviewHero({
   h2hLine,
   lastSeasonLine,
   lastGame,
+  oddsLine = null,
 }: {
   game: ClubGame;
   tag: string;
@@ -426,6 +433,7 @@ function PreviewHero({
   titleSize: string;
   h2hLine: string | null;
   lastSeasonLine: string | null;
+  oddsLine?: string | null;
   lastGame: { id: number; game_date: Date; home_abbrev: string; home_score: number; away_score: number; game_end_type: string } | null;
 }) {
   const flavor = nextGameFlavor(game, abbrev);
@@ -455,6 +463,13 @@ function PreviewHero({
         <ul style={{ listStyle: "none", padding: 0, margin: "0 0 1.5rem", display: "grid", gap: 4, fontSize: ".92rem", color: "var(--text-secondary)" }}>
           {lastSeasonLine && <li>{lastSeasonLine}</li>}
           {h2hLine && <li>{h2hLine}</li>}
+          {oddsLine && (
+            <li>
+              <Link href={`/games/${game.id}`} style={{ color: "inherit", textDecoration: "none" }}>
+                {oddsLine}
+              </Link>
+            </li>
+          )}
           {flavor && <li style={{ fontFamily: "var(--font-editorial)", fontStyle: "italic" }}>{flavor}</li>}
         </ul>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
