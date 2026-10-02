@@ -88,8 +88,8 @@ Owner decisions so far (2026-10-01): history back to **1917**; Utah inherits Ari
 | Ties: p_win and p_tie separately | **Built** | Chart plots win + tie/2 in tie eras |
 | OT and shootout rates by era; playoff OT only | **Built** | Rates per OT rule; 1928-42 ten full minutes; 1983-2005 tied OT decays toward a tie |
 | Monotonicity enforcement | **Built** | 2D isotonic on the table; tested over 9,240 states |
-| Live: jump on goals, drift per minute, Bruins' side | Next | /api/live + scoreboard |
-| UI: live chart, biggest swing, historical game charts | **Built** (historical + finished games) | Live chart comes with the live item |
+| Live: jump on goals, drift per minute, Bruins' side | **Built** | /api/live + scoreboard; replay-tested on 3,176 recorded responses (scripts/stats/test-live-wp.ts) |
+| UI: live chart, biggest swing, historical game charts | **Built** | Live chart on the game page, win-chance bar on the home hero |
 | V2 manpower state | Planned | 2009-10 on (situation codes) |
 | V2 empty net | Planned | 2009-10 on |
 | V2 team strength (Elo) | **Built** | kappa 0.003 fitted on training seasons; beats no-strength 0.475 vs 0.490 log loss |
