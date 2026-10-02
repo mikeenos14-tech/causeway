@@ -284,3 +284,18 @@ html:not([data-banner-raised]) .banner-raise { animation: banner-raise 900ms cub
 .season-select { background: var(--surface-1); color: var(--text-primary); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font-size: 16px; font-family: var(--font-body); cursor: pointer; }
 .season-select:focus { outline: 2px solid var(--gold); outline-offset: 1px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+/* "Bruins history since 1924" under the wordmark (the approved lockup). */
+.masthead-tagline {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.6rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-top: 3px;
+  white-space: nowrap;
+}
+@media (max-width: 480px) {
+  .tagline-long { display: none; }
+}

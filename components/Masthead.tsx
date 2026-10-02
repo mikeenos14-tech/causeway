@@ -18,7 +18,14 @@ export function Masthead({ scoreline }: { scoreline?: React.ReactNode }) {
               <BannerMark width={28} />
             </span>
           </span>
-          Causeway
+          <span style={{ display: "flex", flexDirection: "column", lineHeight: 1 }}>
+            Causeway
+            {/* The approved full lockup: the first game on file is Dec 1, 1924. */}
+            <span className="masthead-tagline">
+              {/* Phones get the short form so the search button keeps its row. */}
+              <span className="tagline-long">Bruins history </span>since 1924
+            </span>
+          </span>
         </Link>
         <nav className="masthead-nav" style={{ fontFamily: "var(--font-display)", fontSize: "1.15rem" }}>
           <Link href="/" style={{ color: "#d8d6cc", textDecoration: "none" }}>
