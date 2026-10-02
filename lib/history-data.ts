@@ -111,6 +111,24 @@ export type HistoryGame = {
   periods: { period: number; periodType: string; home: number; away: number; homeShots: number | null; awayShots: number | null }[];
   iconic: { label: string; story: string; featurable: boolean } | null;
   labels: string[];
+  // Per-player box score, only when the game passed every check against
+  // the play-by-play (scripts/stats/load-nhl-skaters.ts). shots is false
+  // when the era didn't track shots or they don't add up to the team total.
+  box: {
+    shots: boolean;
+    plusMinus: boolean;
+    teams: {
+      teamId: number;
+      code: string;
+      skaters: { id: number; name: string; pos: string | null; g: number; a: number; pim: number; sog: number | null; pm: number | null }[];
+      goalies: { id: number; name: string; decision: string | null; toi: number | null; sa: number | null; sv: number | null; ga: number | null }[];
+    }[];
+  } | null;
+  boxWithheld: string | null; // why a box score exists but isn't shown
+  // The box score credits assists the play-by-play doesn't have (102 of
+  // these games are from the 1930s): a goal with no assist listed may have
+  // had one, so it's "assist not recorded", never "unassisted".
+  assistsUncertain: boolean;
 };
 
 const clock = (sec: number) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
@@ -179,6 +197,8 @@ export async function getHistoryGame(gameId: number): Promise<HistoryGame | null
     periods: periods.map((r) => ({ period: r.period, periodType: r.period_type, home: r.home_goals, away: r.away_goals, homeShots: r.home_shots, awayShots: r.away_shots })),
     iconic: iconic[0] ? { label: iconic[0].label, story: iconic[0].short_story, featurable: iconic[0].featurable } : null,
     labels: labels.map((r) => r.label),
+    ...(await historyBox(g)),
+    assistsUncertain: (await pool.query(`select 1 from nhl_box_checks where game_id = $1 and not ok and reason like 'assist%'`, [gameId])).rowCount! > 0,
   };
 }
 
@@ -275,4 +295,41 @@ export async function getHistoricalPlayoffSeries(teamId: number): Promise<Histor
       games: gs.map((g) => ({ id: g.id, teamScore: g.team_score, oppScore: g.opp_score, end: g.team_score === g.opp_score ? "tie" : g.final_state === "OT" ? "overtime" : "regulation" })),
     };
   });
+}
+
+async function historyBox(g: { id: number; home_team_id: number; away_team_id: number; home_code: string; away_code: string }): Promise<Pick<HistoryGame, "box" | "boxWithheld">> {
+  // Only once every row is marked from the NHL's game logs: old boxscores
+  // also list players who didn't play (all zeros), so an unmarked box can't
+  // say who was in the game.
+  const { rows: [marks] } = await pool.query(`select count(*)::int n, count(played)::int marked from nhl_skater_games where game_id = $1`, [g.id]);
+  if (!marks || marks.n === 0 || marks.marked < marks.n) return { box: null, boxWithheld: null };
+  const { rows: [check] } = await pool.query(`select ok, sog_ok, reason from nhl_box_checks where game_id = $1`, [g.id]);
+  if (!check) return { box: null, boxWithheld: null };
+  if (!check.ok) {
+    const kind = String(check.reason ?? "").split(" ")[0];
+    const what = kind === "goals" || kind === "scorer" ? "who scored" : kind.startsWith("assist") ? "assists" : kind === "pim" ? "penalty minutes" : "the numbers";
+    return { box: null, boxWithheld: `The NHL's box score and its play-by-play disagree on ${what} for this game, so neither's player numbers are shown.` };
+  }
+  const [{ rows: sk }, { rows: gk }] = await Promise.all([
+    pool.query(
+      `select s.player_id, s.team_id, s.position, s.goals, s.assists, s.pim, s.sog, s.plus_minus, coalesce(p.full_name, 'Unknown player') as name
+       from nhl_skater_games s left join nhl_players p on p.id = s.player_id where s.game_id = $1 and s.played
+       order by s.goals + s.assists desc, s.goals desc, name`,
+      [g.id],
+    ),
+    pool.query(
+      `select x.player_id, x.team_id, x.decision, x.toi_sec, x.shots_against, x.saves, x.goals_against, coalesce(p.full_name, 'Unknown player') as name
+       from nhl_goalie_games x left join nhl_players p on p.id = x.player_id where x.game_id = $1 order by x.started desc`,
+      [g.id],
+    ),
+  ]);
+  const teams = [
+    { teamId: g.away_team_id, code: g.away_code },
+    { teamId: g.home_team_id, code: g.home_code },
+  ].map((t) => ({
+    ...t,
+    skaters: sk.filter((r) => Number(r.team_id) === Number(t.teamId)).map((r) => ({ id: Number(r.player_id), name: r.name, pos: r.position, g: r.goals, a: r.assists, pim: r.pim, sog: r.sog, pm: r.plus_minus })),
+    goalies: gk.filter((r) => Number(r.team_id) === Number(t.teamId)).map((r) => ({ id: Number(r.player_id), name: r.name, decision: r.decision, toi: r.toi_sec, sa: r.shots_against, sv: r.saves, ga: r.goals_against })),
+  }));
+  return { box: { shots: check.sog_ok && sk.some((r) => r.sog != null), plusMinus: sk.some((r) => r.plus_minus != null), teams }, boxWithheld: null };
 }

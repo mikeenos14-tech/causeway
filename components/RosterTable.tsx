@@ -86,8 +86,39 @@ function Badge({ b }: { b?: "C" | "A" }) {
   );
 }
 
-export function SkaterRosterTable({ rows, badges = {}, headshots = {} }: { rows: (SkaterRosterRow & Partial<RosterFlags>)[]; badges?: Record<number, "C" | "A">; headshots?: Record<number, string> }) {
+// Columns a season can leave out (ones its era didn't track): older
+// seasons from the NHL's boxscores have no ice time, hits, blocks or PP
+// goals here, and no shots or plus-minus before 1959-60.
+export type SkaterColumn = "plus_minus" | "toi" | "shots" | "hits" | "blocks" | "pp_goals";
+
+type SkaterCol = { key: string; label: string; field: keyof SkaterRosterRow; hint?: string; omit?: SkaterColumn; cell: (r: SkaterRosterRow) => React.ReactNode };
+const SKATER_COLS: SkaterCol[] = [
+  { key: "g", label: "G", field: "goals", cell: (r) => r.goals },
+  { key: "a", label: "A", field: "assists", cell: (r) => r.assists },
+  { key: "p", label: "P", field: "points", cell: (r) => <span style={{ fontWeight: 700, color: "var(--gold)" }}>{r.points}</span> },
+  { key: "pm", label: "+/-", field: "plus_minus", omit: "plus_minus", cell: (r) => (r.plus_minus > 0 ? `+${r.plus_minus}` : r.plus_minus) },
+  { key: "toi", label: "TOI/GP", field: "toiSecondsPerGame", omit: "toi", cell: (r) => toi(r.toiSecondsPerGame) },
+  { key: "pim", label: "PIM", field: "pim", cell: (r) => r.pim },
+  { key: "s", label: "S", field: "shots", omit: "shots", cell: (r) => r.shots },
+  { key: "sp", label: "S%", field: "shootingPct", omit: "shots", cell: (r) => (r.shootingPct != null ? `${(r.shootingPct * 100).toFixed(1)}%` : "—") },
+  { key: "hit", label: "HIT", field: "hits", omit: "hits", cell: (r) => r.hits },
+  { key: "blk", label: "BLK", field: "blocks", omit: "blocks", cell: (r) => r.blocks },
+  { key: "ppg", label: "PPG", field: "pp_goals", hint: "Power-play goals", omit: "pp_goals", cell: (r) => r.pp_goals },
+];
+
+export function SkaterRosterTable({
+  rows,
+  badges = {},
+  headshots = {},
+  omit = [],
+}: {
+  rows: (SkaterRosterRow & Partial<RosterFlags>)[];
+  badges?: Record<number, "C" | "A">;
+  headshots?: Record<number, string>;
+  omit?: SkaterColumn[];
+}) {
   const [sort, setSort] = useState<{ field: keyof SkaterRosterRow; dir: SortDir }>({ field: "points", dir: "desc" });
+  const cols = SKATER_COLS.filter((c) => !c.omit || !omit.includes(c.omit));
 
   const sorted = useMemo(() => {
     const copy = [...rows];
@@ -101,23 +132,15 @@ export function SkaterRosterTable({ rows, badges = {}, headshots = {} }: { rows:
         default sort column, points, is off-screen at 375px). */}
     <p className="swipe-hint">Swipe the table for more columns →</p>
     <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", overflowX: "auto" }}>
-      <table className="box-score-table sticky-first" style={{ minWidth: 860, padding: "0 18px" }}>
+      <table className="box-score-table sticky-first" style={{ minWidth: cols.length > 8 ? 860 : 560, padding: "0 18px" }}>
         <thead>
           <tr>
             <th style={{ textAlign: "left" }}>Player</th>
             <SortableHead label="Pos" field="position" sort={sort} setSort={setSort} />
             <SortableHead label="GP" field="games" sort={sort} setSort={setSort} />
-            <SortableHead label="G" field="goals" sort={sort} setSort={setSort} />
-            <SortableHead label="A" field="assists" sort={sort} setSort={setSort} />
-            <SortableHead label="P" field="points" sort={sort} setSort={setSort} />
-            <SortableHead label="+/-" field="plus_minus" sort={sort} setSort={setSort} />
-            <SortableHead label="TOI/GP" field="toiSecondsPerGame" sort={sort} setSort={setSort} />
-            <SortableHead label="PIM" field="pim" sort={sort} setSort={setSort} />
-            <SortableHead label="S" field="shots" sort={sort} setSort={setSort} />
-            <SortableHead label="S%" field="shootingPct" sort={sort} setSort={setSort} />
-            <SortableHead label="HIT" field="hits" sort={sort} setSort={setSort} />
-            <SortableHead label="BLK" field="blocks" sort={sort} setSort={setSort} />
-            <SortableHead label="PPG" hint="Power-play goals" field="pp_goals" sort={sort} setSort={setSort} />
+            {cols.map((c) => (
+              <SortableHead key={c.key} label={c.label} hint={c.hint} field={c.field} sort={sort} setSort={setSort} />
+            ))}
           </tr>
         </thead>
         <tbody>
@@ -126,23 +149,15 @@ export function SkaterRosterTable({ rows, badges = {}, headshots = {} }: { rows:
               <NameCell r={r} headshot={headshots[r.id]} badge={badges[r.id]} />
               <td>{r.position ?? "—"}</td>
               <td>{r.games}</td>
-              {r.games === 0 ? (
+              {cols.map((c) =>
                 // Hasn't played yet: no numbers, not zeros.
-                Array.from({ length: 11 }, (_, i) => <td key={i} style={{ color: "var(--text-muted)" }}>—</td>)
-              ) : (
-                <>
-                  <td>{r.goals}</td>
-                  <td>{r.assists}</td>
-                  <td style={{ fontWeight: 700, color: "var(--gold)" }}>{r.points}</td>
-                  <td>{r.plus_minus > 0 ? `+${r.plus_minus}` : r.plus_minus}</td>
-                  <td>{toi(r.toiSecondsPerGame)}</td>
-                  <td>{r.pim}</td>
-                  <td>{r.shots}</td>
-                  <td>{r.shootingPct != null ? `${(r.shootingPct * 100).toFixed(1)}%` : "—"}</td>
-                  <td>{r.hits}</td>
-                  <td>{r.blocks}</td>
-                  <td>{r.pp_goals}</td>
-                </>
+                r.games === 0 ? (
+                  <td key={c.key} style={{ color: "var(--text-muted)" }}>
+                    —
+                  </td>
+                ) : (
+                  <td key={c.key}>{c.cell(r)}</td>
+                ),
               )}
             </tr>
           ))}
@@ -153,7 +168,22 @@ export function SkaterRosterTable({ rows, badges = {}, headshots = {} }: { rows:
   );
 }
 
-export function GoalieRosterTable({ rows, badges = {}, headshots = {} }: { rows: (GoalieRosterRow & Partial<RosterFlags>)[]; badges?: Record<number, "C" | "A">; headshots?: Record<number, string> }) {
+// ties: show a T column (seasons before 2005-06). otl: show OTL (from
+// 1999-2000; before that an overtime loss was a loss). gaa: goals against
+// average needs ice time, which older seasons don't all have.
+export function GoalieRosterTable({
+  rows,
+  badges = {},
+  headshots = {},
+  ties = false,
+  otl = true,
+}: {
+  rows: (GoalieRosterRow & Partial<RosterFlags> & { ties?: number })[];
+  badges?: Record<number, "C" | "A">;
+  headshots?: Record<number, string>;
+  ties?: boolean;
+  otl?: boolean;
+}) {
   const [sort, setSort] = useState<{ field: keyof GoalieRosterRow; dir: SortDir }>({ field: "wins", dir: "desc" });
 
   const sorted = useMemo(() => {
@@ -161,6 +191,7 @@ export function GoalieRosterTable({ rows, badges = {}, headshots = {} }: { rows:
     copy.sort((a, b) => compareRows(a, b, sort.field, sort.dir, -Infinity));
     return copy;
   }, [rows, sort]);
+  const statCount = 5 + (ties ? 1 : 0) + (otl ? 1 : 0);
 
   return (
     <>
@@ -175,7 +206,8 @@ export function GoalieRosterTable({ rows, badges = {}, headshots = {} }: { rows:
             <SortableHead label="GP" field="games" sort={sort} setSort={setSort} />
             <SortableHead label="W" field="wins" sort={sort} setSort={setSort} />
             <SortableHead label="L" field="losses" sort={sort} setSort={setSort} />
-            <SortableHead label="OTL" field="otl" sort={sort} setSort={setSort} />
+            {ties && <th>T</th>}
+            {otl && <SortableHead label="OTL" field="otl" sort={sort} setSort={setSort} />}
             <SortableHead label="SO" field="shutouts" sort={sort} setSort={setSort} />
             <SortableHead label="SV%" field="savePct" sort={sort} setSort={setSort} />
             <SortableHead label="GAA" field="gaa" sort={sort} setSort={setSort} />
@@ -187,12 +219,13 @@ export function GoalieRosterTable({ rows, badges = {}, headshots = {} }: { rows:
               <NameCell r={r} headshot={headshots[r.id]} badge={badges[r.id]} />
               <td>{r.games}</td>
               {r.games === 0 ? (
-                Array.from({ length: 6 }, (_, i) => <td key={i} style={{ color: "var(--text-muted)" }}>—</td>)
+                Array.from({ length: statCount }, (_, i) => <td key={i} style={{ color: "var(--text-muted)" }}>—</td>)
               ) : (
                 <>
                   <td>{r.wins}</td>
                   <td>{r.losses}</td>
-                  <td>{r.otl}</td>
+                  {ties && <td>{r.ties ?? 0}</td>}
+                  {otl && <td>{r.otl}</td>}
                   <td>{r.shutouts}</td>
                   <td style={{ fontWeight: 700, color: "var(--gold)" }}>{formatSavePct(r.savePct)}</td>
                   <td>{r.gaa != null ? r.gaa.toFixed(2) : "—"}</td>

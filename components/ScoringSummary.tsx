@@ -60,7 +60,9 @@ export function ScoringSummary({ g, linkPlayers = false }: { g: HistoryGame; lin
                     )}
                     <span style={{ display: "block", color: "var(--text-secondary)", fontSize: ".78rem" }}>
                       {x.assists.length === 0
-                        ? "unassisted"
+                        ? g.assistsUncertain
+                          ? "assist not recorded"
+                          : "unassisted"
                         : x.assists.map((a, k) => (
                             <span key={k}>
                               {k === 0 ? "from " : ", "}

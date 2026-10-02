@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { HistoryGame } from "@/lib/history-data";
 import { formatGameDate } from "@/lib/format-date";
 import { TeamLogo } from "@/components/TeamLogo";
+import { formatSavePct } from "@/lib/util/save-pct";
 import { ScoringSummary, periodName } from "@/components/ScoringSummary";
 
 // A game from before 2007-08, from the audited 1917-on history: the score,
@@ -145,6 +146,83 @@ export function HistoryGameView({ g, nav }: { g: HistoryGame; nav: { prev: { id:
           </div>
         </section>
       )}
+
+      {g.box && (
+        <section style={{ marginBottom: "2.25rem" }}>
+          <h2 style={H2}>Box Score</h2>
+          {g.box.teams.map((t) => (
+            <div key={t.teamId} style={{ marginBottom: "1.25rem" }}>
+              <div style={{ display: "flex", alignItems: "center", fontWeight: 700, margin: "0 0 .5rem", fontSize: ".95rem" }}>
+                <TeamLogo abbrev={t.code} size={22} gap={6} />
+                {t.code}
+              </div>
+              <div style={{ ...CARD, padding: "0 1rem", overflowX: "auto" }}>
+                <table className="box-score-table" style={{ minWidth: 360 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: "left" }}>Player</th>
+                      <th>G</th>
+                      <th>A</th>
+                      <th>P</th>
+                      {g.box!.plusMinus && <th>+/-</th>}
+                      <th>PIM</th>
+                      {g.box!.shots && <th>SOG</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {t.skaters.map((p) => (
+                      <tr key={p.id}>
+                        <td style={{ textAlign: "left" }}>
+                          {p.name}
+                          {p.pos && <span style={{ color: "var(--text-muted)", fontSize: ".72rem", marginLeft: 6 }}>{p.pos}</span>}
+                        </td>
+                        <td>{p.g}</td>
+                        <td>{p.a}</td>
+                        <td style={{ fontWeight: 700, color: p.g + p.a > 0 ? "var(--gold)" : undefined }}>{p.g + p.a}</td>
+                        {g.box!.plusMinus && <td>{p.pm == null ? "—" : p.pm > 0 ? `+${p.pm}` : p.pm}</td>}
+                        <td>{p.pim}</td>
+                        {g.box!.shots && <td>{p.sog ?? "—"}</td>}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {t.goalies.length > 0 && (
+                  <table className="box-score-table" style={{ minWidth: 360, borderTop: "1px solid var(--border)" }}>
+                    <thead>
+                      <tr>
+                        <th style={{ textAlign: "left" }}>Goalie</th>
+                        <th>Dec</th>
+                        <th>SA</th>
+                        <th>SV</th>
+                        <th>SV%</th>
+                        <th>TOI</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {t.goalies.map((x) => (
+                        <tr key={x.id}>
+                          <td style={{ textAlign: "left" }}>{x.name}</td>
+                          <td>{x.decision ?? "—"}</td>
+                          <td>{x.sa ?? "—"}</td>
+                          <td>{x.sv ?? "—"}</td>
+                          <td>{x.sa ? formatSavePct((x.sv ?? 0) / x.sa) : "—"}</td>
+                          <td>{x.toi != null ? `${Math.floor(x.toi / 60)}:${String(x.toi % 60).padStart(2, "0")}` : "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          ))}
+          <p style={{ fontSize: ".75rem", color: "var(--text-muted)", margin: 0 }}>
+            Checked against the play-by-play: every player&apos;s goals, assists and penalty minutes match.
+            {!g.box.plusMinus ? " Plus-minus wasn't kept until 1959-60." : ""}
+            {!g.box.shots ? (g.box.plusMinus ? " Shots are left off: they don't add up to the team's total in the NHL's records." : " Shots weren't kept by player until 1959-60.") : ""}
+          </p>
+        </section>
+      )}
+      {g.boxWithheld && <p style={{ fontSize: ".8rem", color: "var(--text-secondary)", margin: "-1rem 0 2.25rem" }}>No box score: {g.boxWithheld}</p>}
 
       <section style={{ marginBottom: "2.25rem" }}>
         <h2 style={H2}>Penalties</h2>
