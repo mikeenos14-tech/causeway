@@ -135,6 +135,8 @@ jobs:
           npx tsx scripts/stats/verify-iconic-games.ts
           npx tsx scripts/stats/build-elo.ts
           npx tsx scripts/stats/verify-elo-sql.ts
+          npx tsx scripts/stats/build-wp.ts
+          npx tsx scripts/stats/test-wp.ts
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
       # Reliability guard (docs/verification.md, layer 6): the site's data

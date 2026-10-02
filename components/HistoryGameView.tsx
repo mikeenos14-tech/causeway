@@ -1,9 +1,11 @@
 import Link from "next/link";
-import type { HistoryGame } from "@/lib/history-data";
+import { BOS_TEAM_ID, type HistoryGame } from "@/lib/history-data";
 import { formatGameDate } from "@/lib/format-date";
 import { TeamLogo } from "@/components/TeamLogo";
 import { formatSavePct } from "@/lib/util/save-pct";
 import { ScoringSummary, periodName } from "@/components/ScoringSummary";
+import { WinProbChart } from "@/components/WinProbChart";
+import type { WpTimeline } from "@/lib/wp-game";
 
 // A game from before 2007-08, from the audited 1917-on history: the score,
 // who scored when, penalties, period scores and shots where they exist.
@@ -47,7 +49,7 @@ function groupPenalties(pens: HistoryGame["penalties"]) {
   return out;
 }
 
-export function HistoryGameView({ g, nav }: { g: HistoryGame; nav: { prev: { id: number; date: string; label: string } | null; next: { id: number; date: string; label: string } | null } }) {
+export function HistoryGameView({ g, nav, wp }: { g: HistoryGame; wp?: WpTimeline | null; nav: { prev: { id: number; date: string; label: string } | null; next: { id: number; date: string; label: string } | null } }) {
   const homeWon = g.home.score > g.away.score;
   const awayWon = g.away.score > g.home.score;
   const end = g.finalState === "OT" ? (g.otPeriods > 1 ? `${g.otPeriods}OT` : "OT") : g.finalState === "SO" ? "SO" : g.finalState === "TIE" ? "Tie" : "";
@@ -111,6 +113,7 @@ export function HistoryGameView({ g, nav }: { g: HistoryGame; nav: { prev: { id:
       </section>
 
       <ScoringSummary g={g} />
+      {wp && <WinProbChart tl={wp} sideHome={g.away.id !== BOS_TEAM_ID} />}
 
       {g.periods.some((p) => p.homeShots != null) && (
         <section style={{ marginBottom: "2.25rem" }}>

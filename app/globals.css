@@ -346,3 +346,37 @@ html:not([data-banner-raised]) .banner-raise { animation: banner-raise 900ms cub
 @media (max-width: 359px) {
   .masthead-nav { gap: 9px !important; font-size: 1.05rem !important; }
 }
+
+/* Win probability chart (components/WinProbChart.tsx) */
+.wp-stats { display: flex; gap: 28px; flex-wrap: wrap; margin-bottom: 1rem; }
+.wp-stats > div { display: flex; flex-direction: column; min-width: 0; }
+.wp-stat-label { font-size: .72rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .05em; }
+.wp-stat-value { font-family: var(--font-display); font-size: 1.5rem; font-weight: 600; line-height: 1.15; }
+.wp-stat-note { font-size: .78rem; color: var(--text-secondary); }
+.wp-chart { position: relative; padding-left: 40px; }
+.wp-plot { position: relative; height: 200px; border-left: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.wp-plot svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.wp-draw { position: absolute; inset: 0; animation: wp-reveal 1.4s cubic-bezier(.3,.7,.3,1) both; }
+@keyframes wp-reveal { from { clip-path: inset(-10px 100% -10px 0); } to { clip-path: inset(-10px -10px -10px 0); } }
+@media (prefers-reduced-motion: reduce) { .wp-draw { animation: none; } }
+.wp-line { fill: none; stroke: var(--gold); stroke-width: 2.25px; stroke-linejoin: round; }
+.wp-area { fill: var(--gold); opacity: .1; }
+.wp-grid { position: absolute; left: 0; right: 0; border-top: 1px dotted var(--border); }
+.wp-grid-mid { border-top: 1px dashed var(--text-secondary); opacity: .45; }
+.wp-period { position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--border); opacity: .6; }
+.wp-ylabel { position: absolute; left: -40px; width: 34px; text-align: right; transform: translateY(-50%); font-size: .7rem; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.wp-xaxis { position: relative; height: 20px; font-size: .72rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .05em; }
+.wp-xaxis span { position: absolute; top: 4px; transform: translateX(-50%); }
+.wp-goal { position: absolute; width: 9px; height: 9px; border-radius: 50%; transform: translate(-50%, -50%); background: var(--surface-1, #222); border: 2px solid var(--text-secondary); }
+.wp-goal-ours { background: var(--gold); border-color: var(--gold); }
+.wp-goal-key { position: relative; display: inline-block; transform: none; vertical-align: -1px; }
+.wp-how { margin-top: .9rem; font-size: .85rem; color: var(--text-secondary); }
+.wp-how summary { cursor: pointer; font-weight: 600; }
+.wp-how p { margin: .5rem 0 0; line-height: 1.5; max-width: 68ch; }
+@media (max-width: 480px) {
+  .wp-plot { height: 170px; }
+  .wp-chart { padding-left: 34px; }
+  .wp-ylabel { left: -34px; width: 29px; }
+  .wp-stats { gap: 18px; }
+  .wp-stat-value { font-size: 1.3rem; }
+}

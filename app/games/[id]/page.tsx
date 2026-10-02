@@ -16,6 +16,8 @@ import { getPreview } from "@/lib/preview-data";
 import { TeamLogo } from "@/components/TeamLogo";
 import { formatSavePct } from "@/lib/util/save-pct";
 import { ScoringSummary, scoringIsComplete } from "@/components/ScoringSummary";
+import { WinProbChart } from "@/components/WinProbChart";
+import { getGameWpTimeline } from "@/lib/wp-game";
 
 function toi(seconds: number | null) {
   if (seconds == null) return "—";
@@ -59,12 +61,12 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
     const hist = await getHistoryGame(gameId);
     if (hist && hist.season < BOX_SCORES_FROM) {
       const navTeam = hist.home.id === BOS_TEAM_ID || hist.away.id === BOS_TEAM_ID ? BOS_TEAM_ID : hist.home.id;
-      const nav = await getHistoryAdjacent(gameId, navTeam);
+      const [nav, wp] = await Promise.all([getHistoryAdjacent(gameId, navTeam), getGameWpTimeline(gameId).catch(() => null)]);
       return (
         <>
           <Masthead />
           <main style={{ maxWidth: 1160, margin: "0 auto", padding: "3rem 24px 3.5rem" }}>
-            <HistoryGameView g={hist} nav={nav} />
+            <HistoryGameView g={hist} nav={nav} wp={wp} />
           </main>
           <Footer />
         </>
@@ -89,7 +91,7 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
   // only meaningful relative to one team's perspective.
   const bosInGame = game.home_abbrev === TARGET_TEAM_ABBREV || game.away_abbrev === TARGET_TEAM_ABBREV;
 
-  const [skaters, goalies, seasonSeries, playoffSeries, teamLines, scoring] = await Promise.all([
+  const [skaters, goalies, seasonSeries, playoffSeries, teamLines, scoring, wp] = await Promise.all([
     getGameSkaters(gameId),
     getGameGoalies(gameId),
     bosInGame && game.game_type === "regular" ? getSeasonSeriesAsOfGame(gameId, TARGET_TEAM_ABBREV) : Promise.resolve(null),
@@ -97,6 +99,7 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
     getGameTeamLines(gameId),
     // Goal-by-goal from the audited NHL history tables (same game ids).
     getHistoryGame(gameId).catch(() => null),
+    getGameWpTimeline(gameId).catch(() => null),
   ]);
   const opponentAbbrev = game.home_abbrev === TARGET_TEAM_ABBREV ? game.away_abbrev : game.home_abbrev;
   // Previous / next arrows follow the Bruins in their games, the home team
@@ -204,6 +207,7 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
 
         {/* Only when it adds up to the final score; never a partial list. */}
         {scoring && scoringIsComplete(scoring) && <ScoringSummary g={scoring} linkPlayers />}
+        {wp && <WinProbChart tl={wp} sideHome={game.away_abbrev !== TARGET_TEAM_ABBREV} />}
 
         {thisSeries && (
           <section style={{ marginBottom: "2.5rem", background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, padding: "1.25rem 1.5rem" }}>

@@ -85,6 +85,21 @@ const check = (name: string, ok: boolean, detail = "") => {
   const orr = await getGameWpTimeline(1969030314);
   check("Orr's 1970 goal: overtime starts near even, ends at 100%", !!orr && orr.points.at(-1)!.p === 1 && Math.abs(orr.points.filter((x) => x.t <= 3600).at(-1)!.p - 0.5) < 0.2);
 
+  // Overtime and ties on the curve.
+  const ot = await getGameWpTimeline(2023020100);
+  const otGoal = ot?.points.filter((x) => x.goal).at(-1);
+  check("OT winner between minute marks is on the curve (63:48 goal, 2023-24)", !!otGoal && otGoal.t === 3728 && ot!.endT === 3728 && [0, 1].includes(otGoal.p), JSON.stringify(otGoal));
+  const tie = await getGameWpTimeline(1990020037);
+  check("1990-91 tie: the curve runs through the 5-minute OT and ends at 50%", !!tie && tie.endT === 3900 && tie.points.at(-1)!.p === 0.5, tie ? `${tie.endT} ${tie.points.at(-1)!.p}` : "none");
+  const tieOt = tie!.points.filter((x) => x.t > 3600 && x.t < 3900 && !x.goal).map((x) => x.p);
+  check("1990-91 tie: tied in OT, the chance drifts toward 50% as OT runs out", tieOt.length > 2 && Math.abs(tieOt.at(-1)! - 0.5) < Math.abs(tieOt[0] - 0.5) + 1e-9);
+  const ten = await getGameWpTimeline(1930020211);
+  const tenGoals = ten?.points.filter((x) => x.goal && x.t > 3600) ?? [];
+  check("1930-31: 10-minute OT runs its full length; an OT goal there isn't yet a sure win", !!ten && ten.endT === 4200 && tenGoals.length >= 2 && tenGoals[0].p > 0.02 && tenGoals[0].p < 0.98, ten ? `${ten.endT} ${tenGoals.map((x) => x.p.toFixed(3))}` : "none");
+  // Every curve stays in [0, 1], starts at puck drop, and never goes back in time.
+  for (const c of [g7, orr, ot, tie, ten])
+    check(`game ${c?.gameId}: curve within 0-100% and in time order`, !!c && c.points.every((x, i) => x.p >= 0 && x.p <= 1 && (i === 0 || x.t >= c.points[i - 1].t)) && c.points[0].t === 0);
+
   await pool.end();
   console.log(`\n${failed === 0 ? "All passed." : `${failed} failed.`}`);
   process.exit(failed ? 1 : 0);
