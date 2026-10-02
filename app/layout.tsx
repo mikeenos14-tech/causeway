@@ -31,7 +31,7 @@ const siteUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: "Causeway",
-  description: "A stats-first Boston Bruins fan hub.",
+  description: "A stats-first Boston Bruins fan hub. Bruins history since 1924.",
   openGraph: { siteName: "Causeway", type: "website" },
   twitter: { card: "summary_large_image" },
   appleWebApp: {

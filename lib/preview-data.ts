@@ -6,6 +6,7 @@
 // comes from.
 
 import { pool } from "./db";
+import { nhlJson } from "./nhl-fetch";
 import { getLeagueComparisonSeason, getLeagueTeamStats, rankTeam, type LeagueTeamStats } from "./league-data";
 import { getUpcomingMilestones, type Milestone } from "./milestones-data";
 import { getClubSeason, openerTag } from "./nhl-schedule";
@@ -47,14 +48,9 @@ const pct = (v: number | null) => (v == null ? "—" : `${(v * 100).toFixed(1)}%
 type ApiTeam = { id: number; abbrev: string; commonName?: { default: string }; placeName?: { default: string }; score?: number };
 
 export async function getPreview(gameId: number): Promise<Preview | null> {
-  let landing;
-  try {
-    const res = await fetch(`${API}/gamecenter/${gameId}/landing`, { next: { revalidate: 300 } });
-    if (!res.ok) return null;
-    landing = await res.json();
-  } catch {
-    return null;
-  }
+  // null = the NHL says there's no such game (a real 404); an outage throws
+  // (lib/nhl-fetch.ts) so the page shows "try again", never a false 404.
+  const landing = await nhlJson<Record<string, any>>(`${API}/gamecenter/${gameId}/landing`, 300); // eslint-disable-line @typescript-eslint/no-explicit-any
   if (!landing?.homeTeam || (landing.gameType !== 2 && landing.gameType !== 3)) return null;
 
   const season = String(landing.season);
@@ -157,9 +153,8 @@ async function buildTeam(
   // file — for any team, so an offseason arrival shows last year's line.
   let roster: { id: number; name: string; pos: string }[] = [];
   try {
-    const res = await fetch(`${API}/roster/${api.abbrev}/current`, { next: { revalidate: 3600 } });
-    if (res.ok) {
-      const d = await res.json();
+    const d = await nhlJson<Record<string, any>>(`${API}/roster/${api.abbrev}/current`, 3600); // eslint-disable-line @typescript-eslint/no-explicit-any
+    if (d) {
       roster = [...(d.forwards ?? []), ...(d.defensemen ?? []), ...(d.goalies ?? [])].map(
         (p: { id: number; firstName: { default: string }; lastName: { default: string }; positionCode: string }) => ({
           id: p.id,

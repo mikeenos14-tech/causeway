@@ -1,19 +1,46 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTeam } from "@/lib/homepage-data";
 import { getAllRegularSeasonResults, longestWinStreak, longestPointStreak, biggestWin, worstLoss, bestAndWorstMonth } from "@/lib/records-data";
 import { formatGameDate, formatSeasonLabel } from "@/lib/format-date";
 import { Masthead, Footer } from "@/components/Masthead";
 import { TeamSubNav } from "@/components/TeamSubNav";
+import { TeamLogo } from "@/components/TeamLogo";
 
 export const revalidate = 300;
 
-function RecordTile({ label, value, sub }: { label: string; value: React.ReactNode; sub?: string }) {
-  return (
-    <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 10, padding: "1.1rem 1.2rem" }}>
+const LINK = { color: "var(--text-secondary)", textDecoration: "underline", textDecorationColor: "var(--border)", textUnderlineOffset: 3 };
+
+// Every record points at the games behind it.
+function RecordTile({ label, value, sub, href }: { label: string; value: React.ReactNode; sub?: React.ReactNode; href?: string }) {
+  const body = (
+    <>
       <div style={{ fontSize: ".72rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: ".4rem" }}>{label}</div>
       <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "2rem", color: "var(--gold)", fontVariantNumeric: "tabular-nums" }}>{value}</div>
       {sub && <div style={{ fontSize: ".78rem", color: "var(--text-secondary)", marginTop: 4 }}>{sub}</div>}
-    </div>
+    </>
+  );
+  const box = { background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 10, padding: "1.1rem 1.2rem" };
+  return href ? (
+    <Link href={href} style={{ ...box, display: "block", textDecoration: "none", color: "inherit" }}>
+      {body}
+    </Link>
+  ) : (
+    <div style={box}>{body}</div>
+  );
+}
+
+function StreakDates({ streak }: { streak: { startDate: string | Date; endDate: string | Date; startId: number; endId: number } }) {
+  return (
+    <>
+      <Link href={`/games/${streak.startId}`} style={LINK}>
+        {formatGameDate(streak.startDate, true)}
+      </Link>{" "}
+      –{" "}
+      <Link href={`/games/${streak.endId}`} style={LINK}>
+        {formatGameDate(streak.endDate, true)}
+      </Link>
+    </>
   );
 }
 
@@ -50,28 +77,30 @@ export default async function TeamRecords({ params }: { params: Promise<{ abbrev
             <RecordTile
               label="Longest Win Streak"
               value={winStreak.length}
-              sub={`${formatGameDate(winStreak.startDate, true)} – ${formatGameDate(winStreak.endDate, true)}`}
+              sub={<StreakDates streak={winStreak} />}
             />
           )}
           {pointStreak && (
             <RecordTile
               label="Longest Point Streak"
               value={pointStreak.length}
-              sub={`${formatGameDate(pointStreak.startDate, true)} – ${formatGameDate(pointStreak.endDate, true)}`}
+              sub={<StreakDates streak={pointStreak} />}
             />
           )}
           {bigWin && (
             <RecordTile
               label="Biggest Win"
               value={`${bigWin.team_score}-${bigWin.opp_score}`}
-              sub={`vs ${bigWin.opp_abbrev} · ${formatGameDate(bigWin.game_date, true)}`}
+              href={`/games/${bigWin.id}`}
+              sub={<>vs <TeamLogo abbrev={bigWin.opp_abbrev} size={16} gap={3} />{bigWin.opp_abbrev} · {formatGameDate(bigWin.game_date, true)}</>}
             />
           )}
           {badLoss && (
             <RecordTile
               label="Worst Loss"
               value={`${badLoss.team_score}-${badLoss.opp_score}`}
-              sub={`vs ${badLoss.opp_abbrev} · ${formatGameDate(badLoss.game_date, true)}`}
+              href={`/games/${badLoss.id}`}
+              sub={<>vs <TeamLogo abbrev={badLoss.opp_abbrev} size={16} gap={3} />{badLoss.opp_abbrev} · {formatGameDate(badLoss.game_date, true)}</>}
             />
           )}
         </div>
@@ -81,6 +110,7 @@ export default async function TeamRecords({ params }: { params: Promise<{ abbrev
             <RecordTile
               label="Best Month"
               value={`${bestMonth.wins}-${bestMonth.losses}-${bestMonth.otl}`}
+              href={abbrev === "BOS" ? `/schedule?season=${bestMonth.seasonId}` : undefined}
               sub={`${bestMonth.label} · ${bestMonth.points} pts in ${bestMonth.games} games`}
             />
           )}
@@ -88,6 +118,7 @@ export default async function TeamRecords({ params }: { params: Promise<{ abbrev
             <RecordTile
               label="Worst Month"
               value={`${worstMonth.wins}-${worstMonth.losses}-${worstMonth.otl}`}
+              href={abbrev === "BOS" ? `/schedule?season=${worstMonth.seasonId}` : undefined}
               sub={`${worstMonth.label} · ${worstMonth.points} pts in ${worstMonth.games} games`}
             />
           )}

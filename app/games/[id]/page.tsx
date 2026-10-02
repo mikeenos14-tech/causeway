@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getGameDetail, getGameSkaters, getGameGoalies, getGameTeamLines, getTeamName, type TeamGameLine } from "@/lib/game-detail-data";
+import { getGameDetail, getGameSkaters, getGameGoalies, getGameTeamLines, getTeamName, getAdjacentGames, type TeamGameLine, type AdjacentGame } from "@/lib/game-detail-data";
+import { getClubSeason } from "@/lib/nhl-schedule";
 import { AskAboutGame, gameQuestions } from "@/components/AskAboutGame";
 import { getSeasonSeriesAsOfGame, getPlayoffSeriesForGame } from "@/lib/season-series-data";
 import { roundLabel } from "@/lib/playoff-data";
@@ -9,7 +10,12 @@ import { TARGET_TEAM_ABBREV } from "@/lib/significance-checks";
 import { formatGameDate } from "@/lib/format-date";
 import { Masthead, Footer } from "@/components/Masthead";
 import { GamePreview } from "@/components/GamePreview";
+import { HistoryGameView } from "@/components/HistoryGameView";
+import { getHistoryGame, getHistoryAdjacent, BOX_SCORES_FROM, BOS_TEAM_ID } from "@/lib/history-data";
 import { getPreview } from "@/lib/preview-data";
+import { TeamLogo } from "@/components/TeamLogo";
+import { formatSavePct } from "@/lib/util/save-pct";
+import { ScoringSummary, scoringIsComplete } from "@/components/ScoringSummary";
 
 function toi(seconds: number | null) {
   if (seconds == null) return "—";
@@ -24,7 +30,16 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const gameId = Number((await params).id);
   if (!Number.isInteger(gameId)) return {};
   const game = await getGameDetail(gameId).catch(() => null);
-  if (!game) return { title: "Game preview · Causeway", openGraph: { title: "Game preview · Causeway" } };
+  if (!game) {
+    const hist = await getHistoryGame(gameId).catch(() => null);
+    if (hist && hist.season < BOX_SCORES_FROM) {
+      const score = `${hist.away.code} ${hist.away.score}, ${hist.home.code} ${hist.home.score}`;
+      const title = `${score} · ${hist.iconic?.label ?? formatGameDate(hist.date, true)}`;
+      const description = hist.iconic?.story ?? `${hist.stage ?? "Final"}, ${formatGameDate(hist.date, true)}.`;
+      return { title, description, openGraph: { title, description }, twitter: { card: "summary_large_image", title, description } };
+    }
+    return { title: "Game preview · Causeway", openGraph: { title: "Game preview · Causeway" } };
+  }
   const score = `${game.away_abbrev} ${game.away_score}, ${game.home_abbrev} ${game.home_score}`;
   const title = game.headline ? `${score} · ${game.headline}` : `${score} · Causeway`;
   const description = game.body ?? `Box score and stats, ${formatGameDate(game.game_date, true)}.`;
@@ -40,6 +55,21 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
   // Not played (or not loaded) yet: the pre-game preview at the same URL,
   // so a link to a game works before, during, and after it.
   if (!game) {
+    // Before 2007-08: the audited history (score, scorers, penalties).
+    const hist = await getHistoryGame(gameId);
+    if (hist && hist.season < BOX_SCORES_FROM) {
+      const navTeam = hist.home.id === BOS_TEAM_ID || hist.away.id === BOS_TEAM_ID ? BOS_TEAM_ID : hist.home.id;
+      const nav = await getHistoryAdjacent(gameId, navTeam);
+      return (
+        <>
+          <Masthead />
+          <main style={{ maxWidth: 1160, margin: "0 auto", padding: "3rem 24px 3.5rem" }}>
+            <HistoryGameView g={hist} nav={nav} />
+          </main>
+          <Footer />
+        </>
+      );
+    }
     const preview = await getPreview(gameId);
     if (!preview) notFound();
     return (
@@ -59,14 +89,25 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
   // only meaningful relative to one team's perspective.
   const bosInGame = game.home_abbrev === TARGET_TEAM_ABBREV || game.away_abbrev === TARGET_TEAM_ABBREV;
 
-  const [skaters, goalies, seasonSeries, playoffSeries, teamLines] = await Promise.all([
+  const [skaters, goalies, seasonSeries, playoffSeries, teamLines, scoring] = await Promise.all([
     getGameSkaters(gameId),
     getGameGoalies(gameId),
     bosInGame && game.game_type === "regular" ? getSeasonSeriesAsOfGame(gameId, TARGET_TEAM_ABBREV) : Promise.resolve(null),
     bosInGame && game.game_type === "playoff" ? getPlayoffSeriesForGame(gameId, TARGET_TEAM_ABBREV) : Promise.resolve(null),
     getGameTeamLines(gameId),
+    // Goal-by-goal from the audited NHL history tables (same game ids).
+    getHistoryGame(gameId).catch(() => null),
   ]);
   const opponentAbbrev = game.home_abbrev === TARGET_TEAM_ABBREV ? game.away_abbrev : game.home_abbrev;
+  // Previous / next arrows follow the Bruins in their games, the home team
+  // otherwise. The latest game's "next" is the upcoming game's preview.
+  const navTeam = bosInGame ? TARGET_TEAM_ABBREV : game.home_abbrev;
+  const adjacent = await getAdjacentGames(gameId, navTeam);
+  let next: AdjacentGame | null = adjacent.next;
+  if (!next) {
+    const upcoming = (await getClubSeason(navTeam))?.games.find((g) => g.state === "FUT" || g.state === "PRE" || g.state === "LIVE" || g.state === "CRIT");
+    if (upcoming) next = { id: upcoming.id, date: upcoming.gameDate, label: `${upcoming.isHome ? "vs" : "@"} ${upcoming.opponent}` };
+  }
   // Follow-up questions for the Ask box: tonight's top Bruins scorer and
   // goalie against this opponent, and the head-to-head record.
   const askQuestions = bosInGame
@@ -102,6 +143,20 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
       <Masthead />
 
       <main style={{ maxWidth: 1160, margin: "0 auto", padding: "3rem 24px 3.5rem" }}>
+        <nav aria-label={`${navTeam} games`} style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: "1.5rem", fontSize: ".85rem" }}>
+          {adjacent.prev ? (
+            <Link href={`/games/${adjacent.prev.id}`} style={{ color: "var(--text-secondary)", textDecoration: "none" }}>
+              ← {navTeam} {adjacent.prev.label} · {formatGameDate(adjacent.prev.date)}
+            </Link>
+          ) : (
+            <span />
+          )}
+          {next && (
+            <Link href={`/games/${next.id}`} style={{ color: "var(--text-secondary)", textDecoration: "none", textAlign: "right" }}>
+              {navTeam} {next.label} · {formatGameDate(next.date)} →
+            </Link>
+          )}
+        </nav>
         <section style={{ marginBottom: "2.5rem", paddingBottom: "2.5rem", borderBottom: "1px solid var(--border)" }}>
           <span style={{ fontFamily: "var(--font-display)", fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--text-secondary)", display: "block", marginBottom: ".6rem", fontSize: ".9rem" }}>
             {game.game_type === "playoff" ? "Playoff" : game.game_type === "preseason" ? "Preseason" : "Final"} ·{" "}
@@ -118,13 +173,23 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
           )}
 
           <div style={{ display: "flex", gap: 40, marginTop: "1.75rem" }}>
-            <div>
-              <div style={{ fontSize: ".78rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 4 }}>{game.away_abbrev}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <TeamLogo abbrev={game.away_abbrev} size={52} gap={0} />
+              <div>
+              <Link href={`/teams/${game.away_abbrev}`} style={{ display: "block", fontSize: ".78rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 4 }}>
+                {game.away_abbrev}
+              </Link>
               <div style={{ fontFamily: "var(--font-display)", fontSize: "2.6rem", color: awayWon ? "var(--gold)" : "var(--text-secondary)" }}>{game.away_score}</div>
+              </div>
             </div>
-            <div>
-              <div style={{ fontSize: ".78rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 4 }}>{game.home_abbrev}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <TeamLogo abbrev={game.home_abbrev} size={52} gap={0} />
+              <div>
+              <Link href={`/teams/${game.home_abbrev}`} style={{ display: "block", fontSize: ".78rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 4 }}>
+                {game.home_abbrev}
+              </Link>
               <div style={{ fontFamily: "var(--font-display)", fontSize: "2.6rem", color: homeWon ? "var(--gold)" : "var(--text-secondary)" }}>{game.home_score}</div>
+              </div>
             </div>
             {game.game_end_type !== "regulation" && (
               <div style={{ alignSelf: "flex-end", paddingBottom: 8 }}>
@@ -136,6 +201,9 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
           </div>
           <AskAboutGame title="Ask about this game" questions={askQuestions} />
         </section>
+
+        {/* Only when it adds up to the final score; never a partial list. */}
+        {scoring && scoringIsComplete(scoring) && <ScoringSummary g={scoring} linkPlayers />}
 
         {thisSeries && (
           <section style={{ marginBottom: "2.5rem", background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, padding: "1.25rem 1.5rem" }}>
@@ -195,13 +263,15 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
         {teamLines.length === 2 && <TeamStats lines={teamLines} />}
 
         <div id="box-score" />
-        {["away", "home"].map((side) => {
+        {/* The Bruins' box score first on their games; away-then-home otherwise. */}
+        {(game.home_abbrev === TARGET_TEAM_ABBREV ? ["home", "away"] : ["away", "home"]).map((side) => {
           const abbrev = side === "away" ? game.away_abbrev : game.home_abbrev;
           const teamSkaters = skaters.filter((s) => s.team_abbrev === abbrev);
           const teamGoalies = goalies.filter((g) => g.team_abbrev === abbrev);
           return (
             <section key={side} style={{ marginBottom: "2.5rem" }}>
-              <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".02em", fontSize: "1.5rem", marginBottom: "1rem" }}>
+              <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".02em", fontSize: "1.5rem", marginBottom: "1rem", display: "flex", alignItems: "center" }}>
+                <TeamLogo abbrev={abbrev} size={30} gap={8} />
                 {abbrev}
               </h2>
               <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", overflowX: "auto" }}>
@@ -266,7 +336,7 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
                           <td style={tdStyle()}>{g.decision ?? "—"}</td>
                           <td style={tdStyle()}>{g.saves ?? "—"}</td>
                           <td style={tdStyle()}>{g.shots_against ?? "—"}</td>
-                          <td style={tdStyle()}>{g.save_pct != null ? Number(g.save_pct).toFixed(3) : "—"}</td>
+                          <td style={tdStyle()}>{formatSavePct(g.save_pct)}</td>
                           <td style={tdStyle()}>{toi(g.toi_seconds)}</td>
                         </tr>
                       ))}
@@ -318,9 +388,15 @@ function TeamStats({ lines }: { lines: TeamGameLine[] }) {
   return (
     <section style={{ marginBottom: "2.5rem", background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, padding: "1.1rem 1.5rem" }}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", fontSize: ".78rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8 }}>
-        <span>{away.abbrev}</span>
+        <span>
+          <TeamLogo abbrev={away.abbrev} size={18} gap={4} />
+          {away.abbrev}
+        </span>
         <span>Team stats</span>
-        <span style={{ textAlign: "right" }}>{home.abbrev}</span>
+        <span style={{ textAlign: "right" }}>
+          <TeamLogo abbrev={home.abbrev} size={18} gap={4} />
+          {home.abbrev}
+        </span>
       </div>
       {rows.map((r) => {
         const aLead = r.a! > r.h!;

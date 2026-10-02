@@ -49,6 +49,24 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      # Every club's current roster and headshots (32 calls). The Roster
+      # pages read this instead of calling the NHL at page-load time. A
+      # team whose roster doesn't come back complete keeps its last good
+      # roster; never blocks the rest of the run.
+      - name: Sync current rosters and headshots
+        timeout-minutes: 5
+        continue-on-error: true
+        run: npx tsx scripts/sync-rosters.ts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      # A brand-new player can land as "A. Smits" (box-score short name)
+      # when his team's roster lags; this fills in the real name hourly.
+      - name: Repair abbreviated player names
+        timeout-minutes: 3
+        continue-on-error: true
+        run: npx tsx scripts/repair-abbreviated-names.ts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
       # The homepage's question of the day, answered ahead of time. Calls
       # the model only when today's answer is missing or older than the
       # newest Bruins game (about once a day); never fails the run.
@@ -96,6 +114,21 @@ jobs:
         run: npx tsx scripts/backfill-moneypuck.ts
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      # Reliability guard (docs/verification.md, layer 6): the site's data
+      # against the NHL's own, every morning, with a fresh random sample of
+      # box scores and careers plus standings and the Bruins' season. Runs
+      # at 10 AM ET, when no games are in progress. Fails the run (GitHub
+      # emails) on any difference.
+      - name: Cross-check the site's data against the NHL
+        timeout-minutes: 15
+        run: npx tsx scripts/qa/cross-check-nhl.ts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      # Every team's live Roster page against the NHL's current roster:
+      # every rostered player must be listed (McAvoy once wasn't, 2026-10-02).
+      - name: Check every Roster page against the NHL
+        timeout-minutes: 5
+        run: npx tsx scripts/qa/check-rosters.ts https://causeway-ten.vercel.app
       - name: Player-level xG/Corsi (MoneyPuck), current season only
         run: npx tsx scripts/backfill-moneypuck-players.ts ${{ steps.season.outputs.year }} ${{ steps.season.outputs.year }}
         env:

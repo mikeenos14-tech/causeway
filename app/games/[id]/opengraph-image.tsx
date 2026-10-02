@@ -1,5 +1,6 @@
 import { ImageResponse } from "next/og";
 import { getGameDetail } from "@/lib/game-detail-data";
+import { getHistoryGame, BOX_SCORES_FROM } from "@/lib/history-data";
 import { formatGameDate } from "@/lib/format-date";
 import { formatStartTimeET } from "@/lib/nhl-schedule";
 import { OgFrame, OG_SIZE, GOLD, MUTED, clip } from "@/lib/og-card";
@@ -13,11 +14,28 @@ export const alt = "Causeway game card";
 // before it. Any league game works, same as the page.
 export default async function Image({ params }: { params: Promise<{ id: string }> }) {
   const gameId = Number((await params).id);
-  const game = Number.isInteger(gameId) ? await getGameDetail(gameId).catch(() => null) : null;
+  let game = Number.isInteger(gameId) ? await getGameDetail(gameId).catch(() => null) : null;
+  // Before 2007-08: the history tables, in the same final-score card.
+  if (!game && Number.isInteger(gameId)) {
+    const h = await getHistoryGame(gameId).catch(() => null);
+    if (h && h.season < BOX_SCORES_FROM) {
+      game = {
+        game_date: h.date,
+        game_end_type: h.finalState === "OT" ? "overtime" : h.finalState === "SO" ? "shootout" : "regulation",
+        home_abbrev: h.home.code,
+        away_abbrev: h.away.code,
+        home_score: h.home.score,
+        away_score: h.away.score,
+        headline: h.iconic?.label ?? h.stage ?? null,
+        body: h.iconic?.story ?? null,
+      };
+    }
+  }
 
   if (game) {
     const awayWon = game.away_score > game.home_score;
-    const end = game.game_end_type === "overtime" ? " (OT)" : game.game_end_type === "shootout" ? " (SO)" : "";
+    const homeWon = game.home_score > game.away_score; // neither, for a tie
+    const end = game.home_score === game.away_score ? " (Tie)" : game.game_end_type === "overtime" ? " (OT)" : game.game_end_type === "shootout" ? " (SO)" : "";
     const team = (abbrev: string, score: number, won: boolean) => (
       <div style={{ display: "flex", alignItems: "baseline", gap: 28, color: won ? "#f5f5f4" : MUTED }}>
         <div style={{ display: "flex", fontSize: 96, fontWeight: 800, letterSpacing: 2 }}>{abbrev}</div>
@@ -30,7 +48,7 @@ export default async function Image({ params }: { params: Promise<{ id: string }
           <div style={{ display: "flex", alignItems: "center", gap: 56 }}>
             {team(game.away_abbrev, game.away_score, awayWon)}
             <div style={{ display: "flex", fontSize: 60, color: MUTED }}>@</div>
-            {team(game.home_abbrev, game.home_score, !awayWon)}
+            {team(game.home_abbrev, game.home_score, homeWon)}
           </div>
           {game.headline && <div style={{ display: "flex", fontSize: 46, fontWeight: 700, color: GOLD, marginTop: 24 }}>{clip(game.headline, 60)}</div>}
         </OgFrame>

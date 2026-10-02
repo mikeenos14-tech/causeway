@@ -1,16 +1,24 @@
 import Link from "next/link";
 import type { RosterMoves } from "@/lib/roster-moves";
-import { LEADERSHIP } from "@/lib/leadership";
+import { LEADERSHIP, getAlternateNames } from "@/lib/leadership";
+import { TeamLogo } from "@/components/TeamLogo";
 import { formatGameDate, formatSeasonLabel } from "@/lib/format-date";
+import { Headshot } from "@/components/Headshot";
+import { getHeadshots } from "@/lib/headshots";
 
-const ROW = { display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, padding: "9px 0", borderTop: "1px solid var(--border)", fontSize: ".9rem" } as const;
+const ROW = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "9px 0", borderTop: "1px solid var(--border)", fontSize: ".9rem" } as const;
 const SUB = { fontSize: ".8rem", color: "var(--text-secondary)", textAlign: "right" as const };
 
 // Who's new, who's gone, and who wears the C — the team's current NHL
 // roster against last season's. Rendered on the Roster tab always, and on
 // the team dashboard around the start of a season.
-export function RosterMovesCard({ teamAbbrev, moves, captainName }: { teamAbbrev: string; moves: RosterMoves; captainName: string | null }) {
+export async function RosterMovesCard({ teamAbbrev, moves, captainName }: { teamAbbrev: string; moves: RosterMoves; captainName: string | null }) {
+  const headshots = await getHeadshots([...moves.arrivals.map((a) => a.id), ...moves.departures.map((d) => d.id)]);
   const leadership = LEADERSHIP[teamAbbrev];
+  // Alternates only alongside a captain for the same season (captainName
+  // is non-null only then).
+  const alternates = captainName && leadership ? await getAlternateNames(teamAbbrev, leadership.season) : [];
+  const unannounced = leadership ? Math.max(0, leadership.alternateSlots - alternates.length) : 0;
   const last = formatSeasonLabel(moves.lastSeason);
   if (moves.arrivals.length === 0 && moves.departures.length === 0 && !captainName) return null;
 
@@ -27,11 +35,35 @@ export function RosterMovesCard({ teamAbbrev, moves, captainName }: { teamAbbrev
           <Link href={`/players/${leadership.captainId}`} style={{ color: "var(--text-primary)", fontWeight: 600, textDecoration: "none" }}>
             {captainName}
           </Link>{" "}
-          named captain {formatGameDate(leadership.asOf, true)}
-          {leadership.alternateIds.length === 0 ? " · alternates not yet announced" : ""} ·{" "}
+          named captain {formatGameDate(leadership.asOf, true)} ·{" "}
           <a href={leadership.source} style={{ color: "var(--gold)", textDecoration: "none" }}>
             source ↗
           </a>
+          {alternates.length > 0 && (
+            <>
+              <br />
+              <span style={{ display: "inline-block", fontWeight: 700, color: "var(--gold)", border: "1px solid var(--gold)", borderRadius: 4, padding: "0 5px", marginRight: 8, fontSize: ".78rem" }}>A</span>
+              {alternates.map((a, i) => (
+                <span key={a.id}>
+                  {i > 0 ? ", " : ""}
+                  <Link href={`/players/${a.id}`} style={{ color: "var(--text-primary)", fontWeight: 600, textDecoration: "none" }}>
+                    {a.name}
+                  </Link>
+                </span>
+              ))}
+              {unannounced > 0 ? ` · ${unannounced === 1 ? "second alternate" : `${unannounced} more alternates`} not yet announced` : ""}
+              {leadership.alternateSource && (
+                <>
+                  {" "}
+                  ·{" "}
+                  <a href={leadership.alternateSource} style={{ color: "var(--gold)", textDecoration: "none" }}>
+                    source ↗
+                  </a>
+                </>
+              )}
+            </>
+          )}
+          {alternates.length === 0 && " · alternates not yet announced"}
         </p>
       )}
 
@@ -42,7 +74,9 @@ export function RosterMovesCard({ teamAbbrev, moves, captainName }: { teamAbbrev
           </div>
           {moves.arrivals.map((a) => (
             <div key={a.id} className="move-row" style={ROW}>
-              <span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                <Headshot url={headshots[a.id]} name={a.name} size={26} />
+                <span>
                 {a.number != null && <span style={{ color: "var(--text-secondary)", marginRight: 6 }}>#{a.number}</span>}
                 {a.previous ? (
                   <Link href={`/players/${a.id}`} style={{ color: "var(--text-primary)", fontWeight: 600, textDecoration: "none" }}>
@@ -52,13 +86,10 @@ export function RosterMovesCard({ teamAbbrev, moves, captainName }: { teamAbbrev
                   <span style={{ fontWeight: 600 }}>{a.name}</span>
                 )}{" "}
                 <span style={{ color: "var(--text-secondary)", fontSize: ".8rem" }}>{a.position}</span>
+                </span>
               </span>
               <span className="move-detail" style={SUB}>
-                {!a.previous
-                  ? "no NHL games yet"
-                  : a.previous.abbrev === teamAbbrev
-                    ? `back with ${teamAbbrev} · ${a.previous.games} GP in ${formatSeasonLabel(a.previous.season)}`
-                    : `from ${a.previous.abbrev} · ${a.previous.games} GP in ${formatSeasonLabel(a.previous.season)}`}
+                {arrivalDetail(a, teamAbbrev)}
               </span>
             </div>
           ))}
@@ -71,17 +102,25 @@ export function RosterMovesCard({ teamAbbrev, moves, captainName }: { teamAbbrev
           </div>
           {moves.departures.map((d) => (
             <div key={d.id} className="move-row" style={ROW}>
-              <span>
-                <Link href={`/players/${d.id}`} style={{ color: "var(--text-primary)", fontWeight: 600, textDecoration: "none" }}>
-                  {d.name}
-                </Link>{" "}
-                <span style={{ color: "var(--text-secondary)", fontSize: ".8rem" }}>{d.position}</span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                <Headshot url={headshots[d.id]} name={d.name} size={26} />
+                <span>
+                  <Link href={`/players/${d.id}`} style={{ color: "var(--text-primary)", fontWeight: 600, textDecoration: "none" }}>
+                    {d.name}
+                  </Link>{" "}
+                  <span style={{ color: "var(--text-secondary)", fontSize: ".8rem" }}>{d.position}</span>
+                </span>
               </span>
               <span className="move-detail" style={SUB}>
                 {/* "system" = still this team's player per the NHL, but not on the
                     current roster list — injured, in the minors, or waived; the
                     API doesn't say which, so neither do we. */}
-                {d.now.kind === "team" ? `now with ${d.now.abbrev}` : d.now.kind === "system" ? `still with ${teamAbbrev}, off the current roster` : "not on an NHL roster"} ·{" "}
+                {d.now.kind === "team" ? (
+                  <>
+                    now with <TeamLogo abbrev={d.now.abbrev} size={16} gap={3} />
+                    {d.now.abbrev}
+                  </>
+                ) : d.now.kind === "system" ? `still with ${teamAbbrev}, off the current roster` : d.now.kind === "none" ? "not on an NHL roster" : "current status unavailable"} ·{" "}
                 {d.games} GP here in {last}
               </span>
             </div>
@@ -93,5 +132,32 @@ export function RosterMovesCard({ teamAbbrev, moves, captainName }: { teamAbbrev
         Departures list players with 10+ games here last season. Rosters change often in the first weeks; this reflects the NHL&apos;s current roster.
       </p>
     </section>
+  );
+}
+
+// One line on where an arrival comes from. Order matters: a former player
+// coming back from another team; then a player whose last NHL games were
+// here but who spent last season elsewhere (a call-up: "up from
+// Providence"); then a true return; then a newcomer.
+function arrivalDetail(a: RosterMoves["arrivals"][number], teamAbbrev: string) {
+  const elsewhere = a.lastSeasonElsewhere ? `${a.lastSeasonElsewhere.team} (${a.lastSeasonElsewhere.league})` : null;
+  if (!a.previous) return elsewhere ? `from ${elsewhere} · no NHL games yet` : "no NHL games yet";
+  const nhlGames = `${a.previous.games} NHL ${a.previous.games === 1 ? "game" : "games"}`;
+  if (a.previous.abbrev === teamAbbrev) {
+    if (elsewhere) return `up from ${elsewhere} · ${nhlGames} here, ${formatSeasonLabel(a.previous.season)}`;
+    return `back with ${teamAbbrev} · ${a.previous.games} GP here in ${formatSeasonLabel(a.previous.season)}`;
+  }
+  const span = a.formerStint ? (a.formerStint.from === a.formerStint.to ? formatSeasonLabel(a.formerStint.from) : `${formatSeasonLabel(a.formerStint.from)} to ${formatSeasonLabel(a.formerStint.to)}`) : null;
+  return (
+    <>
+      from <TeamLogo abbrev={a.previous.abbrev} size={16} gap={3} />
+      {a.previous.abbrev} · {a.previous.games} GP in {formatSeasonLabel(a.previous.season)}
+      {a.formerStint && (
+        <>
+          {" "}
+          · <span style={{ color: "var(--gold)" }}>back</span> after {a.formerStint.games} GP here ({span})
+        </>
+      )}
+    </>
   );
 }

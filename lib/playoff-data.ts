@@ -9,6 +9,8 @@ export type PlayoffSeriesResult = {
   teamWins: number;
   opponentWins: number;
   maxRoundThatSeason: number;
+  // Every game of the series, in order, from this team's side.
+  games: { id: number; teamScore: number; oppScore: number; end: string }[];
 };
 
 // Every playoff series this team has been part of, oldest first. Series
@@ -30,6 +32,17 @@ export async function getPlayoffHistory(teamAbbrev: string): Promise<PlayoffSeri
        join teams tb on tb.id = ps.team_b_id
        where ta.abbrev = $1 or tb.abbrev = $1
      ),
+     series_games as (
+       select g.series_id,
+              json_agg(json_build_object(
+                'id', g.id,
+                'teamScore', case when g.home_team_id = ts.team_id then g.home_score else g.away_score end,
+                'oppScore', case when g.home_team_id = ts.team_id then g.away_score else g.home_score end,
+                'end', g.game_end_type) order by g.game_date, g.id) as games
+       from games g
+       join team_series ts on ts.id = g.series_id
+       group by g.series_id
+     ),
      game_counts as (
        select g.series_id,
               sum(case when (g.home_team_id = ts.team_id and g.home_score > g.away_score)
@@ -49,9 +62,11 @@ export async function getPlayoffHistory(teamAbbrev: string): Promise<PlayoffSeri
             (ts.winner_team_id = ts.team_id) as won,
             coalesce(gc.team_wins, 0)::int as team_wins,
             coalesce(gc.opp_wins, 0)::int as opp_wins,
-            mr.max_round as max_round_that_season
+            mr.max_round as max_round_that_season,
+            coalesce(sg.games, '[]'::json) as games
      from team_series ts
      left join game_counts gc on gc.series_id = ts.id
+     left join series_games sg on sg.series_id = ts.id
      join max_rounds mr on mr.season_id = ts.season_id
      order by ts.season_id asc, ts.round asc`,
     [teamAbbrev],
@@ -65,6 +80,7 @@ export async function getPlayoffHistory(teamAbbrev: string): Promise<PlayoffSeri
     teamWins: r.team_wins,
     opponentWins: r.opp_wins,
     maxRoundThatSeason: r.max_round_that_season,
+    games: r.games,
   }));
 }
 

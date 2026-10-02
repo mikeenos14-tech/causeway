@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTeam } from "@/lib/homepage-data";
 import { getLeagueComparisonSeason, getLeagueTeamStats, rankTeam, type LeagueTeamStats } from "@/lib/league-data";
@@ -91,9 +92,19 @@ function RankCard({
         />
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: ".7rem", color: "var(--text-secondary)" }}>
-        <span>{format(worst)} worst</span>
+        <span>
+          {format(worst)} worst ·{" "}
+          <Link href={`/teams/${rank.worstTeam}`} style={{ color: "inherit" }}>
+            {rank.worstTeam}
+          </Link>
+        </span>
         <span>league avg {format(rank.leagueAvg)}</span>
-        <span>best {format(best)}</span>
+        <span>
+          <Link href={`/teams/${rank.bestTeam}`} style={{ color: "inherit" }}>
+            {rank.bestTeam}
+          </Link>{" "}
+          · best {format(best)}
+        </span>
       </div>
     </div>
   );
@@ -132,7 +143,7 @@ export default async function TeamLeagueComparison({ params }: { params: Promise
       <main style={{ maxWidth: 1160, margin: "0 auto", padding: "1.5rem 24px 3.5rem" }}>
         <TeamSubNav abbrev={abbrev} />
         <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "clamp(2.2rem,4.5vw,3rem)", textTransform: "uppercase", letterSpacing: ".01em", margin: "0 0 .4rem" }}>
-          League Comparison
+          League Ranks
         </h1>
         <p style={{ color: "var(--text-secondary)", fontSize: ".9rem", marginBottom: "2rem" }}>
           {seasonId

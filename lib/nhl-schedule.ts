@@ -9,6 +9,8 @@
 // currentSeason flips to the new season in the offseason, well before any
 // game is loaded into the database.
 
+import { nhlJson } from "./nhl-fetch";
+
 const API = "https://api-web.nhle.com/v1";
 
 const CANADIAN_TEAMS = new Set(["TOR", "MTL", "OTT", "WPG", "CGY", "EDM", "VAN"]);
@@ -58,9 +60,10 @@ export async function getClubSeason(teamAbbrev: string): Promise<ClubSeason | nu
   try {
     // Five minutes, matching the pages' own revalidate — short enough that
     // a game going final shows up promptly, long enough to be cheap.
-    const res = await fetch(`${API}/club-schedule-season/${teamAbbrev}/now`, { next: { revalidate: 300 } });
-    if (!res.ok) return null;
-    const data = await res.json();
+    // Retries temporary failures (lib/nhl-fetch.ts); a lasting outage
+    // throws into the catch below, and pages fall back to the database.
+    const data = await nhlJson<{ games?: ApiGame[]; currentSeason?: number; previousSeason?: number }>(`${API}/club-schedule-season/${teamAbbrev}/now`, 300);
+    if (!data) return null;
     const games: ClubGame[] = (data.games ?? [])
       .filter((g: ApiGame) => g.gameType === 2 || g.gameType === 3)
       .map((g: ApiGame) => {
@@ -148,7 +151,11 @@ export type HeroChoice = {
 //   preview  the next game, when it's within 30 hours or the last game is
 //            3+ days old (game days, and the whole offseason)
 //   recap    the latest loaded game
-export function chooseHero(games: ClubGame[], lastGame: { id: number; date: string } | null, now: number): HeroChoice {
+// lastGame.startedAt (the real start time) when known: days since the last
+// game used to count from midnight UTC of its date, which made a Tuesday
+// 7 PM game "3 days old" by Thursday 8 PM Eastern (found live 2026-10-01,
+// when the homepage's "Last game" button vanished a day early).
+export function chooseHero(games: ClubGame[], lastGame: { id: number; date: string; startedAt?: string | null } | null, now: number): HeroChoice {
   const pending =
     games.find(isInProgress) ??
     [...games]
@@ -163,7 +170,7 @@ export function chooseHero(games: ClubGame[], lastGame: { id: number; date: stri
     null;
   const next = games.find(isUpcoming) ?? null;
   const hoursToNext = next ? (Date.parse(next.startTimeUTC) - now) / 3.6e6 : Infinity;
-  const daysSinceLast = lastGame ? (now - Date.parse(lastGame.date)) / 8.64e7 : Infinity;
+  const daysSinceLast = lastGame ? (now - Date.parse(lastGame.startedAt ?? lastGame.date)) / 8.64e7 : Infinity;
   const hero = pending
     ? "pending"
     : next && (hoursToNext <= 30 || daysSinceLast >= 3 || !lastGame)

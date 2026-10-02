@@ -11,7 +11,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
 import { join } from "node:path";
-import { diffGoals, goalKey, parseLanding, trackGoals, startTracking, type LiveGoal, type GoalTracker } from "../lib/live-game";
+import { diffGoals, goalKey, parseLanding, trackGoals, startTracking, boardGoals, finalAndComplete, type LiveGoal, type GoalTracker } from "../lib/live-game";
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = "") => {
@@ -84,6 +84,23 @@ if (!existsSync(root)) {
       }
     }
     if (!lastParsed) continue;
+    // The scoreboard stops polling at the first final where every goal is
+    // on the board; at that poll the board must show the final summary.
+    {
+      let st: GoalTracker | null = null;
+      let stoppedAt: { goals: number; score: number } | null = null;
+      for (const t of timeline) {
+        const path = join(dir, `${t.landingHash}.landing.json.gz`);
+        if (!existsSync(path)) continue;
+        const g = parseLanding(JSON.parse(gunzipSync(readFileSync(path)).toString()));
+        st = st ? trackGoals(st, g).state : startTracking(g);
+        if (finalAndComplete(g, st)) {
+          stoppedAt = { goals: boardGoals(st).length, score: g.away.score + g.home.score - (g.status.includes("SO") ? 1 : 0) };
+          break;
+        }
+      }
+      check(`${lastParsed.away.abbrev}@${lastParsed.home.abbrev}: when the board stops polling it shows every goal`, !!stoppedAt && stoppedAt.goals === stoppedAt.score && stoppedAt.goals === lastParsed.goals.length, JSON.stringify(stoppedAt));
+    }
     const final = lastParsed.goals;
     const label = `${lastParsed.away.abbrev}@${lastParsed.home.abbrev} (${lastParsed.status}, ${timeline.length} polls)`;
     const keys = detected.map(goalKey);

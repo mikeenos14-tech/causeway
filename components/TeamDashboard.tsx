@@ -27,7 +27,7 @@ import { getLatestSeasonId } from "@/lib/schedule-data";
 import { getAllSeasonSeriesForTeam } from "@/lib/season-series-data";
 import { getUpcomingMilestones, milestoneText } from "@/lib/milestones-data";
 import { LiveScoreboard } from "@/components/LiveScoreboard";
-
+import { teamNickname } from "@/lib/team-names";
 import { questionOfTheDay, getCachedAnswer, answerTeaser, etDate } from "@/lib/question-of-the-day";
 import { getClubSeason, isFinal, isInProgress, formatStartTimeET, openerTag, chooseHero, type ClubGame } from "@/lib/nhl-schedule";
 import { nextGameFlavor } from "@/lib/next-game";
@@ -38,6 +38,9 @@ import { RosterMovesCard } from "@/components/RosterMovesCard";
 import { getRosterMoves } from "@/lib/roster-moves";
 import { getCurrentCaptainName } from "@/lib/leadership";
 import { FormBars } from "@/components/Sparkline";
+import { TeamLogo } from "@/components/TeamLogo";
+import { Headshot } from "@/components/Headshot";
+import { getHeadshots } from "@/lib/headshots";
 
 const H2 = { margin: 0, fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "1.5rem", textTransform: "uppercase" as const, letterSpacing: ".02em" };
 const TILE_LABEL = { fontSize: ".78rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase" as const, letterSpacing: ".06em", marginBottom: 8 };
@@ -81,6 +84,11 @@ export async function TeamDashboard({ abbrev, compact = false }: { abbrev: strin
       ])
     : [[] as FormResult[], [] as RecentCard[], null, null, null, []];
 
+  const headshots = await getHeadshots([
+    ...milestones.map((m) => m.playerId),
+    ...(statLeaders ? Object.values(statLeaders).flatMap((l) => (l ? [l.id] : [])) : []),
+  ]);
+
   // --- Where are we in the season? ------------------------------------
   const seasonLabel = seasonId ? formatSeasonLabel(seasonId) : null;
   // The NHL has moved on to a new season but this team hasn't played in it
@@ -98,7 +106,8 @@ export async function TeamDashboard({ abbrev, compact = false }: { abbrev: strin
 
   // --- What goes in the hero? ------------------------------------------
   const lastDate = lastGame ? isoDate(lastGame.game_date) : null;
-  const { hero, pending, next, daysSinceLast } = chooseHero(club?.games ?? [], lastGame ? { id: lastGame.id, date: lastDate! } : null, now);
+  const lastStarted = lastGame?.game_datetime ? new Date(lastGame.game_datetime).toISOString() : null;
+  const { hero, pending, next, daysSinceLast } = chooseHero(club?.games ?? [], lastGame ? { id: lastGame.id, date: lastDate!, startedAt: lastStarted } : null, now);
 
   // Grounded context for the preview, all from our own data: head-to-head
   // this season (or last season's, before this team's first game), and how
@@ -179,7 +188,10 @@ export async function TeamDashboard({ abbrev, compact = false }: { abbrev: strin
                       }`
                     : null
                 }
-                lastGame={lastGame && daysSinceLast < 3 ? lastGame : null}
+                // The last result stays one tap away all season (30 days
+                // covers the All-Star and Olympic breaks); it used to vanish
+                // after 3 days, mid-week between games.
+                lastGame={lastGame && daysSinceLast < 30 ? lastGame : null}
               />
               </LiveScoreboard>
             )}
@@ -240,10 +252,6 @@ export async function TeamDashboard({ abbrev, compact = false }: { abbrev: strin
         </section>
       )}
 
-      {moves && <RosterMovesCard teamAbbrev={abbrev} moves={moves} captainName={captainName} />}
-
-      {!compact && <AskBand qotd={qotd} />}
-
       {/* RECENT RESULTS */}
       {recent.length > 0 && (
         <section style={{ marginBottom: "2.5rem" }}>
@@ -264,69 +272,8 @@ export async function TeamDashboard({ abbrev, compact = false }: { abbrev: strin
         </section>
       )}
 
-      {milestones.length > 0 && (
-        <section style={{ marginBottom: "2.5rem" }}>
-          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: "1rem" }}>
-            <h2 style={H2}>Milestone Watch</h2>
-            <span style={CAPTION}>Career, regular season</span>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {milestones.slice(0, 4).map((m) => (
-              <Link
-                key={`${m.playerId}-${m.category}`}
-                href={`/players/${m.playerId}`}
-                style={{
-                  background: "var(--surface-1)",
-                  border: "1px solid var(--border)",
-                  borderRadius: 10,
-                  padding: "12px 18px",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  gap: 12,
-                  textDecoration: "none",
-                  color: "var(--text-primary)",
-                  fontSize: ".9rem",
-                }}
-              >
-                <span>
-                  <strong>{m.playerName}</strong> {milestoneText(m)}
-                </span>
-                <span style={{ color: "var(--gold)", fontWeight: 700, fontFamily: "var(--font-display)", fontSize: "1.1rem", whiteSpace: "nowrap" }}>
-                  {m.current}/{m.target}
-                </span>
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {homeRoadSplit && (homeRoadSplit.home.games > 0 || homeRoadSplit.away.games > 0) && (
-        <section style={{ marginBottom: "2.5rem" }}>
-          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: "1rem" }}>
-            <h2 style={H2}>Home / Road</h2>
-            {seasonCaption && <span style={CAPTION}>{seasonCaption}</span>}
-          </div>
-          <div className="card-row">
-            {(["home", "away"] as const).map((side) => (
-              <div key={side} style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 10, padding: "1.1rem 1.2rem" }}>
-                <div style={{ fontSize: ".72rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: ".4rem" }}>
-                  {side === "home" ? "At Home" : "On the Road"}
-                </div>
-                <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "2rem", color: "var(--gold)", fontVariantNumeric: "tabular-nums" }}>
-                  {homeRoadSplit[side].wins}-{homeRoadSplit[side].losses}-{homeRoadSplit[side].otl}
-                </div>
-                <div style={{ fontSize: ".78rem", color: "var(--text-secondary)", marginTop: 4 }}>
-                  {homeRoadSplit[side].points} pts in {homeRoadSplit[side].games} games
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
       {/* STANDINGS + STAT LEADERS */}
-      <div className="homepage-lower-grid">
+      <div className="homepage-lower-grid" style={{ marginBottom: "2.5rem" }}>
         {standings && (
           <section>
             <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: "1rem" }}>
@@ -364,7 +311,11 @@ export async function TeamDashboard({ abbrev, compact = false }: { abbrev: strin
                     }}
                   >
                     <span style={{ color: own ? "var(--gold)" : "inherit" }}>{t.division_rank}</span>
-                    <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingRight: 8 }}>{t.name}</span>
+                    <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingRight: 8 }}>
+                      <TeamLogo abbrev={t.abbrev} />
+                      <span className="name-full">{t.name}</span>
+                      <span className="name-short">{teamNickname(t.abbrev, t.name)}</span>
+                    </span>
                     <span>{t.wins}</span>
                     <span>{t.losses}</span>
                     <span className="standings-col-otl">{t.ot_losses}</span>
@@ -376,8 +327,78 @@ export async function TeamDashboard({ abbrev, compact = false }: { abbrev: strin
           </section>
         )}
 
-        {statLeaders && <StatLeaders statLeaders={statLeaders} caption={seasonCaption ?? undefined} />}
+        {statLeaders && <StatLeaders statLeaders={statLeaders} caption={seasonCaption ?? undefined} headshots={headshots} />}
       </div>
+
+      {!compact && <AskBand qotd={qotd} />}
+
+      {milestones.length > 0 && (
+        <section style={{ marginBottom: "2.5rem" }}>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: "1rem" }}>
+            <h2 style={H2}>Milestone Watch</h2>
+            <span style={CAPTION}>Career, regular season</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {milestones.slice(0, 4).map((m) => (
+              <Link
+                key={`${m.playerId}-${m.category}`}
+                href={`/players/${m.playerId}`}
+                style={{
+                  background: "var(--surface-1)",
+                  border: "1px solid var(--border)",
+                  borderRadius: 10,
+                  padding: "12px 18px",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 12,
+                  textDecoration: "none",
+                  color: "var(--text-primary)",
+                  fontSize: ".9rem",
+                }}
+              >
+                <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <Headshot url={headshots[m.playerId]} name={m.playerName} size={32} />
+                  <span>
+                    <strong>{m.playerName}</strong> {milestoneText(m)}
+                  </span>
+                </span>
+                <span style={{ color: "var(--gold)", fontWeight: 700, fontFamily: "var(--font-display)", fontSize: "1.1rem", whiteSpace: "nowrap" }}>
+                  {m.current}/{m.target}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {homeRoadSplit && (homeRoadSplit.home.games > 0 || homeRoadSplit.away.games > 0) && (
+        <section style={{ marginBottom: "2.5rem" }}>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: "1rem" }}>
+            <h2 style={H2}>Home / Road</h2>
+            {seasonCaption && <span style={CAPTION}>{seasonCaption}</span>}
+          </div>
+          <div className="card-row">
+            {(["home", "away"] as const).map((side) => (
+              <div key={side} style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 10, padding: "1.1rem 1.2rem" }}>
+                <div style={{ fontSize: ".72rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: ".4rem" }}>
+                  {side === "home" ? "At Home" : "On the Road"}
+                </div>
+                <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "2rem", color: "var(--gold)", fontVariantNumeric: "tabular-nums" }}>
+                  {homeRoadSplit[side].wins}-{homeRoadSplit[side].losses}-{homeRoadSplit[side].otl}
+                </div>
+                <div style={{ fontSize: ".78rem", color: "var(--text-secondary)", marginTop: 4 }}>
+                  {homeRoadSplit[side].points} {homeRoadSplit[side].points === 1 ? "pt" : "pts"} in {homeRoadSplit[side].games} {homeRoadSplit[side].games === 1 ? "game" : "games"}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Roster changes matter in the first weeks; after ~10 games they
+          live on the Roster tab only. */}
+      {moves && (ownStanding?.games_played ?? 0) < 10 && <RosterMovesCard teamAbbrev={abbrev} moves={moves} captainName={captainName} />}
     </>
   );
 }
@@ -414,6 +435,11 @@ function PreviewHero({
             {tag}
             {tag !== when && ` · ${when}`}
           </span>
+        </div>
+        <div aria-hidden="true" style={{ display: "flex", alignItems: "center", gap: 12, margin: "0 0 .5rem" }}>
+          <TeamLogo abbrev={game.isHome ? game.opponent : abbrev} size={48} gap={0} />
+          <span style={{ fontFamily: "var(--font-display)", fontSize: "1rem", color: "var(--text-secondary)" }}>at</span>
+          <TeamLogo abbrev={game.isHome ? abbrev : game.opponent} size={48} gap={0} />
         </div>
         <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: titleSize, lineHeight: 0.94, letterSpacing: ".01em", textTransform: "uppercase", margin: "0 0 1rem" }}>
           {teamName} {game.isHome ? "vs" : "at"} {game.opponentName}
@@ -554,7 +580,10 @@ function RecapHero({
 function ScoreLine({ label, score, strong, muted = false }: { label: string; score: number; strong: boolean; muted?: boolean }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 24 }}>
-      <span style={{ fontWeight: 700, fontSize: ".95rem", color: muted ? "var(--text-secondary)" : "var(--text-primary)" }}>{label}</span>
+      <span style={{ fontWeight: 700, fontSize: ".95rem", color: muted ? "var(--text-secondary)" : "var(--text-primary)", display: "flex", alignItems: "center" }}>
+        <TeamLogo abbrev={label} size={30} gap={8} />
+        {label}
+      </span>
       <span style={{ fontFamily: "var(--font-display)", fontSize: "2.6rem", lineHeight: 1, color: strong ? "var(--gold)" : "var(--text-secondary)" }}>{score}</span>
     </div>
   );
@@ -591,12 +620,16 @@ function GameCard({ card, abbrev }: { card: Extract<RecentCard, { kind: "game" }
         <span style={{ color: won ? "var(--win)" : "var(--loss)" }}>{resultLabel(card.team_score, card.opp_score, card.game_end_type)}</span>
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-        <span style={{ fontSize: ".88rem", fontWeight: 700 }}>{abbrev}</span>
+        <span style={{ fontSize: ".88rem", fontWeight: 700 }}>
+          <TeamLogo abbrev={abbrev} size={18} gap={4} />
+          {abbrev}
+        </span>
         <span style={{ fontSize: ".88rem", fontWeight: 700, color: won ? "var(--gold)" : "var(--text-secondary)" }}>{card.team_score}</span>
       </div>
       <div style={{ display: "flex", justifyContent: "space-between" }}>
         <span style={{ fontSize: ".88rem", color: "var(--text-secondary)" }}>
-          {card.is_home ? "vs" : "@"} {card.opp_abbrev}
+          {card.is_home ? "vs" : "@"} <TeamLogo abbrev={card.opp_abbrev} size={18} gap={4} />
+          {card.opp_abbrev}
         </span>
         <span style={{ fontSize: ".88rem", color: "var(--text-secondary)" }}>{card.opp_score}</span>
       </div>
@@ -623,7 +656,9 @@ function SeriesCard({ card, abbrev }: { card: Extract<RecentCard, { kind: "serie
         <span style={{ color: good ? "var(--win)" : "var(--loss)" }}>{status}</span>
       </div>
       <div style={{ fontSize: ".95rem", fontWeight: 700, marginBottom: 10 }}>
-        {abbrev} vs {card.opp_abbrev}
+        <TeamLogo abbrev={abbrev} size={20} gap={4} />
+        {abbrev} vs <TeamLogo abbrev={card.opp_abbrev} size={20} gap={4} />
+        {card.opp_abbrev}
       </div>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
         {card.games.map((g, i) => {

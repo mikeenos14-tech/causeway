@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { trackGoals, startTracking, type GoalTracker, type LiveGame, type LiveGoal } from "@/lib/live-game";
+import { trackGoals, startTracking, boardGoals, finalAndComplete, type GoalTracker, type LiveGame, type LiveGoal } from "@/lib/live-game";
 
 const POLL_MS = 20_000;
 const WINDOW_BEFORE_MS = 15 * 60_000; // start polling 15 min before puck drop
 const WINDOW_AFTER_MS = 6 * 3600_000; // give up 6h after (a long OT game is ~3.5h)
+const FINAL_GRACE_MS = 15 * 60_000; // after the final, wait at most this long for a goal the feed dropped
 
 const isLive = (g: LiveGame) => g.state === "LIVE" || g.state === "CRIT";
 const isFinal = (g: LiveGame) => g.state === "FINAL" || g.state === "OFF";
@@ -44,6 +45,7 @@ export function LiveScoreboard({
   const [overturned, setOverturned] = useState<{ id: number; goal: LiveGoal } | null>(null);
   const done = useRef(false);
   const seenGoals = useRef<GoalTracker | null>(null);
+  const finalSince = useRef<number | null>(null);
 
   // Each celebration or note clears itself after a few seconds.
   useEffect(() => {
@@ -86,9 +88,12 @@ export function LiveScoreboard({
             } else {
               seenGoals.current = startTracking(g);
             }
-            setGame(g);
+            setGame({ ...g, goals: boardGoals(seenGoals.current) });
             setStale(false);
-            if (isFinal(g)) done.current = true;
+            // Stop once final with every goal on the board; if the feed stays
+            // short a goal, give it 15 minutes past the final, then stop.
+            if (isFinal(g)) finalSince.current ??= Date.now();
+            if (finalAndComplete(g, seenGoals.current) || (finalSince.current && Date.now() - finalSince.current > FINAL_GRACE_MS)) done.current = true;
           } else if (!cancelled) {
             setStale(true);
           }

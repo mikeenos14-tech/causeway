@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BannerMark } from "@/components/BannerMark";
+import { SiteSearch } from "@/components/SiteSearch";
 
 export function Masthead({ scoreline }: { scoreline?: React.ReactNode }) {
   return (
@@ -17,7 +18,14 @@ export function Masthead({ scoreline }: { scoreline?: React.ReactNode }) {
               <BannerMark width={28} />
             </span>
           </span>
-          Causeway
+          <span style={{ display: "flex", flexDirection: "column", lineHeight: 1 }}>
+            Causeway
+            {/* The approved full lockup: the first game on file is Dec 1, 1924. */}
+            <span className="masthead-tagline">
+              {/* Phones get the short form so the search button keeps its row. */}
+              <span className="tagline-long">Bruins history </span>since 1924
+            </span>
+          </span>
         </Link>
         <nav className="masthead-nav" style={{ fontFamily: "var(--font-display)", fontSize: "1.15rem" }}>
           <Link href="/" style={{ color: "#d8d6cc", textDecoration: "none" }}>
@@ -29,35 +37,21 @@ export function Masthead({ scoreline }: { scoreline?: React.ReactNode }) {
           <Link href="/standings" style={{ color: "#d8d6cc", textDecoration: "none" }}>
             Standings
           </Link>
+          <Link href="/history" style={{ color: "#d8d6cc", textDecoration: "none" }}>
+            History
+          </Link>
+          {/* The signature feature gets its own spot (and the gold), not
+              just the search box's "or ask". */}
+          <Link href="/ask" style={{ color: "var(--gold)", textDecoration: "none" }}>
+            Ask
+          </Link>
+          {/* "News", not "Headlines": short enough that all six links fit
+              on a phone without hiding Home (users looked for it). */}
           <Link href="/headlines" style={{ color: "#d8d6cc", textDecoration: "none" }}>
-            Headlines
+            News
           </Link>
         </nav>
-        <Link
-          href="/ask"
-          className="masthead-ask"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            background: "rgba(255,255,255,0.06)",
-            border: "1px solid rgba(255,255,255,0.14)",
-            borderRadius: 999,
-            padding: "7px 16px 7px 13px",
-            fontFamily: "var(--font-body)",
-            fontSize: ".85rem",
-            fontWeight: 600,
-            color: "#f1eee5",
-            textDecoration: "none",
-            whiteSpace: "nowrap",
-          }}
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" strokeWidth="2.4" aria-hidden>
-            <circle cx="11" cy="11" r="7" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-          Ask Causeway
-        </Link>
+        <SiteSearch />
         {scoreline}
       </div>
     </header>

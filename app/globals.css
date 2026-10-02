@@ -120,7 +120,13 @@ body {
   grid-template-columns: 90px 90px 1fr 130px;
 }
 
+/* "Swipe the table for more columns", phones only (wide stats tables). */
+.swipe-hint { display: none; margin: 0 0 6px; font-size: .75rem; color: var(--text-muted); }
+
 @media (max-width: 700px) {
+  .swipe-hint {
+    display: block;
+  }
   .masthead-inner {
     flex-wrap: wrap;
     gap: 8px 16px;
@@ -135,7 +141,7 @@ body {
     overflow-x: auto;
     white-space: nowrap;
     scrollbar-width: none;
-    gap: 22px;
+    gap: 16px;
   }
   /* Preview tale of the tape: each rank on its own line under the value. */
   .tape-rank {
@@ -150,10 +156,12 @@ body {
   /* Roster-change rows: name, then the detail on its own line. */
   .move-row {
     flex-direction: column;
+    align-items: flex-start !important;
     gap: 2px !important;
   }
   .move-detail {
     text-align: left !important;
+    padding-left: 34px; /* in line with the name, past the photo */
   }
   .dash-hero {
     padding-top: 1.75rem !important;
@@ -186,15 +194,23 @@ body {
   .card-wide {
     grid-column: auto;
   }
+  /* Phones keep W, L, OTL and PTS so a row always adds up (hiding OTL made
+     0 wins, 0 losses, 1 point look like an error); only GP is dropped, and
+     team names become nicknames. */
   .standings-row {
-    grid-template-columns: 28px 1fr 40px 40px 52px;
+    grid-template-columns: 24px 1fr 30px 30px 34px 40px;
   }
   .standings-row--compact {
-    grid-template-columns: 28px 1fr 40px 40px 52px;
+    grid-template-columns: 24px 1fr 30px 30px 34px 40px;
   }
-  .standings-col-gp,
-  .standings-col-otl {
+  .standings-col-gp {
     display: none;
+  }
+  .name-full {
+    display: none;
+  }
+  .name-short {
+    display: inline !important;
   }
   .schedule-row {
     grid-template-columns: 66px 1fr 96px;
@@ -276,4 +292,50 @@ html:not([data-banner-raised]) .banner-raise { animation: banner-raise 900ms cub
 @media (prefers-reduced-motion: reduce) {
   .goal-light { animation: none; opacity: 1; background: transparent; }
   .goal-banner { animation: none; }
+}
+
+/* Header search (components/SiteSearch.tsx). */
+.site-search-button { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14); border-radius: 999px; padding: 7px 16px 7px 13px; font-family: var(--font-body); font-size: .85rem; font-weight: 600; color: #f1eee5; white-space: nowrap; cursor: pointer; }
+.site-search-button:hover { background: rgba(255,255,255,0.1); }
+.site-search-panel { position: absolute; right: 0; top: calc(100% + 8px); z-index: 60; width: min(440px, calc(100vw - 32px)); background: #141416; border: 1px solid rgba(255,255,255,0.14); border-radius: 12px; padding: 10px; box-shadow: 0 12px 32px rgba(0,0,0,.45); }
+.site-search-input { width: 100%; box-sizing: border-box; background: #0a0a0b; color: #f1eee5; border: 1px solid rgba(255,255,255,0.18); border-radius: 8px; padding: 10px 12px; font-size: 16px; outline: none; }
+.site-search-input:focus { border-color: var(--gold); }
+.site-search-results { list-style: none; margin: 8px 0 0; padding: 0; max-height: 60vh; overflow-y: auto; }
+.site-search-row { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: 8px; cursor: pointer; color: #f1eee5; font-size: .9rem; }
+.site-search-row[aria-selected="true"] { background: rgba(255,184,28,0.12); }
+
+/* Team names: full on desktop, nickname on phones (see the media query). */
+.name-short { display: none; }
+
+/* Season picker (components/SeasonPicker.tsx). 16px text so iOS doesn't
+   zoom the page when the select is tapped. */
+.season-select { background: var(--surface-1); color: var(--text-primary); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font-size: 16px; font-family: var(--font-body); cursor: pointer; }
+.season-select:focus { outline: 2px solid var(--gold); outline-offset: 1px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+/* "Bruins history since 1924" under the wordmark (the approved lockup). */
+.masthead-tagline {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.6rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-top: 3px;
+  white-space: nowrap;
+}
+@media (max-width: 480px) {
+  .tagline-long { display: none; }
+}
+
+/* Playoff History: one collapsible section per decade. */
+.decade { border-top: 1px solid var(--border); }
+.decade-summary { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 14px 2px; cursor: pointer; list-style: none; }
+.decade-summary::-webkit-details-marker { display: none; }
+.decade-summary > span:nth-child(2) { margin-left: auto; }
+.decade-summary::after { content: "+"; color: var(--gold); font-weight: 700; margin-left: 12px; }
+.decade[open] > .decade-summary::after { content: "–"; }
+/* The smallest phones (320px): tighter nav so all six links fit. */
+@media (max-width: 359px) {
+  .masthead-nav { gap: 9px !important; font-size: 1.05rem !important; }
 }

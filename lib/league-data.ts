@@ -139,7 +139,9 @@ export async function getLeagueTeamStats(seasonId: string): Promise<LeagueTeamSt
   });
 }
 
-export type LeagueRank = { value: number; rank: number; outOf: number; min: number; max: number; leagueAvg: number };
+// bestTeam / worstTeam: who holds each end of the range, so the page can
+// name and link them.
+export type LeagueRank = { value: number; rank: number; outOf: number; min: number; max: number; leagueAvg: number; bestTeam: string; worstTeam: string };
 
 // Rank + the full league's min/max/avg for one metric — everything a
 // percentile bar needs to draw itself. `higherIsBetter` flips the rank
@@ -167,5 +169,7 @@ export function rankTeam(
     min: Math.min(...values),
     max: Math.max(...values),
     leagueAvg,
+    bestTeam: sorted[0].abbrev,
+    worstTeam: sorted[sorted.length - 1].abbrev,
   };
 }

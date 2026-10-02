@@ -4,14 +4,33 @@
 // rule), so without this a fan checking in before the opener can't see
 // that the roster changed at all.
 //
-// Arrivals show their last NHL team from our own data (or "no NHL games
-// yet"); departures (10+ games last season, so call-ups don't clutter it)
+// Arrivals show their last NHL team from our own data, an earlier stint
+// here if they're coming back, and where they played last season if it
+// wasn't the NHL (or "no NHL games yet"); departures (10+ games last season, so call-ups don't clutter it)
 // show where they are now from each player's NHL profile.
 
+import { nhlJson } from "./nhl-fetch";
 import { pool } from "./db";
 
 const API = "https://api-web.nhle.com/v1";
 const DEPARTURE_MIN_GP = 10;
+// NHL profile lookups (arrivals and departures) at most this many at a time.
+// All at once, a team with 15+ roster changes on a cold cache drew 429s,
+// and every failed lookup quietly dropped its line ("from Providence").
+const LOOKUP_CONCURRENCY = 4;
+
+async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
+}
 
 export type Arrival = {
   id: number;
@@ -19,6 +38,13 @@ export type Arrival = {
   position: string;
   number: number | null;
   previous: { abbrev: string; season: string; games: number } | null; // last NHL team on file
+  // Earlier games with THIS team (since 2007-08), for a player coming back
+  // from somewhere else: "back after 232 GP here (2018-19 to 2022-23)".
+  formerStint: { games: number; from: string; to: string } | null;
+  // Where he played last season outside the NHL (AHL, college, junior...),
+  // from his NHL profile: "up from Providence (AHL)". Null when he played
+  // in the NHL last season, or the lookup failed (then nothing is claimed).
+  lastSeasonElsewhere: { team: string; league: string; games: number } | null;
 };
 
 export type Departure = {
@@ -26,7 +52,8 @@ export type Departure = {
   name: string;
   position: string;
   games: number; // for this team last season
-  now: { kind: "team"; abbrev: string } | { kind: "system" } | { kind: "none" };
+  // unknown: the NHL lookup failed, so nothing is claimed (never "none").
+  now: { kind: "team"; abbrev: string } | { kind: "system" } | { kind: "none" } | { kind: "unknown" };
 };
 
 export type RosterMoves = { lastSeason: string; arrivals: Arrival[]; departures: Departure[] };
@@ -36,9 +63,8 @@ type ApiPlayer = { id: number; firstName: { default: string }; lastName: { defau
 export async function getRosterMoves(teamAbbrev: string, lastSeason: string): Promise<RosterMoves | null> {
   let current: ApiPlayer[];
   try {
-    const res = await fetch(`${API}/roster/${teamAbbrev}/current`, { next: { revalidate: 3600 } });
-    if (!res.ok) return null;
-    const data = await res.json();
+    const data = await nhlJson<{ forwards?: ApiPlayer[]; defensemen?: ApiPlayer[]; goalies?: ApiPlayer[] }>(`${API}/roster/${teamAbbrev}/current`, 3600);
+    if (!data) return null;
     current = [...(data.forwards ?? []), ...(data.defensemen ?? []), ...(data.goalies ?? [])];
     if (current.length === 0) return null;
   } catch {
@@ -78,36 +104,66 @@ export async function getRosterMoves(teamAbbrev: string, lastSeason: string): Pr
       )
     : { rows: [] };
   const prevById = new Map(prevRows.map((r) => [Number(r.player_id), r]));
-  const arrivals: Arrival[] = newcomers.map((p) => {
+  // Every earlier stint with this team, to tell a returning player from a
+  // newcomer (the last-NHL-team rule alone called Connor Clifton, 232 GP
+  // here 2018-23, just "from PIT").
+  const { rows: stintRows } = newcomers.length
+    ? await pool.query(
+        `select s.player_id, count(*)::int as games, min(g.season_id) as first, max(g.season_id) as last
+         from (select player_id, game_id, team_id from skater_game_stats
+               union all select player_id, game_id, team_id from goalie_game_stats) s
+         join games g on g.id = s.game_id join teams t on t.id = s.team_id
+         where s.player_id = any($1::int[]) and t.abbrev = $2 and g.game_type = 'regular' and g.season_id <= $3
+         group by s.player_id`,
+        [newcomers.map((p) => p.id), teamAbbrev, lastSeason],
+      )
+    : { rows: [] };
+  const stintById = new Map(stintRows.map((r) => [Number(r.player_id), r]));
+  const arrivals: Arrival[] = await mapLimit(newcomers, LOOKUP_CONCURRENCY, async (p) => {
     const prev = prevById.get(p.id);
+    const stint = stintById.get(p.id);
+    // Last season outside the NHL, only if he played no NHL games then.
+    let lastSeasonElsewhere: Arrival["lastSeasonElsewhere"] = null;
+    if (!prev || String(prev.season_id) !== lastSeason) {
+      try {
+        const d = await nhlJson<{ seasonTotals?: { season: number; gameTypeId: number; leagueAbbrev: string; teamName?: { default: string }; gamesPlayed?: number }[] }>(`${API}/player/${p.id}/landing`, 86400);
+        const rows = (d?.seasonTotals ?? []).filter((t) => String(t.season) === lastSeason && t.gameTypeId === 2);
+        if (rows.length > 0 && !rows.some((t) => t.leagueAbbrev === "NHL")) {
+          const top = [...rows].sort((x, y) => (y.gamesPlayed ?? 0) - (x.gamesPlayed ?? 0))[0];
+          if (top.teamName?.default) lastSeasonElsewhere = { team: top.teamName.default, league: top.leagueAbbrev, games: top.gamesPlayed ?? 0 };
+        }
+      } catch {
+        // stays null: nothing claimed
+      }
+    }
     return {
       id: p.id,
       name: `${p.firstName.default} ${p.lastName.default}`,
       position: p.positionCode,
       number: p.sweaterNumber ?? null,
       previous: prev ? { abbrev: prev.abbrev, season: String(prev.season_id), games: prev.games } : null,
+      formerStint: stint && prev && prev.abbrev !== teamAbbrev ? { games: stint.games, from: String(stint.first), to: String(stint.last) } : null,
+      lastSeasonElsewhere,
     };
   });
 
   // Departures: regulars last season who aren't on the roster now.
   const leavers = lastRows.filter((r) => !currentIds.has(Number(r.id)) && r.games >= DEPARTURE_MIN_GP);
-  const departures: Departure[] = await Promise.all(
-    leavers.map(async (r) => {
-      let now: Departure["now"] = { kind: "none" };
+  const departures: Departure[] = await mapLimit(leavers, LOOKUP_CONCURRENCY, async (r) => {
+      // "Not on an NHL roster" only when the NHL actually says so: a failed
+      // lookup used to fall through to that claim (found in the
+      // 2026-10-01 audit); now it says the status is unavailable.
+      let now: Departure["now"] = { kind: "unknown" };
       try {
-        const res = await fetch(`${API}/player/${r.id}/landing`, { next: { revalidate: 86400 } });
-        if (res.ok) {
-          const d = await res.json();
-          if (d.isActive && d.currentTeamAbbrev) {
-            now = d.currentTeamAbbrev === teamAbbrev ? { kind: "system" } : { kind: "team", abbrev: d.currentTeamAbbrev };
-          }
+        const d = await nhlJson<{ isActive?: boolean; currentTeamAbbrev?: string }>(`${API}/player/${r.id}/landing`, 86400);
+        if (d) {
+          now = d.isActive && d.currentTeamAbbrev ? (d.currentTeamAbbrev === teamAbbrev ? { kind: "system" } : { kind: "team", abbrev: d.currentTeamAbbrev }) : { kind: "none" };
         }
       } catch {
-        // leave as "none" — shown as not on an NHL roster, never guessed
+        // stays "unknown"
       }
       return { id: Number(r.id), name: r.full_name, position: r.position, games: r.games, now };
-    }),
-  );
+  });
 
   arrivals.sort((a, b) => (b.previous?.games ?? -1) - (a.previous?.games ?? -1));
   departures.sort((a, b) => b.games - a.games);

@@ -11,7 +11,11 @@ export type Leadership = {
   season: string;
   captainId: number | null;
   alternateIds: number[];
+  // How many A's the team wears this season (two alongside a captain), so
+  // the page can say how many are still unannounced.
+  alternateSlots: number;
   source: string;
+  alternateSource?: string;
   asOf: string;
 };
 
@@ -19,8 +23,13 @@ export const LEADERSHIP: Record<string, Leadership> = {
   BOS: {
     season: "20262027",
     captainId: 8477956, // David Pastrnak, 28th captain in franchise history
-    alternateIds: [], // not yet announced for 2026-27 (2025-26: McAvoy, Lindholm, Pastrnak)
+    // Charlie McAvoy keeps an A (Boston Globe, 2026-09-27: "McAvoy will
+    // continue to wear one of the club's two 'A's"). The second A hadn't
+    // been announced as of 2026-10-02. (2025-26: McAvoy, H. Lindholm, Pastrnak.)
+    alternateIds: [8479325],
+    alternateSlots: 2,
     source: "https://www.nhl.com/bruins/news/bruins-name-david-pastrnak-28th-captain-in-team-history",
+    alternateSource: "https://www.bostonglobe.com/2026/09/27/sports/david-pastrnak-boston-bruins-team-captain/",
     asOf: "2026-09-27",
   },
 };
@@ -41,4 +50,14 @@ export async function getCurrentCaptainName(teamAbbrev: string, currentSeason: s
   const { pool } = await import("./db");
   const { rows } = await pool.query(`select full_name from players where id = $1`, [l.captainId]);
   return rows[0]?.full_name ?? null;
+}
+
+// Names of this season's announced alternates, in the order listed.
+export async function getAlternateNames(teamAbbrev: string, currentSeason: string | null): Promise<{ id: number; name: string }[]> {
+  const l = LEADERSHIP[teamAbbrev];
+  if (!l || l.season !== currentSeason || l.alternateIds.length === 0) return [];
+  const { pool } = await import("./db");
+  const { rows } = await pool.query(`select id, full_name from players where id = any($1::int[])`, [l.alternateIds]);
+  const byId = new Map(rows.map((r) => [Number(r.id), r.full_name as string]));
+  return l.alternateIds.flatMap((id) => (byId.has(id) ? [{ id, name: byId.get(id)! }] : []));
 }

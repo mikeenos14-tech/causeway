@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { TeamLogo } from "@/components/TeamLogo";
+import { TEAM_NICKNAMES } from "@/lib/team-names";
 
 // Replaces the old "→" link row that used to live inside StatLeaders —
 // that worked when there were two sub-pages, but wrapped into a cramped
@@ -12,12 +14,14 @@ import { usePathname } from "next/navigation";
 const TABS = [
   { label: "Overview", path: "" },
   { label: "Roster", path: "/roster" },
-  { label: "League", path: "/league" },
+  // Labels say what's there; paths kept so existing links still work.
+  { label: "League ranks", path: "/league" },
   { label: "Records", path: "/records" },
-  { label: "Series", path: "/series" },
+  { label: "Head-to-head", path: "/series" },
   { label: "Playoffs", path: "/playoffs" },
-  { label: "Advanced", path: "/advanced" },
 ];
+// Advanced is a view inside Roster now (RosterViewToggle), not its own tab.
+const ALSO_ACTIVE: Record<string, string[]> = { "/roster": ["/advanced"] };
 
 export function TeamSubNav({ abbrev }: { abbrev: string }) {
   const pathname = usePathname();
@@ -60,8 +64,23 @@ export function TeamSubNav({ abbrev }: { abbrev: string }) {
     };
   }, []);
 
+  // Sub-pages ("Roster & Stats", "Records", ...) never named the team, so
+  // on another club's pages nothing said whose roster you were reading.
+  // Overview pages already lead with the team's name, so they skip this.
+  const onOverview = pathname === base || pathname === "/";
   return (
-    <div style={{ position: "relative", marginBottom: "2rem" }}>
+    <div style={{ marginBottom: "2rem" }}>
+      {!onOverview && (
+        <Link
+          href={base}
+          style={{ display: "inline-flex", alignItems: "center", marginBottom: 8, fontFamily: "var(--font-display)", fontSize: "1.05rem", letterSpacing: ".04em", textTransform: "uppercase", color: "var(--text-primary)", textDecoration: "none" }}
+        >
+          <TeamLogo abbrev={abbrev} size={28} gap={6} />
+          {TEAM_NICKNAMES[abbrev] ?? abbrev}
+        </Link>
+      )}
+      {/* Its own positioned box so the scroll fades cover only the tabs. */}
+      <div style={{ position: "relative" }}>
       <nav
         ref={scrollerRef}
         style={{
@@ -86,7 +105,10 @@ export function TeamSubNav({ abbrev }: { abbrev: string }) {
           // Overview also matches the homepage itself when that's BOS, so a
           // Bruins visitor sees it highlighted from "/" too, not just
           // "/teams/BOS".
-          const active = tab.path === "" ? pathname === base || (pathname === "/" && abbrev === "BOS") : pathname === href;
+          const active =
+            tab.path === ""
+              ? pathname === base || (pathname === "/" && abbrev === "BOS")
+              : pathname === href || (ALSO_ACTIVE[tab.path] ?? []).some((p) => pathname === `${base}${p}`);
           return (
             <Link
               key={tab.label}
@@ -145,6 +167,7 @@ export function TeamSubNav({ abbrev }: { abbrev: string }) {
           <span style={{ color: "var(--gold)", fontSize: ".8rem" }}>›</span>
         </div>
       )}
+      </div>
     </div>
   );
 }

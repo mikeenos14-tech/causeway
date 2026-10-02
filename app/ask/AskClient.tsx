@@ -63,6 +63,18 @@ function getDisplayColumns(columns: string[]): string[] {
   return filtered.length > 0 ? filtered : columns;
 }
 
+// Where a cell should link, using ids the same row already carries (the
+// columns that display them are hidden above). Conservative: a name links
+// to a player only when the row has that player's id, a date or matchup
+// links to a game only when the row has its game id.
+function cellHref(row: Record<string, unknown>, column: string): string | null {
+  const id = (key: string) => (typeof row[key] === "number" || (typeof row[key] === "string" && /^\d+$/.test(row[key] as string)) ? String(row[key]) : null);
+  if (/(^|_)(full_name|player|player_name|scorer|goalie)$/i.test(column) && id("player_id")) return `/players/${id("player_id")}`;
+  if (/(^|_)(game_date|date|matchup)$/i.test(column) && id("game_id")) return `/games/${id("game_id")}`;
+  if (/^(opponent|opp|opp_abbrev|team|team_abbrev|abbrev)$/i.test(column) && typeof row[column] === "string" && /^[A-Z]{3}$/.test(row[column] as string)) return `/teams/${row[column]}`;
+  return null;
+}
+
 function formatColumnHeader(column: string): string {
   if (/season_id$/i.test(column)) return "season";
   return column.replace(/_/g, " ");
@@ -282,7 +294,19 @@ export function AskClient({ initialQuestion }: { initialQuestion: string }) {
                     {result.table.rows.map((row, i) => (
                       <tr key={i}>
                         {getDisplayColumns(result.table!.columns).map((c) => (
-                          <td key={c}>{formatCell(row[c], c)}</td>
+                          <td key={c}>
+                            {(() => {
+                              const href = cellHref(row, c);
+                              const text = formatCell(row[c], c);
+                              return href ? (
+                                <a href={href} style={{ color: "inherit", textDecorationColor: "var(--border)", textUnderlineOffset: 3 }}>
+                                  {text}
+                                </a>
+                              ) : (
+                                text
+                              );
+                            })()}
+                          </td>
                         ))}
                       </tr>
                     ))}

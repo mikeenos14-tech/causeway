@@ -207,3 +207,21 @@ export function trackGoals(
   known = known.filter((x) => !removedKeys.has(goalKey(x)));
   return { state: { known, overturnedKeys: [...overturned] }, added, removed, restored };
 }
+
+// The goals to show, in game order: the tracker's list, so a goal the feed
+// drops for a poll stays on the board (it once dropped the OT winner from
+// the very update that first said "Final").
+const PERIOD_ORDER = (p: string) => (p === "1st" ? 1 : p === "2nd" ? 2 : p === "3rd" ? 3 : p === "OT" ? 4 : /^\d+OT$/.test(p) ? 3 + Number(p.slice(0, -2)) : p === "SO" ? 99 : 50);
+const SECONDS = (t: string) => Number(t.split(":")[0]) * 60 + Number(t.split(":")[1] ?? 0);
+export function boardGoals(state: GoalTracker): LiveGoal[] {
+  return [...state.known].sort((a, b) => PERIOD_ORDER(a.period) - PERIOD_ORDER(b.period) || SECONDS(a.time) - SECONDS(b.time));
+}
+
+// Final AND every goal on the board: the scoring list adds up to the score
+// (a shootout's deciding goal counts in the score but not the list). Until
+// then the scoreboard keeps polling, so a final missing a goal isn't frozen.
+export function finalAndComplete(g: Pick<LiveGame, "state" | "status" | "away" | "home">, state: GoalTracker): boolean {
+  if (g.state !== "FINAL" && g.state !== "OFF") return false;
+  const expected = g.away.score + g.home.score - (g.status.includes("SO") ? 1 : 0);
+  return state.known.length === expected;
+}
