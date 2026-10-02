@@ -4,6 +4,9 @@ import { getLatestStandingsSeason, getFullStandings, getConferencePictures, type
 import { formatGameDate, formatSeasonLabel } from "@/lib/format-date";
 import { Masthead, Footer } from "@/components/Masthead";
 import { TeamLogo } from "@/components/TeamLogo";
+import { getHistoricalStandings, getHistoricalStandingsSeasons } from "@/lib/history-standings";
+import { SeasonPicker } from "@/components/SeasonPicker";
+import { HistoricalStandings } from "@/components/HistoricalStandings";
 
 // Without this the page was prerendered once at build time and never
 // picked up the hourly data refresh (live it still read "As of Apr 16"
@@ -40,10 +43,17 @@ function PictureRow({ label, team, pointsBack }: { label: string; team: WildCard
   );
 }
 
-export default async function Standings() {
-  const latest = await getLatestStandingsSeason();
-  const rows = latest ? await getFullStandings(latest.seasonId) : [];
-  const pictures = latest ? await getConferencePictures(latest.seasonId) : [];
+export default async function Standings({ searchParams }: { searchParams: Promise<{ season?: string }> }) {
+  const { season: requested } = await searchParams;
+  const [latest, pastSeasons] = await Promise.all([getLatestStandingsSeason(), getHistoricalStandingsSeasons()]);
+  // Every season with official standings, 1917-18 on (no 2004-05: lockout).
+  const seasons = [...new Set([...(latest ? [latest.seasonId] : []), ...pastSeasons])].sort().reverse();
+  // A past season (any valid one other than the current) shows its final
+  // standings; anything else, including a bad ?season=, shows the current.
+  const pastSeason = requested && requested !== latest?.seasonId && pastSeasons.includes(requested) ? requested : null;
+  const past = pastSeason ? await getHistoricalStandings(pastSeason) : null;
+  const rows = latest && !past ? await getFullStandings(latest.seasonId) : [];
+  const pictures = latest && !past ? await getConferencePictures(latest.seasonId) : [];
 
   const byDivision = new Map<string, typeof rows>();
   for (const r of rows) {
@@ -58,11 +68,23 @@ export default async function Standings() {
         <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "clamp(2.2rem,4.5vw,3rem)", textTransform: "uppercase", letterSpacing: ".01em", margin: "0 0 .4rem" }}>
           Standings
         </h1>
-        {latest && (
-          <p style={{ color: "var(--text-secondary)", fontSize: ".9rem", marginBottom: "2.5rem" }}>
-            {formatSeasonLabel(latest.seasonId)} regular season · through {formatGameDate(latest.asOf, true)}
+        {past && pastSeason ? (
+          <p style={{ color: "var(--text-secondary)", fontSize: ".9rem", marginBottom: "1rem" }}>
+            {formatSeasonLabel(pastSeason)} final regular-season standings · {formatGameDate(past.asOf, true)} · the NHL&apos;s official standings
           </p>
+        ) : (
+          latest && (
+            <p style={{ color: "var(--text-secondary)", fontSize: ".9rem", marginBottom: "1rem" }}>
+              {formatSeasonLabel(latest.seasonId)} regular season · through {formatGameDate(latest.asOf, true)}
+            </p>
+          )
         )}
+        {seasons.length > 1 && (
+          <div style={{ marginBottom: "2.5rem" }}>
+            <SeasonPicker seasons={seasons} current={pastSeason ?? latest?.seasonId ?? seasons[0]} basePath="/standings" />
+          </div>
+        )}
+        {past && pastSeason && <HistoricalStandings seasonId={pastSeason} rows={past.rows} />}
 
         {pictures.length > 0 && (
           <section style={{ marginBottom: "3rem" }}>
@@ -101,6 +123,8 @@ export default async function Standings() {
           </section>
         )}
 
+{!past && (
+          <>
         <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".02em", fontSize: "1.4rem", margin: "0 0 1rem" }}>
           By Division
         </h2>
@@ -153,6 +177,8 @@ export default async function Standings() {
             </section>
           ))}
         </div>
+          </>
+        )}
       </main>
       <Footer />
     </>

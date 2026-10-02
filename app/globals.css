@@ -154,6 +154,11 @@ body {
     align-items: flex-end;
   }
   /* Roster-change rows: name, then the detail on its own line. */
+  /* Past standings: GF/GA give way to the record on phones. */
+  /* Hidden cells keep their grid slot (0px wide): display:none would pull
+     every later cell one column left. */
+  .hist-standings { --hist-goals-col: 0px; --hist-gp-col: 0px; --hist-num-col: 30px; font-size: .95em; }
+  .hist-col-goals, .hist-col-gp { visibility: hidden; overflow: hidden; }
   .move-row {
     flex-direction: column;
     align-items: flex-start !important;

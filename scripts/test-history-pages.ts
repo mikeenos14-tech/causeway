@@ -6,6 +6,8 @@
 
 import { eraRecord, eraResult, roundName, getHistorySeasonSchedule, getHistoricalPlayoffSeries, getHistoryGame, getBruinsSeasons, BOS_TEAM_ID } from "../lib/history-data";
 import { pool } from "../lib/db";
+import { getHistoricalStandings, getHistoricalStandingsSeasons } from "../lib/history-standings";
+import { teamNickname } from "../lib/team-names";
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = "") => {
@@ -77,6 +79,32 @@ async function main() {
   const boston1924 = (await getHistorySeasonSchedule("19241925"))[0];
   check("first Bruins game: Dec 1, 1924, beat the Maroons", boston1924?.date === "1924-12-01" && boston1924.team > boston1924.opp && boston1924.opponent === "MMR", JSON.stringify(boston1924));
   void first;
+
+  // Historical standings (the Standings season picker)
+  const st71 = await getHistoricalStandings("19701971");
+  const bos71 = st71?.rows.find((r) => r.code === "BOS");
+  check("1970-71 standings: BOS 57-14-7, 121 pts, 1st in the East", bos71?.w === 57 && bos71.l === 14 && bos71.t === 7 && bos71.pts === 121 && bos71.rank === 1 && bos71.group === "East", JSON.stringify(bos71));
+  const st51 = await getHistoricalStandings("19501951");
+  check("1950-51: one six-team league table", st51?.rows.length === 6 && new Set(st51.rows.map((r) => r.group)).size === 1 && st51.rows[0].group === "League");
+  const st27 = await getHistoricalStandings("19261927");
+  check("1926-27: American and Canadian divisions", JSON.stringify([...new Set(st27?.rows.map((r) => r.group))].sort()) === JSON.stringify(["American", "Canadian"]));
+  const st00 = await getHistoricalStandings("19992000");
+  check("1999-00: six divisions, 16 playoff teams", new Set(st00?.rows.map((r) => r.group)).size === 6 && st00!.rows.filter((r) => r.madePlayoffs).length === 16);
+  const st21 = await getHistoricalStandings("20202021");
+  check("2020-21: divisions without sponsor names", JSON.stringify([...new Set(st21?.rows.map((r) => r.group))].sort()) === JSON.stringify(["Central", "East", "North", "West"]));
+  check("2004-05 (lockout) has no standings", !(await getHistoricalStandingsSeasons()).includes("20042005"));
+  // Invariants over every season: each decided game has one winner and one
+  // loser (W = L + OTL league-wide), and league GF = GA.
+  const bad: string[] = [];
+  for (const season of await getHistoricalStandingsSeasons()) {
+    const sst = await getHistoricalStandings(season);
+    if (!sst) continue;
+    const sum = (k: "w" | "l" | "otl" | "gf" | "ga") => sst.rows.reduce((a, r) => a + Number(r[k] ?? 0), 0);
+    if (sum("w") !== sum("l") + sum("otl")) bad.push(`${season} W ${sum("w")} vs L+OTL ${sum("l") + sum("otl")}`);
+    if (sst.rows.every((r) => r.gf != null) && sum("gf") !== sum("ga")) bad.push(`${season} GF ${sum("gf")} vs GA ${sum("ga")}`);
+  }
+  check("every season: league W = L + OTL, and GF = GA", bad.length === 0, bad.slice(0, 5).join("; "));
+  check("short names: (1917) Senators, Maple Leafs, St. Patricks", teamNickname("SEN", "Ottawa Senators (1917)") === "Senators" && teamNickname("TOR", "Toronto Maple Leafs") === "Maple Leafs" && teamNickname("TSP", "Toronto St. Patricks") === "St. Patricks");
 
   await pool.end();
   console.log(`\n${failed === 0 ? "All passed." : `${failed} failed.`}`);

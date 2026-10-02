@@ -10,4 +10,14 @@ export const TEAM_NICKNAMES: Record<string, string> = {
   WPG: "Jets", WSH: "Capitals",
 };
 
-export const teamNickname = (abbrev: string, fullName: string) => TEAM_NICKNAMES[abbrev] ?? fullName;
+// Clubs no longer in the league (history pages): the nickname is the last
+// word, except these two-word ones.
+const TWO_WORD = ["Red Wings", "Maple Leafs", "Blue Jackets", "Golden Knights", "Golden Seals", "North Stars", "St. Patricks", "Blue Shirts"];
+
+export const teamNickname = (abbrev: string, fullName: string) => {
+  if (TEAM_NICKNAMES[abbrev]) return TEAM_NICKNAMES[abbrev];
+  // "Ottawa Senators (1917)": the year tells clubs apart in full names only.
+  const name = fullName.replace(/\s*\(\d{4}\)$/, "");
+  const two = TWO_WORD.find((n) => name.endsWith(` ${n}`));
+  return two ?? name.split(" ").at(-1) ?? name;
+};
