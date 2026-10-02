@@ -79,20 +79,7 @@ async function main() {
   const c = new Client({ connectionString: process.env.DATABASE_URL });
   await c.connect();
   const games = await loadEloGames(c);
-  const { rows: en } = await c.query(
-    `select e.game_id, sum((e.team_id = g.home_team_id)::int)::int as home, sum((e.team_id = g.away_team_id)::int)::int as away
-     from nhl_goal_events e join nhl_games g on g.id = e.game_id where e.empty_net and g.season >= '20092010' group by e.game_id`,
-  );
-  const { rows: known } = await c.query(`select id from nhl_games where season >= '20092010'`);
   await c.end();
-  const enBy = new Map(en.map((r) => [Number(r.game_id), r]));
-  const knownIds = new Set(known.map((r) => Number(r.id)));
-  for (const g of games) {
-    if (!knownIds.has(g.id)) continue;
-    const r = enBy.get(g.id);
-    g.enHome = r ? r.home : 0;
-    g.enAway = r ? r.away : 0;
-  }
   const byId = new Map(games.map((g) => [g.id, g]));
   const base: EloParams = { ...ELO.params };
   const variants: [string, EloParams][] = [
@@ -112,6 +99,35 @@ async function main() {
     console.log(`done: ${name}`);
   }
   console.table(results);
+
+  // Candidate additions, on the current settings plus the empty-net
+  // margin: each new knob tuned on training seasons, then compared game by
+  // game with that baseline on held-out seasons (mean log-loss gain and
+  // its standard error). Adopt only at 2+ standard errors.
+  const baseEN: EloParams = { ...base, marginExcludesEmptyNet: true };
+  const heldLL = (p: EloParams) => {
+    const pts = points(games, byId, p);
+    const ab = fit(pts.filter((t) => !isHeldOutSeason(t.season)));
+    const out = new Map<string, number>();
+    for (const t of pts) if (isHeldOutSeason(t.season)) {
+      const q = 1 / (1 + Math.exp(-(ab[0] + ab[1] * t.x)));
+      out.set(`${t.season}|${t.x}|${t.y}|${out.size}`, -(t.y * Math.log(q) + (1 - t.y) * Math.log(1 - q)));
+    }
+    return [...out.values()];
+  };
+  const paired = (a: number[], b: number[]) => {
+    const d = a.map((x, i) => x - b[i]);
+    const m = d.reduce((s, x) => s + x, 0) / d.length;
+    const se = Math.sqrt(d.reduce((s, x) => s + (x - m) ** 2, 0) / (d.length - 1) / d.length);
+    return { gain: m, se, z: m / se };
+  };
+  const pickBest = (cands: EloParams[]) => cands.reduce((best, p) => (evaluate(games, byId, p).trainLL < evaluate(games, byId, best).trainLL ? p : best));
+  const configOnly = heldLL(base), enOnly = heldLL(baseEN);
+  console.log("empty-net margin vs current (same settings):", JSON.stringify(paired(configOnly, enOnly)));
+  const b2b = pickBest([0, 10, 20, 30, 40, 50, 60].map((pen) => ({ ...baseEN, b2bPenalty: pen })));
+  console.log(`back-to-back penalty tuned to ${b2b.b2bPenalty}:`, JSON.stringify(paired(enOnly, heldLL(b2b))));
+  const early = pickBest([1].flatMap(() => [5, 10, 15, 20].flatMap((n) => [1, 1.25, 1.5, 2].map((mult) => ({ ...baseEN, earlyK: { games: n, mult } })))));
+  console.log(`early-season K tuned to ${JSON.stringify(early.earlyK)}:`, JSON.stringify(paired(enOnly, heldLL(early))));
 }
 
 main().catch((e) => {

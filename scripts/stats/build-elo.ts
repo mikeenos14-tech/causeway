@@ -23,7 +23,23 @@ export async function loadEloGames(client: Client): Promise<EloGame[]> {
      where not (g.id = any($1))`,
     [ELO.excludeGameIds],
   );
-  return rows.map((r) => ({ id: r.id, season: r.season, date: r.date, playoff: r.playoff, home: r.home, away: r.away, homeScore: r.home_score, awayScore: r.away_score, finalState: r.final_state }));
+  // Empty-net goals per side where known (2009-10 on; earlier stays
+  // unknown), and back-to-back flags (team_rest).
+  const { rows: en } = await client.query(
+    `select g.id, coalesce(sum((e.team_id = g.home_team_id and e.empty_net)::int), 0)::int as h, coalesce(sum((e.team_id = g.away_team_id and e.empty_net)::int), 0)::int as a
+     from nhl_games g left join nhl_goal_events e on e.game_id = g.id where g.season >= '20092010' group by g.id`,
+  );
+  const enBy = new Map(en.map((r) => [Number(r.id), r]));
+  const { rows: rest } = await client.query(`select game_id, is_home, back_to_back from team_rest where back_to_back`);
+  const b2b = new Set(rest.map((r) => `${r.game_id}|${r.is_home ? "h" : "a"}`));
+  return rows.map((r) => {
+    const e = enBy.get(Number(r.id));
+    return {
+      id: r.id, season: r.season, date: r.date, playoff: r.playoff, home: r.home, away: r.away, homeScore: r.home_score, awayScore: r.away_score, finalState: r.final_state,
+      enHome: e ? e.h : null, enAway: e ? e.a : null,
+      b2bHome: b2b.has(`${r.id}|h`), b2bAway: b2b.has(`${r.id}|a`),
+    };
+  });
 }
 
 const seasonOfRow = (games: Map<number, EloGame>) => (r: EloRow) => games.get(r.gameId)!.season;

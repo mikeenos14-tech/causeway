@@ -109,7 +109,7 @@ export async function getPreview(gameId: number): Promise<Preview | null> {
     statsSeasonLabel,
     meetings,
     // Never blocks the preview: no odds rather than an error.
-    odds: await getEloOdds(awayApi.id, homeApi.id, season, landing.gameType).catch(() => null),
+    odds: await getEloOdds(awayApi.id, homeApi.id, season, landing.gameType, landing.startTimeUTC).catch(() => null),
   };
 }
 

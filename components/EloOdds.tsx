@@ -29,10 +29,10 @@ export function EloOddsBar({ odds, away, home }: { odds: EloOdds; away: { abbrev
       <details style={{ marginTop: 10, fontSize: ".8rem", color: "var(--text-secondary)" }}>
         <summary style={{ cursor: "pointer", color: "var(--gold)" }}>How this works</summary>
         <p style={{ margin: ".5rem 0 0", maxWidth: "70ch", lineHeight: 1.5 }}>
-          Each team has an Elo rating built from every NHL game since 1917 (wins, margins, home ice), updated after each game. The ratings&apos; gap,
+          Each team has an Elo rating built from every NHL game since 1917 (wins, margins not counting empty-net goals, home ice), updated after each game. The ratings&apos; gap,
           plus home ice, gives each team&apos;s chance to win, overtime and shootouts included. Tested on {ELO.winProb.heldOutGames.toLocaleString()} games
           from seasons the model never saw, it beat a no-information guess every season and was typically within about {Math.round(ELO.winProb.calibrationErrorPts)}{" "}
-          points of how often teams actually won. It doesn&apos;t know about injuries or who&apos;s in goal. Ratings: {away.abbrev}{" "}
+          points of how often teams actually won. A team playing the second night of a back-to-back is rated a little lower.{odds.b2b.away || odds.b2b.home ? ` (Tonight: ${[odds.b2b.away ? away.abbrev : null, odds.b2b.home ? home.abbrev : null].filter(Boolean).join(" and ")} played yesterday.)` : ""} It doesn&apos;t know about injuries or who&apos;s in goal. Ratings: {away.abbrev}{" "}
           {Math.round(odds.awayRating)}, {home.abbrev} {Math.round(odds.homeRating)}.
         </p>
       </details>

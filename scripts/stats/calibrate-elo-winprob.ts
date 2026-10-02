@@ -15,7 +15,9 @@ type G = { season: string; diff: number; homeWin: number };
 
 async function main() {
   const { rows } = await pool.query(
-    `select g.season, h.rating_before::float as rh, a.rating_before::float as ra, (g.home_score > g.away_score)::int as home_win
+    `select g.season, h.rating_before::float as rh, a.rating_before::float as ra, (g.home_score > g.away_score)::int as home_win,
+            exists (select 1 from team_rest r where r.game_id = g.id and r.is_home and r.back_to_back) as b2b_h,
+            exists (select 1 from team_rest r where r.game_id = g.id and not r.is_home and r.back_to_back) as b2b_a
      from nhl_games g
      join nhl_teams ht on ht.id = g.home_team_id join nhl_teams at on at.id = g.away_team_id
      join elo_history h on h.game_id = g.id and h.franchise_id = ht.lineage_id
@@ -24,7 +26,9 @@ async function main() {
   );
   const homeIce = ELO.params.homeIce;
   // Home ice exactly as the Elo model applies it (by era, config ERAS).
-  const games: G[] = rows.map((r) => ({ season: r.season, diff: r.rh - r.ra + (homeIce[eraOf(r.season).id] ?? 0), homeWin: r.home_win }));
+  // and the back-to-back penalty exactly as the model applies it.
+  const pen = ELO.params.b2bPenalty ?? 0;
+  const games: G[] = rows.map((r) => ({ season: r.season, diff: r.rh - (r.b2b_h ? pen : 0) - (r.ra - (r.b2b_a ? pen : 0)) + (homeIce[eraOf(r.season).id] ?? 0), homeWin: r.home_win }));
   const train = games.filter((g) => !isHeldOutSeason(g.season));
   const test = games.filter((g) => isHeldOutSeason(g.season));
 

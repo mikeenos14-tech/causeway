@@ -1,3 +1,4 @@
+import type { EloParams } from "../lib/stats/elo";
 // Every tunable setting for the Signature Stats engine lives here (spec
 // section 2: "all tunable weights live in one config file"), never in the
 // code that uses them. Phase 0 settings only so far; each later phase adds
@@ -85,7 +86,7 @@ export const ELO = {
   // out): training log loss 0.65841 vs 0.66033 for the spec's starting
   // values. Every value is inside its search range (margin first landed on
   // the old range's edge, so the range was widened and re-run).
-  modelVersion: "elo-v1-2026-10-02",
+  modelVersion: "elo-v1.1-2026-10-02",
   params: {
     initial: 1500,
     expansionStart: 1380,
@@ -96,15 +97,25 @@ export const ELO = {
     marginCoef: 1.25,
     reversion: 0.4,
     otWinnerScore: 0.75,
-  },
+    // Adopted 2026-10-02 from scripts/stats/experiment-elo.ts (held-out,
+    // game-by-game against the v1 settings): margins leave out the winner's
+    // empty-net goals where known (2009-10 on), +0.00038 log loss, 2.9 SE;
+    // a team on the second night of a back-to-back plays 30 points below
+    // its rating, +0.00131, 3.5 SE (tuned 0-60). Tested and rejected:
+    // autocorrelation damping, separate shootout scoring, early-season K
+    // (1.2 SE).
+    marginExcludesEmptyNet: true,
+    b2bPenalty: 30,
+  } as EloParams,
   // Pregame win chance (OT and shootouts count as wins) from the pregame
-  // rating gap incl. era home ice: p = 1 / (1 + exp(-(intercept + slope *
-  // gap))). Fitted by scripts/stats/calibrate-elo-winprob.ts on 2005-06 on
-  // training seasons (20,464 games); on the held-out seasons (4,854 games)
-  // log loss 0.6737 vs 0.6882 for the no-skill baseline, Brier 0.2405 vs
-  // 0.2475, average calibration error 2.7 points. Refit if the Elo
-  // parameters change. Regular season only.
-  winProb: { intercept: 0.0404, slope: 0.005443, calibrationErrorPts: 2.7, heldOutGames: 4854 },
+  // rating gap incl. era home ice and the back-to-back penalty:
+  // p = 1 / (1 + exp(-(intercept + slope * gap))). Fitted by
+  // scripts/stats/calibrate-elo-winprob.ts on 2005-06 on training seasons
+  // (20,464 games) with the v1.1 ratings; on the held-out seasons (4,854
+  // games) log loss 0.6722 vs 0.6882 for the no-skill baseline, Brier
+  // 0.2398 vs 0.2475, average calibration error 2.3 points. Refit whenever
+  // the Elo parameters change. Regular season only.
+  winProb: { intercept: 0.014, slope: 0.005664, calibrationErrorPts: 2.3, heldOutGames: 4854 },
   // Games that aren't real results: the 1918 Montreal Wanderers forfeits
   // (their arena burned down; Montreal and Toronto were credited 1-0 wins).
   excludeGameIds: [1917020035, 1917020036],

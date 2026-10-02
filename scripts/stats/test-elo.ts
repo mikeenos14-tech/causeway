@@ -31,6 +31,14 @@ async function main() {
   check("shootout and tie scoring", resultScore(game({ finalState: "SO" }), SPEC) === 0.75 && resultScore(game({ finalState: "TIE", homeScore: 2, awayScore: 2 }), SPEC) === 0.5);
   const two = runElo([game({ season: "19171918", date: "1917-12-19" })], { ...SPEC, initial: 1505 }, () => "early");
   const delta = two.rows[0].after - two.rows[0].before;
+  // v1.1 options (config: on)
+  const EN = { ...SPEC, marginExcludesEmptyNet: true };
+  check("empty-net goals leave the margin: 4-1 with 2 empty-netters is a 1-goal game", marginMultiplier(game({ homeScore: 4, awayScore: 1, enHome: 2 }), EN) === 1);
+  check("empty-net goals unknown (before 2009-10): full margin", near(marginMultiplier(game({ homeScore: 4, awayScore: 1, enHome: null }), EN), 1 + 0.5 * Math.log(3), 1e-9));
+  check("only the winner's empty-netters count (loser's don't shrink it)", near(marginMultiplier(game({ homeScore: 5, awayScore: 1, enHome: 0, enAway: 1 }), EN), 1 + 0.5 * Math.log(4), 1e-9));
+  const b2bRun = runElo([game({ id: 9, season: "19171918", b2bHome: true })], { ...SPEC, b2bPenalty: 30 }, () => "early");
+  check("back-to-back: the tired team's expectation uses its rating minus 30", near(b2bRun.rows[0].expected, expectedHome(1500 - 30, 1500, 50), 1e-12), String(b2bRun.rows[0].expected));
+  check("config has the v1.1 options on (empty-net margin, 30-point back-to-back)", ELO.params.marginExcludesEmptyNet === true && ELO.params.b2bPenalty === 30);
   check("one home regulation win moves ratings by K * (1 - E)", near(delta, 6 * (1 - expectedHome(1505, 1505, 50)), 1e-9), String(delta));
   check("updates are zero-sum", near(two.rows[0].after + two.rows[1].after, 2 * 1505, 1e-9));
 

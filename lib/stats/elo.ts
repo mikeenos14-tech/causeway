@@ -17,6 +17,9 @@ export type EloGame = {
   // experimental margin that leaves them out.
   enHome?: number | null;
   enAway?: number | null;
+  // Second night of a back-to-back (team_rest), for the experimental penalty.
+  b2bHome?: boolean;
+  b2bAway?: boolean;
 };
 
 export type EloParams = {
@@ -33,6 +36,8 @@ export type EloParams = {
   soWinnerScore?: number; // separate S for a shootout winner
   autocorr?: boolean; // damp big wins by heavy favorites (2.2 / (gap * 0.001 + 2.2))
   marginExcludesEmptyNet?: boolean; // margin without the winner's empty-net goals, where known
+  b2bPenalty?: number; // rating points off a team's expectation on a back-to-back
+  earlyK?: { games: number; mult: number }; // larger K for each team's first games of a season
 };
 
 export type EloRow = { gameId: number; team: number; date: string; before: number; after: number; expected: number; result: number };
@@ -76,6 +81,7 @@ export function autocorrFactor(winnerGap: number): number {
 export function runElo(input: EloGame[], p: EloParams, eraOf: (season: string) => string, foundingSeason = "19171918") {
   const games = [...input].sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
   const rating = new Map<number, number>();
+  const played = new Map<number, number>(); // games this season, per team
   const rows: EloRow[] = [];
   let season = "";
 
@@ -83,6 +89,7 @@ export function runElo(input: EloGame[], p: EloParams, eraOf: (season: string) =
     const g = games[i];
     if (g.season !== season) {
       season = g.season;
+      played.clear();
       // Offseason reversion toward the mean (roster turnover).
       for (const [t, r] of rating) rating.set(t, r + p.reversion * (p.leagueMean - r));
       const teams = new Set<number>();
@@ -101,13 +108,21 @@ export function runElo(input: EloGame[], p: EloParams, eraOf: (season: string) =
 
     const rh = rating.get(g.home)!;
     const ra = rating.get(g.away)!;
-    const e = expectedHome(rh, ra, p.homeIce[eraOf(g.season)] ?? 0);
+    const pen = p.b2bPenalty ?? 0;
+    const e = expectedHome(rh - (g.b2bHome ? pen : 0), ra - (g.b2bAway ? pen : 0), p.homeIce[eraOf(g.season)] ?? 0);
     const s = resultScore(g, p);
     let k = (g.playoff ? p.kPlayoff : p.kRegular) * marginMultiplier(g, p);
     if (p.autocorr && g.finalState === "REG" && g.homeScore !== g.awayScore) {
       const gap = (rh + (p.homeIce[eraOf(g.season)] ?? 0) - ra) * (g.homeScore > g.awayScore ? 1 : -1);
       k *= autocorrFactor(gap);
     }
+    // Early-season boost: the larger multiplier of the two teams, while
+    // either is within its first earlyK.games games of the season.
+    if (p.earlyK && !g.playoff) {
+      const early = (played.get(g.home) ?? 0) < p.earlyK.games || (played.get(g.away) ?? 0) < p.earlyK.games;
+      if (early) k *= p.earlyK.mult;
+    }
+    played.set(g.home, (played.get(g.home) ?? 0) + 1).set(g.away, (played.get(g.away) ?? 0) + 1);
     const delta = k * (s - e);
     rating.set(g.home, rh + delta);
     rating.set(g.away, ra - delta);

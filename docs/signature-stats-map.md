@@ -104,7 +104,7 @@ Owner decisions so far (2026-10-01): history back to **1917**; Utah inherits Ari
 
 | Item | Status | Notes |
 | --- | --- | --- |
-| V1 Elo (formulas, parameters, reversion, expansion, league mean) | Built | `lib/stats/elo.ts`; 16 tests pass on partial history |
+| V1 Elo (formulas, parameters, reversion, expansion, league mean) | Done (v1.1) | `lib/stats/elo.ts`. v1.1 (2026-10-02): margins without empty-net goals, 30-point back-to-back penalty, both adopted on held-out evidence; autocorrelation damping, separate shootout scoring and early-season K tested and rejected (`scripts/stats/experiment-elo.ts`). Every expectation and every rating change recomputed independently in SQL (`verify-elo-sql.ts`) |
 | Tuning script (grid search, per-era log loss) | Built | Tunes on training seasons only; every fifth season held out |
 | elo_history / elo_current | Built | Migration 0015 |
 | Forfeits excluded | Done | 1918 Wanderers forfeits |

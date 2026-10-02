@@ -7,15 +7,29 @@ import { ELO, eraOf } from "../config/stats";
 // current Elo (elo_current, rebuilt daily), so a game the same day as a
 // prior game uses ratings from before that game.
 
-export type EloOdds = { home: number; away: number; homeRating: number; awayRating: number; asOf: string };
+export type EloOdds = { home: number; away: number; homeRating: number; awayRating: number; asOf: string; b2b: { home: boolean; away: boolean } };
 
-export function winChance(homeRating: number, awayRating: number, season: string): number {
-  const gap = homeRating - awayRating + (ELO.params.homeIce[eraOf(season).id] ?? 0);
+export function winChance(homeRating: number, awayRating: number, season: string, b2b: { home: boolean; away: boolean } = { home: false, away: false }): number {
+  // A team on the second night of a back-to-back plays below its rating.
+  const pen = ELO.params.b2bPenalty ?? 0;
+  const gap = homeRating - (b2b.home ? pen : 0) - (awayRating - (b2b.away ? pen : 0)) + (ELO.params.homeIce[eraOf(season).id] ?? 0);
   return 1 / (1 + Math.exp(-(ELO.winProb.intercept + ELO.winProb.slope * gap)));
 }
 
-export async function getEloOdds(awayTeamId: number, homeTeamId: number, season: string, gameType: number): Promise<EloOdds | null> {
+// startTimeUTC: the game's start, for the back-to-back check (did either
+// team play the day before, Eastern dates). Without it, no penalty.
+export async function getEloOdds(awayTeamId: number, homeTeamId: number, season: string, gameType: number, startTimeUTC?: string): Promise<EloOdds | null> {
   if (gameType !== 2) return null;
+  let b2b = { home: false, away: false };
+  if (startTimeUTC) {
+    const et = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(startTimeUTC));
+    const { rows: prev } = await pool.query(
+      `select t.id, exists (select 1 from nhl_games g where t.id in (g.home_team_id, g.away_team_id) and g.game_date = $2::date - 1) as played
+       from unnest($1::int[]) t(id)`,
+      [[awayTeamId, homeTeamId], et],
+    );
+    b2b = { home: !!prev.find((r) => Number(r.id) === homeTeamId)?.played, away: !!prev.find((r) => Number(r.id) === awayTeamId)?.played };
+  }
   const { rows } = await pool.query(
     `select t.id, c.rating::float as rating, c.last_game_date::text as as_of
      from nhl_teams t join elo_current c on c.franchise_id = t.lineage_id where t.id = any($1::int[])`,
@@ -23,14 +37,14 @@ export async function getEloOdds(awayTeamId: number, homeTeamId: number, season:
   );
   const away = rows.find((r) => Number(r.id) === awayTeamId), home = rows.find((r) => Number(r.id) === homeTeamId);
   if (!away || !home) return null;
-  const p = winChance(home.rating, away.rating, season);
-  return { home: p, away: 1 - p, homeRating: home.rating, awayRating: away.rating, asOf: [home.as_of, away.as_of].sort().at(-1)! };
+  const p = winChance(home.rating, away.rating, season, b2b);
+  return { home: p, away: 1 - p, homeRating: home.rating, awayRating: away.rating, asOf: [home.as_of, away.as_of].sort().at(-1)!, b2b };
 }
 
 // The same, by team code (the home page's next-game card has codes).
-export async function getEloOddsByAbbrev(awayAbbrev: string, homeAbbrev: string, season: string, gameType: number): Promise<EloOdds | null> {
+export async function getEloOddsByAbbrev(awayAbbrev: string, homeAbbrev: string, season: string, gameType: number, startTimeUTC?: string): Promise<EloOdds | null> {
   const { rows } = await pool.query(`select id, abbrev from teams where is_active and abbrev = any($1)`, [[awayAbbrev, homeAbbrev]]);
   const id = (a: string) => rows.find((r) => r.abbrev === a)?.id;
   if (!id(awayAbbrev) || !id(homeAbbrev)) return null;
-  return getEloOdds(Number(id(awayAbbrev)), Number(id(homeAbbrev)), season, gameType);
+  return getEloOdds(Number(id(awayAbbrev)), Number(id(homeAbbrev)), season, gameType, startTimeUTC);
 }

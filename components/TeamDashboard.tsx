@@ -121,7 +121,7 @@ export async function TeamDashboard({ abbrev, compact = false }: { abbrev: strin
   const h2h = next ? h2hRows.find((r) => r.opp_abbrev === next.opponent) : undefined;
   // Pregame Elo win chance for the next game (regular season), this team's side.
   const odds =
-    hero === "preview" && next ? await getEloOddsByAbbrev(next.isHome ? next.opponent : abbrev, next.isHome ? abbrev : next.opponent, next.season, next.gameType).catch(() => null) : null;
+    hero === "preview" && next ? await getEloOddsByAbbrev(next.isHome ? next.opponent : abbrev, next.isHome ? abbrev : next.opponent, next.season, next.gameType, next.startTimeUTC).catch(() => null) : null;
   const oddsLine = odds && next ? `Win chance (Elo): ${TEAM_NICKNAMES[abbrev] ?? abbrev} ${Math.round((next.isHome ? odds.home : odds.away) * 100)}%` : null;
 
   // Roster changes matter most around the turn of a season: before this
