@@ -96,7 +96,8 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
               <p style={{ color: "var(--text-secondary)", fontSize: ".95rem" }}>
                 Born {formatGameDate(player.birth_date, true)}
                 {player.birth_country ? `, ${player.birth_country}` : ""}
-                {player.shoots_catches ? ` · Shoots/catches ${player.shoots_catches}` : ""}
+                {/* Skaters shoot; goalies catch (the glove hand), as the NHL lists it. */}
+                {player.shoots_catches ? ` · ${isGoalie ? "Catches" : "Shoots"} ${player.shoots_catches}` : ""}
               </p>
             ) : (
               <p style={{ color: "var(--text-secondary)", fontSize: ".9rem" }}>
