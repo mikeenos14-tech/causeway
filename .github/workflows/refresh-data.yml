@@ -32,7 +32,7 @@ jobs:
   refresh-current-season:
     if: github.event.schedule == '17 * * * *' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -70,6 +70,15 @@ jobs:
       # The homepage's question of the day, answered ahead of time. Calls
       # the model only when today's answer is missing or older than the
       # newest Bruins game (about once a day); never fails the run.
+      # Signature Stats history (nhl_* tables): this season's newly
+      # finished games, plus a re-check of the last 48 hours for scoring
+      # changes. Separate from the site's own tables; never fails the run.
+      - name: Ingest stats history
+        timeout-minutes: 8
+        continue-on-error: true
+        run: npx tsx scripts/stats/ingest-recent-games.ts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
       - name: Warm question of the day
         timeout-minutes: 3
         continue-on-error: true
@@ -94,7 +103,7 @@ jobs:
   refresh-moneypuck:
     if: github.event.schedule == '23 14 * * *' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -112,6 +121,20 @@ jobs:
           echo "year=$YEAR" >> "$GITHUB_OUTPUT"
       - name: Team-level xG/Corsi (MoneyPuck)
         run: npx tsx scripts/backfill-moneypuck.ts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      # Signature Stats rebuilds (spec section 3: rebuild_derived after
+      # ingest): data tiers, derived tables, and game labels, from scratch.
+      - name: Rebuild stats audit, derived tables and labels
+        timeout-minutes: 20
+        continue-on-error: true
+        run: |
+          npx tsx scripts/stats/audit.ts --quiet
+          npx tsx scripts/stats/build-derived.ts
+          npx tsx scripts/stats/build-game-labels.ts
+          npx tsx scripts/stats/verify-iconic-games.ts
+          npx tsx scripts/stats/build-elo.ts
+          npx tsx scripts/stats/verify-elo-sql.ts
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
       # Reliability guard (docs/verification.md, layer 6): the site's data
