@@ -1,3 +1,4 @@
+import { nhlJson } from "./nhl-fetch";
 import { pool } from "./db";
 import { hasFullCareerLoaded } from "./significance-checks";
 
@@ -30,9 +31,8 @@ const WINDOW = { goals: 5, points: 10, games: 10, wins: 5, shutouts: 2 } as cons
 // we return null and the module hides rather than risk naming ex-players.
 async function getCurrentRosterIds(teamAbbrev: string): Promise<Set<number> | null> {
   try {
-    const res = await fetch(`https://api-web.nhle.com/v1/roster/${teamAbbrev}/current`, { next: { revalidate: 3600 } });
-    if (!res.ok) return null;
-    const data = await res.json();
+    const data = await nhlJson<{ forwards?: { id: number }[]; defensemen?: { id: number }[]; goalies?: { id: number }[] }>(`https://api-web.nhle.com/v1/roster/${teamAbbrev}/current`, 3600);
+    if (!data) return null;
     const ids = [...(data.forwards ?? []), ...(data.defensemen ?? []), ...(data.goalies ?? [])].map((p: { id: number }) => p.id);
     return ids.length > 0 ? new Set(ids) : null;
   } catch (err) {
