@@ -148,7 +148,11 @@ export type HeroChoice = {
 //   preview  the next game, when it's within 30 hours or the last game is
 //            3+ days old (game days, and the whole offseason)
 //   recap    the latest loaded game
-export function chooseHero(games: ClubGame[], lastGame: { id: number; date: string } | null, now: number): HeroChoice {
+// lastGame.startedAt (the real start time) when known: days since the last
+// game used to count from midnight UTC of its date, which made a Tuesday
+// 7 PM game "3 days old" by Thursday 8 PM Eastern (found live 2026-10-01,
+// when the homepage's "Last game" button vanished a day early).
+export function chooseHero(games: ClubGame[], lastGame: { id: number; date: string; startedAt?: string | null } | null, now: number): HeroChoice {
   const pending =
     games.find(isInProgress) ??
     [...games]
@@ -163,7 +167,7 @@ export function chooseHero(games: ClubGame[], lastGame: { id: number; date: stri
     null;
   const next = games.find(isUpcoming) ?? null;
   const hoursToNext = next ? (Date.parse(next.startTimeUTC) - now) / 3.6e6 : Infinity;
-  const daysSinceLast = lastGame ? (now - Date.parse(lastGame.date)) / 8.64e7 : Infinity;
+  const daysSinceLast = lastGame ? (now - Date.parse(lastGame.startedAt ?? lastGame.date)) / 8.64e7 : Infinity;
   const hero = pending
     ? "pending"
     : next && (hoursToNext <= 30 || daysSinceLast >= 3 || !lastGame)

@@ -30,7 +30,7 @@ export async function getLatestGame(teamAbbrev: string) {
   // a 'recap' row (the general-take fallback — most games), or neither yet
   // (not narrated at all). Prefer highlights when both exist.
   const { rows } = await pool.query(
-    `select g.id, g.game_date, g.game_type, ht.abbrev as home_abbrev, at.abbrev as away_abbrev,
+    `select g.id, g.game_date, g.game_datetime, g.game_type, ht.abbrev as home_abbrev, at.abbrev as away_abbrev,
             g.home_score, g.away_score, g.game_end_type,
             coalesce(nh.headline, nr.headline) as headline,
             coalesce(nh.body, nr.body) as body
