@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { SkaterRosterRow, GoalieRosterRow } from "@/lib/roster-data";
+import type { RosterFlags } from "@/lib/current-roster";
 import { Headshot } from "@/components/Headshot";
 import { formatSavePct } from "@/lib/util/save-pct";
 
@@ -42,6 +43,39 @@ function SortableHead<Row>({
   );
 }
 
+// Players who haven't played yet (GP 0) always sit at the bottom, whatever
+// the sort: they have no numbers to rank. Ties break on GP, then name.
+function compareRows<R extends { games: number; full_name: string }>(a: R, b: R, field: keyof R, dir: SortDir, missing: number) {
+  if ((a.games === 0) !== (b.games === 0)) return a.games === 0 ? 1 : -1;
+  const av = a[field] ?? missing;
+  const bv = b[field] ?? missing;
+  let c: number;
+  if (typeof av === "string" || typeof bv === "string") c = dir === "desc" ? String(bv).localeCompare(String(av)) : String(av).localeCompare(String(bv));
+  else c = dir === "desc" ? Number(bv) - Number(av) : Number(av) - Number(bv);
+  return c || b.games - a.games || a.full_name.localeCompare(b.full_name);
+}
+
+// The name cell: photo, name (linked when he has a player page), C/A, and
+// a note when he played here this season but is off the roster now.
+function NameCell({ r, headshot, badge }: { r: { id: number; full_name: string } & Partial<RosterFlags>; headshot?: string; badge?: "C" | "A" }) {
+  return (
+    <td style={{ textAlign: "left" }}>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 8, verticalAlign: "middle" }}>
+        <Headshot url={headshot} name={r.full_name} size={28} />
+        {r.hasPage === false ? (
+          <span style={{ color: "var(--text-primary)", fontWeight: 600 }}>{r.full_name}</span>
+        ) : (
+          <Link href={`/players/${r.id}`} style={{ color: "var(--text-primary)", textDecoration: "none", fontWeight: 600 }}>
+            {r.full_name}
+          </Link>
+        )}
+      </span>
+      <Badge b={badge} />
+      {r.onRoster === false && <span style={{ display: "block", marginLeft: 36, fontSize: ".7rem", color: "var(--text-muted)" }}>not on current roster</span>}
+    </td>
+  );
+}
+
 // A gold "C" / "A" after a name, for the season the designation applies to.
 function Badge({ b }: { b?: "C" | "A" }) {
   if (!b) return null;
@@ -52,19 +86,12 @@ function Badge({ b }: { b?: "C" | "A" }) {
   );
 }
 
-export function SkaterRosterTable({ rows, badges = {}, headshots = {} }: { rows: SkaterRosterRow[]; badges?: Record<number, "C" | "A">; headshots?: Record<number, string> }) {
+export function SkaterRosterTable({ rows, badges = {}, headshots = {} }: { rows: (SkaterRosterRow & Partial<RosterFlags>)[]; badges?: Record<number, "C" | "A">; headshots?: Record<number, string> }) {
   const [sort, setSort] = useState<{ field: keyof SkaterRosterRow; dir: SortDir }>({ field: "points", dir: "desc" });
 
   const sorted = useMemo(() => {
     const copy = [...rows];
-    copy.sort((a, b) => {
-      const av = a[sort.field] ?? 0;
-      const bv = b[sort.field] ?? 0;
-      if (typeof av === "string" || typeof bv === "string") {
-        return sort.dir === "desc" ? String(bv).localeCompare(String(av)) : String(av).localeCompare(String(bv));
-      }
-      return sort.dir === "desc" ? Number(bv) - Number(av) : Number(av) - Number(bv);
-    });
+    copy.sort((a, b) => compareRows(a, b, sort.field, sort.dir, 0));
     return copy;
   }, [rows, sort]);
 
@@ -96,28 +123,27 @@ export function SkaterRosterTable({ rows, badges = {}, headshots = {} }: { rows:
         <tbody>
           {sorted.map((r) => (
             <tr key={r.id}>
-              <td style={{ textAlign: "left" }}>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 8, verticalAlign: "middle" }}>
-                  <Headshot url={headshots[r.id]} name={r.full_name} size={28} />
-                  <Link href={`/players/${r.id}`} style={{ color: "var(--text-primary)", textDecoration: "none", fontWeight: 600 }}>
-                    {r.full_name}
-                  </Link>
-                </span>
-                <Badge b={badges[r.id]} />
-              </td>
+              <NameCell r={r} headshot={headshots[r.id]} badge={badges[r.id]} />
               <td>{r.position ?? "—"}</td>
               <td>{r.games}</td>
-              <td>{r.goals}</td>
-              <td>{r.assists}</td>
-              <td style={{ fontWeight: 700, color: "var(--gold)" }}>{r.points}</td>
-              <td>{r.plus_minus > 0 ? `+${r.plus_minus}` : r.plus_minus}</td>
-              <td>{toi(r.toiSecondsPerGame)}</td>
-              <td>{r.pim}</td>
-              <td>{r.shots}</td>
-              <td>{r.shootingPct != null ? `${(r.shootingPct * 100).toFixed(1)}%` : "—"}</td>
-              <td>{r.hits}</td>
-              <td>{r.blocks}</td>
-              <td>{r.pp_goals}</td>
+              {r.games === 0 ? (
+                // Hasn't played yet: no numbers, not zeros.
+                Array.from({ length: 11 }, (_, i) => <td key={i} style={{ color: "var(--text-muted)" }}>—</td>)
+              ) : (
+                <>
+                  <td>{r.goals}</td>
+                  <td>{r.assists}</td>
+                  <td style={{ fontWeight: 700, color: "var(--gold)" }}>{r.points}</td>
+                  <td>{r.plus_minus > 0 ? `+${r.plus_minus}` : r.plus_minus}</td>
+                  <td>{toi(r.toiSecondsPerGame)}</td>
+                  <td>{r.pim}</td>
+                  <td>{r.shots}</td>
+                  <td>{r.shootingPct != null ? `${(r.shootingPct * 100).toFixed(1)}%` : "—"}</td>
+                  <td>{r.hits}</td>
+                  <td>{r.blocks}</td>
+                  <td>{r.pp_goals}</td>
+                </>
+              )}
             </tr>
           ))}
         </tbody>
@@ -127,19 +153,12 @@ export function SkaterRosterTable({ rows, badges = {}, headshots = {} }: { rows:
   );
 }
 
-export function GoalieRosterTable({ rows, badges = {}, headshots = {} }: { rows: GoalieRosterRow[]; badges?: Record<number, "C" | "A">; headshots?: Record<number, string> }) {
+export function GoalieRosterTable({ rows, badges = {}, headshots = {} }: { rows: (GoalieRosterRow & Partial<RosterFlags>)[]; badges?: Record<number, "C" | "A">; headshots?: Record<number, string> }) {
   const [sort, setSort] = useState<{ field: keyof GoalieRosterRow; dir: SortDir }>({ field: "wins", dir: "desc" });
 
   const sorted = useMemo(() => {
     const copy = [...rows];
-    copy.sort((a, b) => {
-      const av = a[sort.field] ?? -Infinity;
-      const bv = b[sort.field] ?? -Infinity;
-      if (typeof av === "string" || typeof bv === "string") {
-        return sort.dir === "desc" ? String(bv).localeCompare(String(av)) : String(av).localeCompare(String(bv));
-      }
-      return sort.dir === "desc" ? Number(bv) - Number(av) : Number(av) - Number(bv);
-    });
+    copy.sort((a, b) => compareRows(a, b, sort.field, sort.dir, -Infinity));
     return copy;
   }, [rows, sort]);
 
@@ -165,22 +184,20 @@ export function GoalieRosterTable({ rows, badges = {}, headshots = {} }: { rows:
         <tbody>
           {sorted.map((r) => (
             <tr key={r.id}>
-              <td style={{ textAlign: "left" }}>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 8, verticalAlign: "middle" }}>
-                  <Headshot url={headshots[r.id]} name={r.full_name} size={28} />
-                  <Link href={`/players/${r.id}`} style={{ color: "var(--text-primary)", textDecoration: "none", fontWeight: 600 }}>
-                    {r.full_name}
-                  </Link>
-                </span>
-                <Badge b={badges[r.id]} />
-              </td>
+              <NameCell r={r} headshot={headshots[r.id]} badge={badges[r.id]} />
               <td>{r.games}</td>
-              <td>{r.wins}</td>
-              <td>{r.losses}</td>
-              <td>{r.otl}</td>
-              <td>{r.shutouts}</td>
-              <td style={{ fontWeight: 700, color: "var(--gold)" }}>{formatSavePct(r.savePct)}</td>
-              <td>{r.gaa != null ? r.gaa.toFixed(2) : "—"}</td>
+              {r.games === 0 ? (
+                Array.from({ length: 6 }, (_, i) => <td key={i} style={{ color: "var(--text-muted)" }}>—</td>)
+              ) : (
+                <>
+                  <td>{r.wins}</td>
+                  <td>{r.losses}</td>
+                  <td>{r.otl}</td>
+                  <td>{r.shutouts}</td>
+                  <td style={{ fontWeight: 700, color: "var(--gold)" }}>{formatSavePct(r.savePct)}</td>
+                  <td>{r.gaa != null ? r.gaa.toFixed(2) : "—"}</td>
+                </>
+              )}
             </tr>
           ))}
         </tbody>

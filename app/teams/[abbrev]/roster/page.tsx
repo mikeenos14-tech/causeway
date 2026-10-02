@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { getTeam } from "@/lib/homepage-data";
-import { getRosterSeasonId, getSkaterRosterStats, getGoalieRosterStats } from "@/lib/roster-data";
+import { getCurrentRoster } from "@/lib/current-roster";
 import { formatSeasonLabel } from "@/lib/format-date";
 import { SkaterRosterTable, GoalieRosterTable } from "@/components/RosterTable";
 import { Masthead, Footer } from "@/components/Masthead";
@@ -21,12 +21,9 @@ export default async function TeamRoster({ params }: { params: Promise<{ abbrev:
   const team = await getTeam(abbrev);
   if (!team) notFound();
 
-  const seasonId = await getRosterSeasonId(abbrev);
-  const [skaters, goalies, club] = await Promise.all([
-    seasonId ? getSkaterRosterStats(abbrev, seasonId) : Promise.resolve([]),
-    seasonId ? getGoalieRosterStats(abbrev, seasonId) : Promise.resolve([]),
-    getClubSeason(abbrev),
-  ]);
+  // The NHL's current roster with this season's stats (lib/current-roster.ts).
+  const [roster, club] = await Promise.all([getCurrentRoster(abbrev), getClubSeason(abbrev)]);
+  const { seasonId, skaters, goalies } = roster;
   const lastSeason = club?.previousSeason ?? seasonId;
   const [moves, captainName] = await Promise.all([
     lastSeason ? getRosterMoves(abbrev, lastSeason) : Promise.resolve(null),
@@ -48,8 +45,14 @@ export default async function TeamRoster({ params }: { params: Promise<{ abbrev:
         </h1>
         <RosterViewToggle abbrev={abbrev} view="standard" />
         <p style={{ color: "var(--text-secondary)", fontSize: ".9rem", marginBottom: "2rem" }}>
-          {seasonId ? `${formatSeasonLabel(seasonId)} regular season · tap or click a column to sort` : "No season loaded yet"}
+          {formatSeasonLabel(seasonId)} regular season ·{" "}
+          {roster.teamGamesPlayed === 0 ? "the current roster; stats start with the first game" : "tap or click a column to sort"}
         </p>
+        {!roster.rosterAvailable && (
+          <p style={{ color: "var(--text-secondary)", fontSize: ".85rem", margin: "-1.25rem 0 2rem" }}>
+            The NHL&apos;s roster couldn&apos;t be reached just now, so this lists players who&apos;ve played this season.
+          </p>
+        )}
 
         {moves && <RosterMovesCard teamAbbrev={abbrev} moves={moves} captainName={captainName} />}
 
@@ -58,7 +61,7 @@ export default async function TeamRoster({ params }: { params: Promise<{ abbrev:
           {skaters.length > 0 ? (
             <SkaterRosterTable rows={skaters} badges={badges} headshots={headshots} />
           ) : (
-            <p style={{ color: "var(--text-secondary)", fontSize: ".9rem" }}>No skater stats on file yet for this season.</p>
+            <p style={{ color: "var(--text-secondary)", fontSize: ".9rem" }}>No skaters on the roster.</p>
           )}
         </section>
 
@@ -67,7 +70,7 @@ export default async function TeamRoster({ params }: { params: Promise<{ abbrev:
           {goalies.length > 0 ? (
             <GoalieRosterTable rows={goalies} badges={badges} headshots={headshots} />
           ) : (
-            <p style={{ color: "var(--text-secondary)", fontSize: ".9rem" }}>No goalie stats on file yet for this season.</p>
+            <p style={{ color: "var(--text-secondary)", fontSize: ".9rem" }}>No goalies on the roster.</p>
           )}
         </section>
       </main>

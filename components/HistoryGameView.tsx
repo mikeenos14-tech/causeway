@@ -27,6 +27,25 @@ function coverageNote(g: HistoryGame): string {
   return parts.join(" ");
 }
 
+// The NHL records a double minor (and two coincident minors) as separate,
+// identical penalty events, which read as duplicates in a list. Same
+// player, team, time, infraction and length become one line, "×2", with
+// the minutes summed: 2 + 2 for roughing shows "Roughing ×2 · 4 min".
+// (Penalty data matches the NHL's official per-game counts and minutes;
+// checked 2026-10-02 across 21,199 team-games.)
+function groupPenalties(pens: HistoryGame["penalties"]) {
+  const out: (HistoryGame["penalties"][number] & { count: number; each: number | null })[] = [];
+  for (const p of pens) {
+    const last = out.at(-1);
+    const same = last && p.player && last.period === p.period && last.time === p.time && last.team === p.team && last.player === p.player && last.infraction === p.infraction && last.each === p.minutes;
+    if (last && same) {
+      last.count++;
+      last.minutes = (last.minutes ?? 0) + (p.minutes ?? 0);
+    } else out.push({ ...p, count: 1, each: p.minutes });
+  }
+  return out;
+}
+
 export function HistoryGameView({ g, nav }: { g: HistoryGame; nav: { prev: { id: number; date: string; label: string } | null; next: { id: number; date: string; label: string } | null } }) {
   const homeWon = g.home.score > g.away.score;
   const awayWon = g.away.score > g.home.score;
@@ -133,7 +152,7 @@ export function HistoryGameView({ g, nav }: { g: HistoryGame; nav: { prev: { id:
           {g.penalties.length === 0 ? (
             <p style={{ margin: 0, color: "var(--text-secondary)" }}>None recorded.</p>
           ) : (
-            g.penalties.map((p, i) => (
+            groupPenalties(g.penalties).map((p, i) => (
               <div key={i} style={{ display: "grid", gridTemplateColumns: "3.4rem 1fr auto", gap: 10, padding: "5px 0", borderTop: i ? "1px solid var(--border)" : "none", fontSize: ".85rem" }}>
                 <span style={{ color: "var(--text-muted)" }}>
                   {periodName(p.period, "REG")} {p.time}
@@ -141,7 +160,13 @@ export function HistoryGameView({ g, nav }: { g: HistoryGame; nav: { prev: { id:
                 <span>
                   {p.team && <span style={{ fontWeight: 700, marginRight: 6 }}>{p.team}</span>}
                   {p.player ?? "Team penalty"}
-                  {p.infraction && <span style={{ color: "var(--text-secondary)" }}> · {p.infraction.replace(/-/g, " ")}</span>}
+                  {p.infraction && (
+                    <span style={{ color: "var(--text-secondary)" }}>
+                      {" "}
+                      · {p.infraction.replace(/-/g, " ")}
+                      {p.count > 1 ? ` ×${p.count}` : ""}
+                    </span>
+                  )}
                 </span>
                 <span style={{ color: "var(--text-secondary)" }}>{p.minutes != null ? `${p.minutes} min` : ""}</span>
               </div>

@@ -123,6 +123,11 @@ jobs:
         run: npx tsx scripts/sync-headshots.ts
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      # Every team's live Roster page against the NHL's current roster:
+      # every rostered player must be listed (McAvoy once wasn't, 2026-10-02).
+      - name: Check every Roster page against the NHL
+        timeout-minutes: 5
+        run: npx tsx scripts/qa/check-rosters.ts https://causeway-ten.vercel.app
       - name: Player-level xG/Corsi (MoneyPuck), current season only
         run: npx tsx scripts/backfill-moneypuck-players.ts ${{ steps.season.outputs.year }} ${{ steps.season.outputs.year }}
         env:
