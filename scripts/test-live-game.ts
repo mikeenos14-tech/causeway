@@ -11,7 +11,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
 import { join } from "node:path";
-import { diffGoals, goalKey, parseLanding, type LiveGoal } from "../lib/live-game";
+import { diffGoals, goalKey, parseLanding, trackGoals, startTracking, type LiveGoal, type GoalTracker } from "../lib/live-game";
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = "") => {
@@ -29,6 +29,28 @@ check("same goal on the next poll is not new", diffGoals([a], [a]).added.length 
 check("a second goal is the only new one", JSON.stringify(diffGoals([a], [a, b]).added) === JSON.stringify([b]));
 check("scoring change (credit moves to another player) is not a new goal", diffGoals([a], [{ ...a, scorer: "Brad Marchand" }]).added.length === 0);
 check("a goal that vanishes is reported as removed (overturned)", diffGoals([a, b], [a]).removed.length === 1 && diffGoals([a, b], [a]).removed[0] === b);
+// The tracker (what the scoreboard uses): the feed's flicker on 2026-10-01.
+{
+  const team = (abbrev: string, score: number) => ({ abbrev, name: abbrev, score, sog: null });
+  const game = (goals: LiveGoal[], away: number, home: number) => ({ goals, away: team(a.team === "BOS" ? "NYR" : "BOS", away), home: team(a.team, home) });
+  let st: GoalTracker = startTracking(game([a], 0, 1));
+  let r = trackGoals(st, game([], 0, 1)); // goal drops off the list, score still 1
+  check("flicker: a goal missing from the list while the score still counts it is NOT overturned", r.removed.length === 0 && r.added.length === 0);
+  st = r.state;
+  r = trackGoals(st, game([a], 0, 1)); // and comes back
+  check("flicker: when it comes back it is not a new goal (no second goal light)", r.added.length === 0 && r.restored.length === 0);
+  st = r.state;
+  r = trackGoals(st, game([], 0, 0)); // real overturn: list AND score drop
+  check("a real overturn (goal gone and the score drops) is reported once", r.removed.length === 1 && r.removed[0] === a);
+  st = r.state;
+  r = trackGoals(st, game([], 0, 0));
+  check("an overturn isn't reported again on the next poll", r.removed.length === 0);
+  st = r.state;
+  r = trackGoals(st, game([a], 0, 1)); // overturn reversed (or the score dipped by mistake)
+  check("a goal back after an overturn is restored, never celebrated twice", r.added.length === 0 && r.restored.length === 1);
+  const sh = trackGoals(startTracking(game([a], 0, 1)), game([a], 0, 2)); // shootout winner counts in the score, not the list
+  check("shootout: a score above the goal list never invents an overturn", sh.removed.length === 0 && sh.added.length === 0);
+}
 check("NHL time correction (11:10 -> 11:12, same event) is neither new nor removed", (() => { const d = diffGoals([a], [{ ...a, time: "05:02" }]); return d.added.length === 0 && d.removed.length === 0; })());
 check("without event ids, keys fall back to period, time and team", new Set([goalKey({ ...a, eventId: null }), goalKey({ ...b, eventId: null }), goalKey({ ...a, eventId: null, team: "NYR" })]).size === 3);
 
@@ -42,7 +64,7 @@ if (!existsSync(root)) {
   for (const id of readdirSync(root)) {
     const dir = join(root, id);
     const timeline = readFileSync(join(dir, "timeline.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l)).filter((t) => t.landingHash);
-    let prev: LiveGoal[] | null = null;
+    let prev: GoalTracker | null = null;
     const detected: LiveGoal[] = [];
     let overturned = 0;
     let lastParsed = null;
@@ -52,13 +74,14 @@ if (!existsSync(root)) {
       const g = parseLanding(JSON.parse(gunzipSync(readFileSync(path)).toString()));
       lastParsed = g;
       if (prev) {
-        const d = diffGoals(prev, g.goals);
+        const d = trackGoals(prev, g);
         detected.push(...d.added);
-        overturned += d.removed.length;
+        overturned += d.removed.length - d.restored.length;
+        prev = d.state;
       } else {
         detected.push(...g.goals); // goals already on the board at the first poll
+        prev = startTracking(g);
       }
-      prev = g.goals;
     }
     if (!lastParsed) continue;
     const final = lastParsed.goals;

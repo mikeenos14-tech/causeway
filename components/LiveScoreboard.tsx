@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { diffGoals, type LiveGame, type LiveGoal } from "@/lib/live-game";
+import { trackGoals, startTracking, type GoalTracker, type LiveGame, type LiveGoal } from "@/lib/live-game";
 
 const POLL_MS = 20_000;
 const WINDOW_BEFORE_MS = 15 * 60_000; // start polling 15 min before puck drop
@@ -43,7 +43,7 @@ export function LiveScoreboard({
   const [celebration, setCelebration] = useState<{ id: number; goal: LiveGoal } | null>(null);
   const [overturned, setOverturned] = useState<{ id: number; goal: LiveGoal } | null>(null);
   const done = useRef(false);
-  const seenGoals = useRef<LiveGoal[] | null>(null);
+  const seenGoals = useRef<GoalTracker | null>(null);
 
   // Each celebration or note clears itself after a few seconds.
   useEffect(() => {
@@ -74,13 +74,18 @@ export function LiveScoreboard({
             // The first response is the baseline: goals already scored
             // when the page opened never light up.
             if (seenGoals.current) {
-              const { added, removed } = diffGoals(seenGoals.current, g.goals);
+              const { state, added, removed, restored } = trackGoals(seenGoals.current, g);
+              seenGoals.current = state;
+              // A goal back on the board after an "overturn" was a feed
+              // blip: drop the note, no second goal light.
+              if (restored.length) setOverturned(null);
               const playing = g.home.abbrev === focusTeam || g.away.abbrev === focusTeam;
               const cheer = added.filter((x) => !playing || x.team === focusTeam).at(-1);
               if (cheer) setCelebration({ id: Date.now(), goal: cheer });
               if (removed.length) setOverturned({ id: Date.now(), goal: removed.at(-1)! });
+            } else {
+              seenGoals.current = startTracking(g);
             }
-            seenGoals.current = g.goals;
             setGame(g);
             setStale(false);
             if (isFinal(g)) done.current = true;

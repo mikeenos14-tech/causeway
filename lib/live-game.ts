@@ -157,3 +157,53 @@ export function diffGoals(prev: LiveGoal[], next: LiveGoal[]): { added: LiveGoal
   const after = new Set(next.map(goalKey));
   return { added: next.filter((g) => !before.has(goalKey(g))), removed: prev.filter((g) => !after.has(goalKey(g))) };
 }
+
+// Goal tracking across polls, robust to the NHL feed's flicker. On opening
+// night (2026-10-01, recorded) the feed dropped a goal from its scoring
+// list for 12-50 seconds while the SCORE still counted it (Jack Hughes's OT
+// winner after the final horn; Dylan Guenther's 1st-period goal), then put
+// it back. Treating "missing from the list" as overturned fired the goal
+// light twice. Now:
+//   - a missing goal is overturned only when its team's score has dropped
+//     below the goals still credited to that team (a real overturn always
+//     takes the goal off the scoreboard); otherwise it's kept, silently
+//   - a goal that reappears after being called overturned is restored,
+//     never celebrated again
+export type GoalTracker = { known: LiveGoal[]; overturnedKeys: string[] };
+
+export function startTracking(g: Pick<LiveGame, "goals">): GoalTracker {
+  return { known: g.goals, overturnedKeys: [] };
+}
+
+export function trackGoals(
+  state: GoalTracker,
+  g: Pick<LiveGame, "goals" | "away" | "home">,
+): { state: GoalTracker; added: LiveGoal[]; removed: LiveGoal[]; restored: LiveGoal[] } {
+  const knownKeys = new Set(state.known.map(goalKey));
+  const overturned = new Set(state.overturnedKeys);
+  const nextByKey = new Map(g.goals.map((x) => [goalKey(x), x]));
+
+  const added = g.goals.filter((x) => !knownKeys.has(goalKey(x)) && !overturned.has(goalKey(x)));
+  const restored = g.goals.filter((x) => overturned.has(goalKey(x)));
+  for (const x of restored) overturned.delete(goalKey(x));
+
+  // Known goals carry forward with the feed's latest details (time
+  // corrections, scoring changes); missing ones stay as they were.
+  let known = [...state.known.map((x) => nextByKey.get(goalKey(x)) ?? x), ...added, ...restored];
+  const removed: LiveGoal[] = [];
+  for (const team of [g.away, g.home]) {
+    const credited = known.filter((x) => x.team === team.abbrev);
+    let excess = credited.length - team.score;
+    // Only goals absent from the feed can be the overturned ones, latest first.
+    const missing = credited.filter((x) => !nextByKey.has(goalKey(x))).reverse();
+    for (const x of missing) {
+      if (excess <= 0) break;
+      removed.push(x);
+      overturned.add(goalKey(x));
+      excess--;
+    }
+  }
+  const removedKeys = new Set(removed.map(goalKey));
+  known = known.filter((x) => !removedKeys.has(goalKey(x)));
+  return { state: { known, overturnedKeys: [...overturned] }, added, removed, restored };
+}
