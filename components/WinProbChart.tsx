@@ -23,6 +23,23 @@ const clock = (t: number) => {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")} of the ${["1st", "2nd", "3rd"][period - 1]}`;
 };
 
+// "Now" reads like the scoreboard: time left in the period.
+const timeLeft = (t: number, playoff: boolean) => {
+  if (t === 3600) return "end of regulation";
+  if (t > 3600) {
+    const len = playoff ? 1200 : 300;
+    if (!playoff && t >= 3900) return "shootout";
+    const n = Math.floor((t - 3600) / len);
+    if ((t - 3600) % len === 0) return `end of ${n === 1 ? "OT" : `${n}OT`}`;
+    const left = len - (t - 3600 - n * len);
+    return `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")} left in ${n ? `${n + 1}OT` : "OT"}`;
+  }
+  const period = Math.min(3, Math.floor(t / 1200) + 1);
+  const left = period * 1200 - t;
+  if (left === 1200 && t > 0) return `end of the ${["1st", "2nd", "3rd"][period - 2]}`;
+  return `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")} left in the ${["1st", "2nd", "3rd"][period - 1]}`;
+};
+
 const lastName = (name: string | null) => (name ? name.split(" ").slice(1).join(" ") || name : "Unknown scorer");
 
 export function WinProbChart({ tl, sideHome, finalNote }: { tl: WpTimeline; sideHome: boolean; finalNote?: string }) {
@@ -39,8 +56,9 @@ export function WinProbChart({ tl, sideHome, finalNote }: { tl: WpTimeline; side
   const goals = pts.filter((x) => x.goal);
   const swing = tl.biggestSwing;
   const ours = (home: boolean) => home === sideHome;
+  const live = !!tl.live;
   const fin = pts.at(-1)!.v;
-  const won = fin === 1, lost = fin === 0;
+  const won = !live && fin === 1, lost = !live && fin === 0;
   // The far end of the curve: a winner's low point, a loser's high point.
   const extreme = pts.slice(0, -1).reduce((best, x) => (won ? (x.v < best.v ? x : best) : x.v > best.v ? x : best), pts[0]);
   const ties = tl.tiesPossible;
@@ -70,6 +88,13 @@ export function WinProbChart({ tl, sideHome, finalNote }: { tl: WpTimeline; side
           <span className="wp-stat-label">Puck drop</span>
           <span className="wp-stat-value">{pct(val(tl.pregame))}</span>
         </div>
+        {live && (
+          <div>
+            <span className="wp-stat-label">Now</span>
+            <span className="wp-stat-value" style={{ color: "var(--gold)" }}>{pct(fin)}</span>
+            <span className="wp-stat-note">{timeLeft(tl.endT, !!tl.playoff)}</span>
+          </div>
+        )}
         {(won || lost) && (
           <div>
             <span className="wp-stat-label">{won ? "Low point" : "High point"}</span>
@@ -79,7 +104,7 @@ export function WinProbChart({ tl, sideHome, finalNote }: { tl: WpTimeline; side
         )}
         {swing && (
           <div>
-            <span className="wp-stat-label">Biggest swing</span>
+            <span className="wp-stat-label">Biggest swing{live ? " so far" : ""}</span>
             <span className="wp-stat-value">
               {pct(val(swing.from))} → {pct(val(swing.to))}
             </span>
@@ -90,7 +115,7 @@ export function WinProbChart({ tl, sideHome, finalNote }: { tl: WpTimeline; side
         )}
       </div>
 
-      <div className="wp-chart" role="img" aria-label={`${team} win probability through the game: ${pct(val(tl.pregame))} at puck drop, ${won ? "won" : lost ? "lost" : "tied"}.`}>
+      <div className="wp-chart" role="img" aria-label={`${team} win probability through the game: ${pct(val(tl.pregame))} at puck drop, ${live ? `${pct(fin)} now` : won ? "won" : lost ? "lost" : "tied"}.`}>
         <div className="wp-plot">
           {[0.25, 0.5, 0.75].map((v) => (
             <div key={v} className={v === 0.5 ? "wp-grid wp-grid-mid" : "wp-grid"} style={{ top: `${Y(v)}%` }} />
@@ -111,6 +136,7 @@ export function WinProbChart({ tl, sideHome, finalNote }: { tl: WpTimeline; side
                 title={`${lastName(x.goal!.scorer)} (${ours(x.goal!.home) ? team : opp}), ${clock(x.t)}: ${pct(x.v)}`}
               />
             ))}
+            {live && <span className="wp-now" style={{ left: `${X(tl.endT)}%`, top: `${Y(fin)}%` }} />}
           </div>
           <span className="wp-ylabel" style={{ top: "0%" }}>100%</span>
           <span className="wp-ylabel" style={{ top: "50%" }}>50%</span>

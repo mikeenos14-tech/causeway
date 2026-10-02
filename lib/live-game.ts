@@ -7,7 +7,9 @@
 
 const API = "https://api-web.nhle.com/v1";
 
-export type LiveState = "FUT" | "PRE" | "LIVE" | "CRIT" | "FINAL" | "OFF";
+// OVER: the horn has gone but the result isn't official yet (up to a
+// minute before FINAL on the recorded 2026-10-01 games). Shown as final.
+export type LiveState = "FUT" | "PRE" | "LIVE" | "CRIT" | "OVER" | "FINAL" | "OFF";
 
 export type LiveGoal = {
   eventId: number | null; // the feed's id for this goal; stable when the NHL corrects the time
@@ -25,9 +27,21 @@ export type LiveGoal = {
 
 export type LiveTeam = { abbrev: string; name: string; score: number; sog: number | null };
 
+export type LiveClock = {
+  period: number; // 1-3, 4 = first OT
+  periodType: "REG" | "OT" | "SO";
+  secondsRemaining: number; // in the period (in the intermission's countdown during one)
+  inIntermission: boolean;
+};
+
 export type LiveGame = {
   id: number;
   state: LiveState;
+  gameType: number; // 2 regular season, 3 playoffs
+  season: string; // "20262027"
+  awayId: number;
+  homeId: number;
+  clock: LiveClock | null;
   startTimeUTC: string;
   status: string; // "2nd · 12:34", "1st intermission", "Final (OT)"
   away: LiveTeam;
@@ -56,7 +70,7 @@ export function parseLanding(d: any): LiveGame {
   const state = d.gameState as LiveState;
   const period = periodLabel(d.periodDescriptor, d.regPeriods ?? 3);
   const live = state === "LIVE" || state === "CRIT";
-  const final = state === "FINAL" || state === "OFF";
+  const final = state === "FINAL" || state === "OFF" || state === "OVER";
   let status: string;
   if (final) {
     const t = d.periodDescriptor?.periodType;
@@ -113,9 +127,20 @@ export function parseLanding(d: any): LiveGame {
     }
   }
 
+  const pd = d.periodDescriptor;
+  const clock: LiveClock | null =
+    pd?.number && d.clock
+      ? { period: pd.number, periodType: pd.periodType, secondsRemaining: Number(d.clock.secondsRemaining ?? 0), inIntermission: !!d.clock.inIntermission }
+      : null;
+
   return {
     id: d.id,
     state,
+    gameType: Number(d.gameType),
+    season: String(d.season),
+    awayId: Number(d.awayTeam?.id),
+    homeId: Number(d.homeTeam?.id),
+    clock,
     startTimeUTC: d.startTimeUTC,
     status,
     away: team(d.awayTeam),

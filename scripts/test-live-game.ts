@@ -101,6 +101,16 @@ if (!existsSync(root)) {
       }
       check(`${lastParsed.away.abbrev}@${lastParsed.home.abbrev}: when the board stops polling it shows every goal`, !!stoppedAt && stoppedAt.goals === stoppedAt.score && stoppedAt.goals === lastParsed.goals.length, JSON.stringify(stoppedAt));
     }
+    // OVER (horn gone, not yet official): shown as a final, never as
+    // "Not started" (which flipped the board back to the preview).
+    for (const t of timeline) {
+      const path = join(dir, `${t.landingHash}.landing.json.gz`);
+      if (!existsSync(path)) continue;
+      const g = parseLanding(JSON.parse(gunzipSync(readFileSync(path)).toString()));
+      if (g.state !== "OVER") continue;
+      check(`${lastParsed.away.abbrev}@${lastParsed.home.abbrev}: OVER reads as a final ("${g.status}")`, g.status.startsWith("Final"), g.status);
+      break;
+    }
     const final = lastParsed.goals;
     const label = `${lastParsed.away.abbrev}@${lastParsed.home.abbrev} (${lastParsed.status}, ${timeline.length} polls)`;
     const keys = detected.map(goalKey);

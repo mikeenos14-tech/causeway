@@ -16,10 +16,13 @@ export function winChance(homeRating: number, awayRating: number, season: string
   return 1 / (1 + Math.exp(-(ELO.winProb.intercept + ELO.winProb.slope * gap)));
 }
 
-// startTimeUTC: the game's start, for the back-to-back check (did either
-// team play the day before, Eastern dates). Without it, no penalty.
-export async function getEloOdds(awayTeamId: number, homeTeamId: number, season: string, gameType: number, startTimeUTC?: string): Promise<EloOdds | null> {
-  if (gameType !== 2) return null;
+// Each team's current rating and whether it's on the second night of a
+// back-to-back (played the previous Eastern date). startTimeUTC: the
+// game's start; without it, no back-to-back. Any game type (the live win
+// probability uses it for playoff games too).
+export type EloMatchup = { homeRating: number; awayRating: number; asOf: string; b2b: { home: boolean; away: boolean } };
+
+export async function getEloMatchup(awayTeamId: number, homeTeamId: number, startTimeUTC?: string): Promise<EloMatchup | null> {
   let b2b = { home: false, away: false };
   if (startTimeUTC) {
     const et = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(startTimeUTC));
@@ -37,8 +40,16 @@ export async function getEloOdds(awayTeamId: number, homeTeamId: number, season:
   );
   const away = rows.find((r) => Number(r.id) === awayTeamId), home = rows.find((r) => Number(r.id) === homeTeamId);
   if (!away || !home) return null;
-  const p = winChance(home.rating, away.rating, season, b2b);
-  return { home: p, away: 1 - p, homeRating: home.rating, awayRating: away.rating, asOf: [home.as_of, away.as_of].sort().at(-1)!, b2b };
+  return { homeRating: home.rating, awayRating: away.rating, asOf: [home.as_of, away.as_of].sort().at(-1)!, b2b };
+}
+
+// Regular season only: the curve was fitted on regular-season games.
+export async function getEloOdds(awayTeamId: number, homeTeamId: number, season: string, gameType: number, startTimeUTC?: string): Promise<EloOdds | null> {
+  if (gameType !== 2) return null;
+  const m = await getEloMatchup(awayTeamId, homeTeamId, startTimeUTC);
+  if (!m) return null;
+  const p = winChance(m.homeRating, m.awayRating, season, m.b2b);
+  return { home: p, away: 1 - p, ...m };
 }
 
 // The same, by team code (the home page's next-game card has codes).

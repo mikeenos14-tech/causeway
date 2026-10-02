@@ -32,7 +32,7 @@ export type Preview = {
   id: number;
   season: string;
   gameType: number;
-  state: string; // FUT, PRE, LIVE, CRIT, FINAL, OFF
+  state: string; // FUT, PRE, LIVE, CRIT, OVER, FINAL, OFF
   startTimeUTC: string;
   venue: string;
   tv: string[];

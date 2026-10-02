@@ -15,7 +15,10 @@ const API = "https://api-web.nhle.com/v1";
 
 const CANADIAN_TEAMS = new Set(["TOR", "MTL", "OTT", "WPG", "CGY", "EDM", "VAN"]);
 
-export type GameState = "FUT" | "PRE" | "LIVE" | "CRIT" | "FINAL" | "OFF";
+// OVER: the horn has gone but the result isn't official yet (seen on the
+// recorded 2026-10-01 games, for up to a minute before FINAL). Still in
+// progress here, so the live board stays up.
+export type GameState = "FUT" | "PRE" | "LIVE" | "CRIT" | "OVER" | "FINAL" | "OFF";
 
 export type ClubGame = {
   id: number;
@@ -110,7 +113,7 @@ export async function getClubSeason(teamAbbrev: string): Promise<ClubSeason | nu
 }
 
 export const isUpcoming = (g: ClubGame) => g.state === "FUT" || g.state === "PRE";
-export const isInProgress = (g: ClubGame) => g.state === "LIVE" || g.state === "CRIT";
+export const isInProgress = (g: ClubGame) => g.state === "LIVE" || g.state === "CRIT" || g.state === "OVER";
 export const isFinal = (g: ClubGame) => g.state === "FINAL" || g.state === "OFF";
 
 // "Tue, Sep 29 · 8:00 PM ET". Converting a real UTC instant to Eastern is

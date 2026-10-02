@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { trackGoals, startTracking, boardGoals, finalAndComplete, type GoalTracker, type LiveGame, type LiveGoal } from "@/lib/live-game";
+import type { LiveWp } from "@/lib/live-wp";
+import type { WpTimeline } from "@/lib/wp-game";
+import { WinProbChart } from "@/components/WinProbChart";
 
 const POLL_MS = 20_000;
 const WINDOW_BEFORE_MS = 15 * 60_000; // start polling 15 min before puck drop
@@ -10,7 +13,9 @@ const WINDOW_AFTER_MS = 6 * 3600_000; // give up 6h after (a long OT game is ~3.
 const FINAL_GRACE_MS = 15 * 60_000; // after the final, wait at most this long for a goal the feed dropped
 
 const isLive = (g: LiveGame) => g.state === "LIVE" || g.state === "CRIT";
-const isFinal = (g: LiveGame) => g.state === "FINAL" || g.state === "OFF";
+// OVER (horn gone, result not yet official) shows as final; polling still
+// waits for FINAL with every goal on the board (finalAndComplete).
+const isFinal = (g: LiveGame) => g.state === "FINAL" || g.state === "OFF" || g.state === "OVER";
 
 // A live score card that keeps itself current while a game is on: score,
 // shots, period and clock, power play, and each goal as it's scored. Shows
@@ -40,6 +45,11 @@ export function LiveScoreboard({
   children?: ReactNode;
 }) {
   const [game, setGame] = useState<LiveGame | null>(null);
+  // Win probability (home side) from /api/live. The curve is kept from the
+  // last poll whose goal list added up to the score, so a feed flicker
+  // doesn't blank the chart; `now` always follows the scoreboard.
+  const [wpNow, setWpNow] = useState<number | null>(null);
+  const [wpCurve, setWpCurve] = useState<WpTimeline | null>(null);
   const [stale, setStale] = useState(false);
   const [celebration, setCelebration] = useState<{ id: number; goal: LiveGoal } | null>(null);
   const [overturned, setOverturned] = useState<{ id: number; goal: LiveGoal } | null>(null);
@@ -71,8 +81,10 @@ export function LiveScoreboard({
         try {
           const res = await fetch(`/api/live/${gameId}`, { cache: "no-store" });
           if (res.ok) {
-            const g: LiveGame = await res.json();
+            const { wp, ...g }: LiveGame & { wp?: LiveWp | null } = await res.json();
             if (cancelled) return;
+            setWpNow(wp?.now ?? null);
+            if (wp?.timeline) setWpCurve(wp.timeline);
             // The first response is the baseline: goals already scored
             // when the page opened never light up.
             if (seenGoals.current) {
@@ -122,10 +134,39 @@ export function LiveScoreboard({
 
   if (!game || !(isLive(game) || isFinal(game))) return <>{children}</>;
   const extras = { celebration, overturned };
-  return variant === "hero" ? <HeroBoard g={game} title={title} stale={stale} {...extras} /> : <PageBoard g={game} stale={stale} {...extras} />;
+  // From the focus team's side when it's playing, else the home team's.
+  const sideHome = game.away.abbrev !== focusTeam;
+  const wp = { now: wpNow, curve: wpCurve, sideHome };
+  return variant === "hero" ? <HeroBoard g={game} title={title} stale={stale} wp={wp} {...extras} /> : <PageBoard g={game} stale={stale} wp={wp} {...extras} />;
 }
 
 type Extras = { celebration: { id: number; goal: LiveGoal } | null; overturned: { id: number; goal: LiveGoal } | null };
+type WpView = { now: number | null; curve: WpTimeline | null; sideHome: boolean };
+
+const wpPct = (p: number) => (p > 0 && p < 0.01 ? "<1%" : p < 1 && p > 0.99 ? ">99%" : `${Math.round(100 * p)}%`);
+
+// One line under the score: each team's chance to win right now.
+function WinChanceBar({ g, wp }: { g: LiveGame; wp: WpView }) {
+  if (wp.now == null) return null;
+  const home = wp.now;
+  const [left, right] = wp.sideHome ? [g.home, g.away] : [g.away, g.home];
+  const pl = wp.sideHome ? home : 1 - home;
+  return (
+    <div style={{ marginTop: ".9rem" }} aria-label={`Chance to win: ${left.abbrev} ${wpPct(pl)}, ${right.abbrev} ${wpPct(1 - pl)}`}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: ".75rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 4 }}>
+        <span>
+          <span style={{ color: "var(--gold)" }}>{left.abbrev} {wpPct(pl)}</span> chance to win
+        </span>
+        <span>
+          {right.abbrev} {wpPct(1 - pl)}
+        </span>
+      </div>
+      <div style={{ display: "flex", height: 6, borderRadius: 3, overflow: "hidden", background: "var(--border)" }}>
+        <span style={{ width: `${100 * pl}%`, background: "var(--gold)", transition: "width .8s ease" }} />
+      </div>
+    </div>
+  );
+}
 
 // The red flash and the scorer banner, layered over the score card.
 function GoalLight({ celebration }: Pick<Extras, "celebration">) {
@@ -222,7 +263,7 @@ function GoalList({ g, limit }: { g: LiveGame; limit?: number }) {
   );
 }
 
-function HeroBoard({ g, title, stale, celebration, overturned }: { g: LiveGame; title: string; stale: boolean } & Extras) {
+function HeroBoard({ g, title, stale, wp, celebration, overturned }: { g: LiveGame; title: string; stale: boolean; wp: WpView } & Extras) {
   const final = isFinal(g);
   return (
     <>
@@ -234,6 +275,7 @@ function HeroBoard({ g, title, stale, celebration, overturned }: { g: LiveGame; 
         <div style={{ position: "relative", overflow: "hidden", background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 16, padding: "1.2rem 1.5rem", maxWidth: 420, marginBottom: "1.2rem" }}>
           <GoalLight celebration={celebration} />
           <Scores g={g} big />
+          <WinChanceBar g={g} wp={wp} />
         </div>
         <OverturnedNote overturned={overturned} />
         <p style={{ fontSize: ".85rem", color: "var(--text-secondary)", margin: "0 0 1.2rem" }}>
@@ -256,8 +298,9 @@ function HeroBoard({ g, title, stale, celebration, overturned }: { g: LiveGame; 
   );
 }
 
-function PageBoard({ g, stale, celebration, overturned }: { g: LiveGame; stale: boolean } & Extras) {
+function PageBoard({ g, stale, wp, celebration, overturned }: { g: LiveGame; stale: boolean; wp: WpView } & Extras) {
   return (
+    <>
     <div style={{ display: "grid", gap: "1rem", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", marginTop: "1.2rem" }}>
       <div style={{ position: "relative", overflow: "hidden", background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, padding: "1.1rem 1.3rem" }}>
         <GoalLight celebration={celebration} />
@@ -265,6 +308,7 @@ function PageBoard({ g, stale, celebration, overturned }: { g: LiveGame; stale: 
           <StatusLine g={g} stale={stale} />
         </div>
         <Scores g={g} big={false} />
+        <WinChanceBar g={g} wp={wp} />
         <OverturnedNote overturned={overturned} />
       </div>
       <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, padding: "1.1rem 1.3rem" }}>
@@ -272,5 +316,11 @@ function PageBoard({ g, stale, celebration, overturned }: { g: LiveGame; stale: 
         <GoalList g={g} />
       </div>
     </div>
+    {wp.curve && (
+      <div style={{ marginTop: "1.75rem" }}>
+        <WinProbChart tl={wp.curve} sideHome={wp.sideHome} />
+      </div>
+    )}
+    </>
   );
 }

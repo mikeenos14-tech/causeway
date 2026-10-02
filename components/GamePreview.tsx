@@ -23,7 +23,7 @@ export function GamePreview({ p }: { p: Preview }) {
   const opp = bos === p.home ? p.away : p.home;
   const askQuestions = bos ? gameQuestions({ opponent: opp.fullName, skater: bos.topSkaters[0]?.name ?? null }) : [];
   const live = p.state === "LIVE" || p.state === "CRIT";
-  const final = p.state === "FINAL" || p.state === "OFF";
+  const final = p.state === "FINAL" || p.state === "OFF" || p.state === "OVER"; // OVER: horn gone, not yet official
   return (
     <>
       <section style={{ marginBottom: "2rem", paddingBottom: "1.75rem", borderBottom: "1px solid var(--border)" }}>
@@ -60,7 +60,7 @@ export function GamePreview({ p }: { p: Preview }) {
         </LiveScoreboard>
       </section>
 
-      {p.odds && !(p.state === "LIVE" || p.state === "CRIT" || p.state === "FINAL" || p.state === "OFF") && (
+      {p.odds && !(p.state === "LIVE" || p.state === "CRIT" || p.state === "OVER" || p.state === "FINAL" || p.state === "OFF") && (
         <EloOddsBar odds={p.odds} away={{ abbrev: p.away.abbrev, name: p.away.name }} home={{ abbrev: p.home.abbrev, name: p.home.name }} />
       )}
 
