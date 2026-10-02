@@ -81,7 +81,7 @@ export function RosterMovesCard({ teamAbbrev, moves, captainName }: { teamAbbrev
                 {/* "system" = still this team's player per the NHL, but not on the
                     current roster list — injured, in the minors, or waived; the
                     API doesn't say which, so neither do we. */}
-                {d.now.kind === "team" ? `now with ${d.now.abbrev}` : d.now.kind === "system" ? `still with ${teamAbbrev}, off the current roster` : "not on an NHL roster"} ·{" "}
+                {d.now.kind === "team" ? `now with ${d.now.abbrev}` : d.now.kind === "system" ? `still with ${teamAbbrev}, off the current roster` : d.now.kind === "none" ? "not on an NHL roster" : "current status unavailable"} ·{" "}
                 {d.games} GP here in {last}
               </span>
             </div>

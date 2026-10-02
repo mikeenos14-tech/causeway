@@ -8,6 +8,7 @@
 // yet"); departures (10+ games last season, so call-ups don't clutter it)
 // show where they are now from each player's NHL profile.
 
+import { nhlJson } from "./nhl-fetch";
 import { pool } from "./db";
 
 const API = "https://api-web.nhle.com/v1";
@@ -26,7 +27,8 @@ export type Departure = {
   name: string;
   position: string;
   games: number; // for this team last season
-  now: { kind: "team"; abbrev: string } | { kind: "system" } | { kind: "none" };
+  // unknown: the NHL lookup failed, so nothing is claimed (never "none").
+  now: { kind: "team"; abbrev: string } | { kind: "system" } | { kind: "none" } | { kind: "unknown" };
 };
 
 export type RosterMoves = { lastSeason: string; arrivals: Arrival[]; departures: Departure[] };
@@ -36,9 +38,8 @@ type ApiPlayer = { id: number; firstName: { default: string }; lastName: { defau
 export async function getRosterMoves(teamAbbrev: string, lastSeason: string): Promise<RosterMoves | null> {
   let current: ApiPlayer[];
   try {
-    const res = await fetch(`${API}/roster/${teamAbbrev}/current`, { next: { revalidate: 3600 } });
-    if (!res.ok) return null;
-    const data = await res.json();
+    const data = await nhlJson<{ forwards?: ApiPlayer[]; defensemen?: ApiPlayer[]; goalies?: ApiPlayer[] }>(`${API}/roster/${teamAbbrev}/current`, 3600);
+    if (!data) return null;
     current = [...(data.forwards ?? []), ...(data.defensemen ?? []), ...(data.goalies ?? [])];
     if (current.length === 0) return null;
   } catch {
@@ -93,17 +94,17 @@ export async function getRosterMoves(teamAbbrev: string, lastSeason: string): Pr
   const leavers = lastRows.filter((r) => !currentIds.has(Number(r.id)) && r.games >= DEPARTURE_MIN_GP);
   const departures: Departure[] = await Promise.all(
     leavers.map(async (r) => {
-      let now: Departure["now"] = { kind: "none" };
+      // "Not on an NHL roster" only when the NHL actually says so: a failed
+      // lookup used to fall through to that claim (found in the
+      // 2026-10-01 audit); now it says the status is unavailable.
+      let now: Departure["now"] = { kind: "unknown" };
       try {
-        const res = await fetch(`${API}/player/${r.id}/landing`, { next: { revalidate: 86400 } });
-        if (res.ok) {
-          const d = await res.json();
-          if (d.isActive && d.currentTeamAbbrev) {
-            now = d.currentTeamAbbrev === teamAbbrev ? { kind: "system" } : { kind: "team", abbrev: d.currentTeamAbbrev };
-          }
+        const d = await nhlJson<{ isActive?: boolean; currentTeamAbbrev?: string }>(`${API}/player/${r.id}/landing`, 86400);
+        if (d) {
+          now = d.isActive && d.currentTeamAbbrev ? (d.currentTeamAbbrev === teamAbbrev ? { kind: "system" } : { kind: "team", abbrev: d.currentTeamAbbrev }) : { kind: "none" };
         }
       } catch {
-        // leave as "none" — shown as not on an NHL roster, never guessed
+        // stays "unknown"
       }
       return { id: Number(r.id), name: r.full_name, position: r.position, games: r.games, now };
     }),

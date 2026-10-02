@@ -9,6 +9,8 @@
 // currentSeason flips to the new season in the offseason, well before any
 // game is loaded into the database.
 
+import { nhlJson } from "./nhl-fetch";
+
 const API = "https://api-web.nhle.com/v1";
 
 const CANADIAN_TEAMS = new Set(["TOR", "MTL", "OTT", "WPG", "CGY", "EDM", "VAN"]);
@@ -58,9 +60,10 @@ export async function getClubSeason(teamAbbrev: string): Promise<ClubSeason | nu
   try {
     // Five minutes, matching the pages' own revalidate — short enough that
     // a game going final shows up promptly, long enough to be cheap.
-    const res = await fetch(`${API}/club-schedule-season/${teamAbbrev}/now`, { next: { revalidate: 300 } });
-    if (!res.ok) return null;
-    const data = await res.json();
+    // Retries temporary failures (lib/nhl-fetch.ts); a lasting outage
+    // throws into the catch below, and pages fall back to the database.
+    const data = await nhlJson<{ games?: ApiGame[]; currentSeason?: number; previousSeason?: number }>(`${API}/club-schedule-season/${teamAbbrev}/now`, 300);
+    if (!data) return null;
     const games: ClubGame[] = (data.games ?? [])
       .filter((g: ApiGame) => g.gameType === 2 || g.gameType === 3)
       .map((g: ApiGame) => {
