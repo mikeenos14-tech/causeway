@@ -1,4 +1,5 @@
-// Season totals built from our pre-2007 box scores (nhl_skater_games, what
+// Season totals built from our pre-2007 box scores (nhl_skater_games rows
+// marked played from the NHL's game logs, what
 // the Roster page's season picker shows) against the NHL's official season
 // totals (stats API skater summary), for every player in a spread of
 // seasons. GP, G, A, PIM always; +/- and shots where the era tracked them.
@@ -6,6 +7,13 @@
 // Usage: npx tsx --env-file=.env.local scripts/qa/check-history-rosters.ts [season ...]
 
 import { pool } from "../../lib/db";
+
+// Known differences, each traced to the NHL's own sources disagreeing.
+const KNOWN = new Map([
+  // NHL player page and game log: 1 NHL game (1927-28, otherwise with the
+  // Can-Pro Toronto Ravinas); the stats API summary says 2. Ours: 1.
+  ["19271928|8448197", "NHL sources disagree (player page and game log: 1 GP; stats summary: 2)"],
+]);
 
 const DEFAULT = ["19251926", "19371938", "19501951", "19591960", "19661967", "19701971", "19801981", "19871988", "19951996", "20022003", "20052006"];
 const seasons = process.argv.slice(2).length ? process.argv.slice(2) : DEFAULT;
@@ -36,7 +44,7 @@ async function nhlSeason(season: string): Promise<any[]> {
       `select s.player_id, count(*)::int gp, sum(s.goals)::int g, sum(s.assists)::int a, sum(s.pim)::int pim, sum(s.plus_minus)::int pm, sum(s.sog)::int sog,
               bool_and(s.plus_minus is not null) pm_tracked, bool_and(s.sog is not null) sog_tracked
        from nhl_skater_games s join nhl_games g on g.id = s.game_id
-       where g.season = $1 and g.game_type = 'regular' group by s.player_id`,
+       where g.season = $1 and g.game_type = 'regular' and s.played group by s.player_id`,
       [season],
     );
     const ours = new Map(rows.map((r) => [Number(r.player_id), r]));
@@ -57,6 +65,11 @@ async function nhlSeason(season: string): Promise<any[]> {
       if (o?.pm_tracked) fields.push(["+/-", o.pm, p.plusMinus]);
       if (o?.sog_tracked && p.shots != null) fields.push(["SOG", o.sog, p.shots]);
       const bad = fields.filter(([, a, b]) => Number(a) !== Number(b));
+      const known = KNOWN.get(`${season}|${p.playerId}`);
+      if (bad.length && known) {
+        console.log(`    known: ${p.skaterFullName}: ${known}`);
+        continue;
+      }
       if (bad.length) {
         sDiffs++;
         if (examples.length < 4) examples.push(`${p.skaterFullName}: ${bad.map(([k, a, b]) => `${k} ours ${a} NHL ${b}`).join(", ")}`);
