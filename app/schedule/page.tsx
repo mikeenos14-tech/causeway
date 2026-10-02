@@ -3,6 +3,8 @@ import { getLatestSeasonId, getSeasonSchedule } from "@/lib/schedule-data";
 import { getClubSeason, formatStartTimeET, isFinal, isInProgress } from "@/lib/nhl-schedule";
 import { formatGameDate, formatSeasonLabel } from "@/lib/format-date";
 import { Masthead, Footer } from "@/components/Masthead";
+import { SeasonPicker } from "@/components/SeasonPicker";
+import { getBruinsSeasons, getHistorySeasonSchedule, eraRecord, eraResult, BOX_SCORES_FROM } from "@/lib/history-data";
 
 // Without this the page was prerendered once at build time and never
 // picked up the hourly data refresh — same 5-minute window as every
@@ -18,6 +20,9 @@ type Row = {
   // Result from our database (linked, narrated) or, for a game the NHL has
   // finished but the hourly refresh hasn't loaded yet, straight from the API.
   result: { team: number; opp: number; endType: string | null; loaded: boolean } | null;
+  // Before 2007-08 (history tables): the era's result tag and any notable label.
+  tag?: "W" | "L" | "T" | "OTL";
+  notable?: string | null;
   live: boolean;
   startTimeUTC: string | null;
   tv: string[];
@@ -34,14 +39,34 @@ const MONTHS = ["January", "February", "March", "April", "May", "June", "July", 
 // season from the database alone.
 export default async function Schedule({ searchParams }: { searchParams: Promise<{ season?: string }> }) {
   const { season: requested } = await searchParams;
-  const [club, latestLoaded] = await Promise.all([getClubSeason("BOS"), getLatestSeasonId("BOS")]);
+  const [club, latestLoaded, historySeasons] = await Promise.all([getClubSeason("BOS"), getLatestSeasonId("BOS"), getBruinsSeasons()]);
   const currentSeason = club?.currentSeason ?? latestLoaded;
-  const seasonId = requested && /^\d{8}$/.test(requested) ? requested : currentSeason;
-  const stored = seasonId ? await getSeasonSchedule("BOS", seasonId) : [];
+  const seasons = [...new Set([...(currentSeason ? [currentSeason] : []), ...historySeasons])];
+  const seasonId = requested && seasons.includes(requested) ? requested : currentSeason;
+  // Before 2007-08 the site's own box-score tables have nothing; the
+  // audited 1917-on history supplies every game, result and scorer.
+  const historical = !!seasonId && seasonId < BOX_SCORES_FROM;
+  const history = historical ? await getHistorySeasonSchedule(seasonId!) : [];
+  const stored = seasonId && !historical ? await getSeasonSchedule("BOS", seasonId) : [];
   const storedById = new Map(stored.map((g) => [Number(g.id), g]));
 
-  const rows: Row[] =
-    club && seasonId === club.currentSeason
+  const rows: Row[] = historical
+    ? history.map((h) => ({
+        id: h.id,
+        date: h.date,
+        gameType: h.gameType,
+        isHome: h.isHome,
+        opponent: h.opponent,
+        result: { team: h.team, opp: h.opp, endType: h.finalState === "OT" ? "overtime" : h.finalState === "SO" ? "shootout" : "regulation", loaded: true },
+        live: false,
+        startTimeUTC: null,
+        tv: [],
+        hasHighlight: !!h.notable,
+        hasRecap: false,
+        tag: eraResult(seasonId!, h.gameType, h.team, h.opp, h.finalState),
+        notable: h.notable,
+      }))
+    : club && seasonId === club.currentSeason
       ? club.games
           .filter((g) => g.season === seasonId)
           .map((g) => {
@@ -84,9 +109,10 @@ export default async function Schedule({ searchParams }: { searchParams: Promise
   const w = played.filter((r) => r.result!.team > r.result!.opp).length;
   const l = played.filter((r) => r.result!.team < r.result!.opp && r.result!.endType === "regulation").length;
   const otl = played.length - w - l;
+  // Ties until 2004-05 and OTL from 1999-2000: the record as that era wrote it.
+  const record = historical ? eraRecord(seasonId!, history.filter((h) => h.gameType === "regular").map((h) => ({ team: h.team, opp: h.opp, finalState: h.finalState }))) : `${w}-${l}-${otl}`;
   const nextId = rows.find((r) => !r.result && !r.live)?.id;
   const regularCount = rows.filter((r) => r.gameType === "regular").length;
-  const previousSeason = club?.previousSeason;
 
   return (
     <>
@@ -98,24 +124,19 @@ export default async function Schedule({ searchParams }: { searchParams: Promise
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 16, flexWrap: "wrap", marginBottom: "1.5rem" }}>
           <p style={{ color: "var(--text-secondary)", fontSize: ".9rem", margin: 0 }}>
             Boston Bruins · {regularCount} regular-season games
-            {played.length > 0 ? ` · ${w}-${l}-${otl}${played.length === regularCount || seasonId !== currentSeason ? " final" : " so far"}` : ""}
+            {played.length > 0 ? ` · ${record}${historical && seasonId! < "20052006" ? (seasonId! >= "19992000" ? " (W-L-T-OTL)" : " (W-L-T)") : ""}${played.length === regularCount || seasonId !== currentSeason ? " final" : " so far"}` : ""}
           </p>
-          <p style={{ fontSize: ".82rem", margin: 0, display: "flex", gap: 16, flexWrap: "wrap" }}>
-            {seasonId !== currentSeason && currentSeason && (
-              <Link href="/schedule" style={{ color: "var(--gold)", textDecoration: "none", fontWeight: 600 }}>
-                {formatSeasonLabel(currentSeason)} schedule →
-              </Link>
-            )}
-            {seasonId === currentSeason && previousSeason && (
-              <Link href={`/schedule?season=${previousSeason}`} style={{ color: "var(--gold)", textDecoration: "none", fontWeight: 600 }}>
-                {formatSeasonLabel(previousSeason)} results →
-              </Link>
-            )}
-          </p>
+          {seasonId && seasons.length > 1 && <SeasonPicker seasons={seasons} current={seasonId} basePath="/schedule" />}
         </div>
-        <p style={{ fontSize: ".78rem", color: "var(--text-secondary)", margin: "0 0 1rem" }}>
-          <span style={{ color: "var(--gold)" }}>★</span> notable-game highlight · <span style={{ color: "var(--gold)" }}>●</span> recap · Times are Eastern
-        </p>
+        {historical ? (
+          <p style={{ fontSize: ".78rem", color: "var(--text-secondary)", margin: "0 0 1rem", maxWidth: "70ch" }}>
+            <span style={{ color: "var(--gold)" }}>★</span> a notable game · Results and goal scorers from the NHL&apos;s official game records. Recaps and full box scores start in 2007-08.
+          </p>
+        ) : (
+          <p style={{ fontSize: ".78rem", color: "var(--text-secondary)", margin: "0 0 1rem" }}>
+            <span style={{ color: "var(--gold)" }}>★</span> notable-game highlight · <span style={{ color: "var(--gold)" }}>●</span> recap · Times are Eastern
+          </p>
+        )}
 
         <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden" }}>
           <div className="schedule-row" style={{ padding: "10px 18px", fontSize: ".68rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".04em", borderBottom: "1px solid var(--border)" }}>
@@ -149,15 +170,15 @@ export default async function Schedule({ searchParams }: { searchParams: Promise
                 <span style={{ color: "var(--text-primary)" }}>
                   {r.isHome ? "vs" : "@"} {r.opponent}
                   {(r.hasHighlight || r.hasRecap) && (
-                    <span style={{ color: "var(--gold)", marginLeft: 8, fontSize: ".75rem" }} aria-label={r.hasHighlight ? "Notable-game highlight" : "Recap"}>
+                    <span style={{ color: "var(--gold)", marginLeft: 8, fontSize: ".75rem" }} aria-label={r.notable ?? (r.hasHighlight ? "Notable-game highlight" : "Recap")} title={r.notable ?? undefined}>
                       {r.hasHighlight ? "★" : "●"}
                     </span>
                   )}
                 </span>
                 <span>
                   {r.result ? (
-                    <span style={{ color: won ? "var(--win)" : "var(--loss)", fontWeight: 700 }}>
-                      {won ? "W" : r.result.endType === "regulation" || r.gameType === "playoff" ? "L" : "OTL"} {r.result.team}-{r.result.opp}
+                    <span style={{ color: won ? "var(--win)" : r.tag === "T" ? "var(--text-secondary)" : "var(--loss)", fontWeight: 700 }}>
+                      {r.tag ?? (won ? "W" : r.result.endType === "regulation" || r.gameType === "playoff" ? "L" : "OTL")} {r.result.team}-{r.result.opp}
                       {r.result.endType === "overtime" ? " OT" : r.result.endType === "shootout" ? " SO" : ""}
                       {!r.result.loaded && <span style={{ color: "var(--text-secondary)", fontWeight: 400, fontSize: ".75rem" }}> · recap soon</span>}
                     </span>

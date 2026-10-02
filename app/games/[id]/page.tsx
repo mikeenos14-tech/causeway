@@ -10,6 +10,8 @@ import { TARGET_TEAM_ABBREV } from "@/lib/significance-checks";
 import { formatGameDate } from "@/lib/format-date";
 import { Masthead, Footer } from "@/components/Masthead";
 import { GamePreview } from "@/components/GamePreview";
+import { HistoryGameView } from "@/components/HistoryGameView";
+import { getHistoryGame, getHistoryAdjacent, BOX_SCORES_FROM, BOS_TEAM_ID } from "@/lib/history-data";
 import { getPreview } from "@/lib/preview-data";
 
 function toi(seconds: number | null) {
@@ -25,7 +27,16 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const gameId = Number((await params).id);
   if (!Number.isInteger(gameId)) return {};
   const game = await getGameDetail(gameId).catch(() => null);
-  if (!game) return { title: "Game preview · Causeway", openGraph: { title: "Game preview · Causeway" } };
+  if (!game) {
+    const hist = await getHistoryGame(gameId).catch(() => null);
+    if (hist && hist.season < BOX_SCORES_FROM) {
+      const score = `${hist.away.code} ${hist.away.score}, ${hist.home.code} ${hist.home.score}`;
+      const title = `${score} · ${hist.iconic?.label ?? formatGameDate(hist.date, true)}`;
+      const description = hist.iconic?.story ?? `${hist.stage ?? "Final"}, ${formatGameDate(hist.date, true)}.`;
+      return { title, description, openGraph: { title, description }, twitter: { card: "summary_large_image", title, description } };
+    }
+    return { title: "Game preview · Causeway", openGraph: { title: "Game preview · Causeway" } };
+  }
   const score = `${game.away_abbrev} ${game.away_score}, ${game.home_abbrev} ${game.home_score}`;
   const title = game.headline ? `${score} · ${game.headline}` : `${score} · Causeway`;
   const description = game.body ?? `Box score and stats, ${formatGameDate(game.game_date, true)}.`;
@@ -41,6 +52,21 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
   // Not played (or not loaded) yet: the pre-game preview at the same URL,
   // so a link to a game works before, during, and after it.
   if (!game) {
+    // Before 2007-08: the audited history (score, scorers, penalties).
+    const hist = await getHistoryGame(gameId);
+    if (hist && hist.season < BOX_SCORES_FROM) {
+      const navTeam = hist.home.id === BOS_TEAM_ID || hist.away.id === BOS_TEAM_ID ? BOS_TEAM_ID : hist.home.id;
+      const nav = await getHistoryAdjacent(gameId, navTeam);
+      return (
+        <>
+          <Masthead />
+          <main style={{ maxWidth: 1160, margin: "0 auto", padding: "3rem 24px 3.5rem" }}>
+            <HistoryGameView g={hist} nav={nav} />
+          </main>
+          <Footer />
+        </>
+      );
+    }
     const preview = await getPreview(gameId);
     if (!preview) notFound();
     return (
