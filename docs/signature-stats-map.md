@@ -84,15 +84,15 @@ Owner decisions so far (2026-10-01): history back to **1917**; Utah inherits Ari
 
 | Item | Status | Notes |
 | --- | --- | --- |
-| V1 table: (era, goal_diff, minute) with logistic blend, n/(n+200) | Planned | Phase 2; data supports all eras |
-| Ties: p_win and p_tie separately | Planned | |
-| OT and shootout rates by era; playoff OT only | Planned | |
-| Monotonicity enforcement | Planned | |
-| Live: jump on goals, drift per minute, Bruins' side | Planned | |
-| UI: live chart, biggest swing, historical game charts | Planned | |
+| V1 table: (era, goal_diff, minute) with logistic blend, n/(n+200) | **Built** | Poisson base by era + correction table (era x reg/playoff x minute x margin +/-3), weight pooled over 5 minutes; held out: log loss 0.475, calibration 0.44 pts (wp-v1-2026-10-02) |
+| Ties: p_win and p_tie separately | **Built** | Chart plots win + tie/2 in tie eras |
+| OT and shootout rates by era; playoff OT only | **Built** | Rates per OT rule; 1928-42 ten full minutes; 1983-2005 tied OT decays toward a tie |
+| Monotonicity enforcement | **Built** | 2D isotonic on the table; tested over 9,240 states |
+| Live: jump on goals, drift per minute, Bruins' side | Next | /api/live + scoreboard |
+| UI: live chart, biggest swing, historical game charts | **Built** (historical + finished games) | Live chart comes with the live item |
 | V2 manpower state | Planned | 2009-10 on (situation codes) |
 | V2 empty net | Planned | 2009-10 on |
-| V2 team strength (Elo) | Planned | After Elo tuning |
+| V2 team strength (Elo) | **Built** | kappa 0.003 fitted on training seasons; beats no-strength 0.475 vs 0.490 log loss |
 | V2 pressure term | Planned | Shot events 2005-06 on |
 | V2 final-minute 10-second buckets | Planned | |
 | V2 OT/shootout model from Elo | Planned | |
