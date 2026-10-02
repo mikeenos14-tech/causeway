@@ -96,7 +96,8 @@ export async function TeamDashboard({ abbrev, compact = false }: { abbrev: strin
 
   // --- What goes in the hero? ------------------------------------------
   const lastDate = lastGame ? isoDate(lastGame.game_date) : null;
-  const { hero, pending, next, daysSinceLast } = chooseHero(club?.games ?? [], lastGame ? { id: lastGame.id, date: lastDate! } : null, now);
+  const lastStarted = lastGame?.game_datetime ? new Date(lastGame.game_datetime).toISOString() : null;
+  const { hero, pending, next, daysSinceLast } = chooseHero(club?.games ?? [], lastGame ? { id: lastGame.id, date: lastDate!, startedAt: lastStarted } : null, now);
 
   // Grounded context for the preview, all from our own data: head-to-head
   // this season (or last season's, before this team's first game), and how
@@ -174,7 +175,10 @@ export async function TeamDashboard({ abbrev, compact = false }: { abbrev: strin
                       }`
                     : null
                 }
-                lastGame={lastGame && daysSinceLast < 3 ? lastGame : null}
+                // The last result stays one tap away all season (30 days
+                // covers the All-Star and Olympic breaks); it used to vanish
+                // after 3 days, mid-week between games.
+                lastGame={lastGame && daysSinceLast < 30 ? lastGame : null}
               />
             )}
             {hero === "pending" && pending && <PendingHero game={pending} teamName={teamName} abbrev={abbrev} titleSize={titleSize} />}
