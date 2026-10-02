@@ -40,6 +40,8 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
   // is only an honest claim if we can verify we have this player's whole
   // career loaded, not just what happens to be in this database.
   const fullCareer = hasFullCareerLoaded(player.birth_date);
+  // The team of the player's most recent game (the log is newest first).
+  const latestTeam: string | undefined = gameLog[0]?.team_abbrev ?? seasonSplits.at(-1)?.team_abbrev;
 
   // One value per season for the career-trajectory sparkline — a mid-season
   // trade already gets its own row per team in the table above, but a trend
@@ -74,6 +76,14 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
           <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "clamp(2.4rem,5.5vw,4rem)", lineHeight: 0.98, textTransform: "uppercase", letterSpacing: ".01em", margin: "0 0 .6rem" }}>
             {player.full_name}
           </h1>
+          {/* A way back out: the player's most recent team and its roster. */}
+          {latestTeam && (
+            <p style={{ margin: "0 0 .4rem", fontSize: ".9rem" }}>
+              <Link href={`/teams/${latestTeam}/roster`} style={{ color: "var(--gold)", textDecoration: "none", fontWeight: 600 }}>
+                {latestTeam} roster →
+              </Link>
+            </p>
+          )}
           {player.birth_date ? (
             <p style={{ color: "var(--text-secondary)", fontSize: ".95rem" }}>
               Born {formatGameDate(player.birth_date, true)}
@@ -173,7 +183,11 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
                   {seasonSplits.map((s) => (
                     <tr key={`${s.season_id}-${s.team_abbrev}`}>
                       <td style={{ textAlign: "left" }}>{formatSeasonLabel(s.season_id)}</td>
-                      <td style={{ textAlign: "left" }}>{s.team_abbrev}</td>
+                      <td style={{ textAlign: "left" }}>
+                        <Link href={`/teams/${s.team_abbrev}`} style={{ color: "inherit" }}>
+                          {s.team_abbrev}
+                        </Link>
+                      </td>
                       <td>{s.games}</td>
                       {isGoalie ? (
                         <>
@@ -237,8 +251,17 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
                         {formatGameDate(g.game_date)}
                       </Link>
                     </td>
-                    <td style={tdStyle("left")}>{g.team_abbrev}</td>
-                    <td style={tdStyle("left")}>{g.is_home ? "vs" : "@"} {g.opp_abbrev}</td>
+                    <td style={tdStyle("left")}>
+                      <Link href={`/teams/${g.team_abbrev}`} style={{ color: "inherit" }}>
+                        {g.team_abbrev}
+                      </Link>
+                    </td>
+                    <td style={tdStyle("left")}>
+                      {g.is_home ? "vs" : "@"}{" "}
+                      <Link href={`/teams/${g.opp_abbrev}`} style={{ color: "inherit" }}>
+                        {g.opp_abbrev}
+                      </Link>
+                    </td>
                     {isGoalie ? (
                       <>
                         <td style={tdStyle()}>{g.decision ?? "—"}</td>
