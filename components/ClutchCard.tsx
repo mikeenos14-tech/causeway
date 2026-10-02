@@ -22,7 +22,7 @@ const ordinal = (n: number) => {
 };
 
 export function goalContext(g: BigGoal) {
-  return `${g.playoff ? "Playoffs · " : ""}${formatGameDate(g.date, true)} vs ${g.opponent} · ${periodName(g.period, g.periodType)} ${clock(g.timeInPeriod)}`;
+  return `${g.stage ? `${g.season.slice(4)} ${g.stage} · ` : ""}${formatGameDate(g.date, true)} vs ${g.opponent} · ${periodName(g.period, g.periodType)} ${clock(g.timeInPeriod)}`;
 }
 
 export function ClutchCard({ c, name }: { c: Card; name: string }) {
@@ -74,6 +74,7 @@ export function ClutchCard({ c, name }: { c: Card; name: string }) {
             <span style={{ ...VALUE, display: "block" }}>{c.playoff.lg.toFixed(1)}</span>
             <span style={NOTE}>
               wins added, {c.playoff.goals} goals{c.playoff.playoffLg > 0 ? ` · ${c.playoff.playoffLg.toFixed(2)} series added` : ""}
+              {c.playoff.cupLg > 0.005 ? ` · ${c.playoff.cupLg.toFixed(2)} Cups added` : ""}
             </span>
           </div>
         )}
@@ -116,7 +117,8 @@ export function ClutchCard({ c, name }: { c: Card; name: string }) {
         </p>
         <p>
           In the playoffs, &ldquo;series added&rdquo; also weighs each goal by how much its game mattered to the series (a Game 7 counts fully; a game
-          in a series nearly won, very little). Every goal since 1917 is counted, from the NHL&rsquo;s own game records.
+          in a series nearly won, very little). &ldquo;Cups added&rdquo; goes one step further: how much the series mattered to winning the Stanley Cup,
+          against the teams that actually played the later rounds. Every goal since 1917 is counted, from the NHL&rsquo;s own game records.
         </p>
       </details>
     </section>

@@ -6,8 +6,8 @@
 
 import { pool } from "../../lib/db";
 import { getGameWpTimeline } from "../../lib/wp-game";
-import { seriesChance, gameStakes, seriesFormat, neutralGameChance } from "../../lib/stats/leverage";
-import { getClutchCard, getBruinsLeverageLeaders, getBruinsBiggestGoals, getLeverageSeasons } from "../../lib/leverage-data";
+import { seriesChance, gameStakes, seriesFormat, neutralGameChance, cupChanceIfWon, type BracketSeries } from "../../lib/stats/leverage";
+import { getClutchCard, getBruinsLeverageLeaders, getBruinsBiggestGoals, getBiggestGoals, getLeverageSeasons } from "../../lib/leverage-data";
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = "") => {
@@ -30,6 +30,19 @@ const near = (a: number, b: number, tol = 1e-6) => Math.abs(a - b) < tol;
   check("1927 Final (2 wins, 2 ties) is irregular, not guessed", seriesFormat("19261927", [sg(0, 0), sg(2, 0), sg(1, 1), sg(3, 1)]).kind === "irregular");
   check("a 4-3 series is best-of-7", JSON.stringify(seriesFormat("20102011", [sg(0, 1), sg(0, 1), sg(1, 0), sg(1, 0), sg(1, 0), sg(0, 1), sg(1, 0)])) === JSON.stringify({ kind: "best-of", need: 4 }));
   check("a series the 'winner' didn't finish is irregular", seriesFormat("20102011", [sg(1, 0), sg(1, 0), sg(1, 0), sg(0, 1)]).kind === "irregular");
+
+  // Cup chance through a bracket: semis then a final, everyone rated equal.
+  const bo7 = { kind: "best-of" as const, need: 4 };
+  const br: BracketSeries[] = [
+    { teams: [1, 2], winner: 1, format: bo7, isFinal: false },
+    { teams: [3, 4], winner: 4, format: bo7, isFinal: false },
+    { teams: [1, 4], winner: 4, format: bo7, isFinal: true },
+  ];
+  check("Cup chance from a Final is 1", cupChanceIfWon(br, 2, 1500, () => 1500) === 1);
+  check("Cup chance from an even semifinal is the Final's 50%", near(cupChanceIfWon(br, 0, 1500, () => 1500)!, 0.5));
+  check("...for the semifinal's loser too (it would take the winner's slot)", near(cupChanceIfWon(br, 0, 1500, () => 1500)!, 0.5));
+  check("a stronger team's Cup chance is higher", cupChanceIfWon(br, 1, 1600, () => 1500)! > 0.5);
+  check("a broken bracket gives no number, not a guess", cupChanceIfWon([{ teams: [1, 2], winner: 1, format: bo7, isFinal: false }], 0, 1500, () => 1500) === null);
 
   const one = async (sql: string, args: unknown[] = []) => (await pool.query(sql, args)).rows[0];
 
@@ -106,6 +119,28 @@ const near = (a: number, b: number, tol = 1e-6) => Math.abs(a - b) < tol;
             (select sum(s.assists) from nhl_skater_games s join nhl_games g on g.id = s.game_id where s.player_id = 8447400 and g.game_type = 'regular' and s.played)::int box`,
   );
   check(`Gretzky's assists: ${assists.lev} = ${assists.box} official`, assists.lev === assists.box);
+
+  // Cup Leverage, stored.
+  const cupCover = await one(
+    `select count(*) filter (where l.cup_home is null or l.cup_away is null)::int missing, count(*)::int n,
+            count(*) filter (where (l.cup_home not between 0 and 1) or (l.cup_away not between 0 and 1))::int bad
+     from leverage_games l join nhl_games g on g.id = l.game_id where g.game_type = 'playoff' and g.season >= '19261927'`,
+  );
+  check(`every playoff game since 1926-27 has a Cup chance for both sides (${cupCover.n} games), all within 0-1`, cupCover.missing === 0 && cupCover.bad === 0, JSON.stringify(cupCover));
+  const early = await one(`select count(*)::int n from leverage_games l join nhl_games g on g.id = l.game_id where g.season < '19261927' and (l.cup_home is not null or l.cup_away is not null)`);
+  check("no Cup chance before 1926-27 (the Cup was played against other leagues)", early.n === 0);
+  const finals = await one(
+    `select count(*)::int n, min(least(l.cup_home, l.cup_away))::float mn from leverage_games l join nhl_games g on g.id = l.game_id
+     where g.game_type = 'playoff' and g.season >= '19261927' and (g.id / 100) % 10 = (select max((x.id / 100) % 10) from nhl_games x where x.season = g.season and x.game_type = 'playoff')`,
+  );
+  check(`every Final game (${finals.n}) is worth the whole Cup`, near(finals.mn, 1));
+  const cupTop = await getBiggestGoals("cup", { bruins: false, limit: 5 });
+  check("the two Game 7 overtime winners in Final history (Leswick 1954, Babando 1950) are in the top 5", ["Tony Leswick", "Pete Babando"].every((n) => cupTop.some((g) => g.scorer === n)), cupTop.map((g) => g.scorer).join(", "));
+  const g11 = await one(
+    `select min(rank)::int r from (select w.game_id, rank() over (order by (w.wp_after - w.wp_before) * w.stakes * case when e.team_id = g.home_team_id then l.cup_home else l.cup_away end desc nulls last)
+     from goal_wpa w join nhl_goal_events e using (game_id, event_id) join nhl_games g on g.id = w.game_id join leverage_games l on l.game_id = w.game_id) x where game_id = 2010030417`,
+  );
+  check(`2011 Final Game 7: Bergeron's opener is near the top in Cup Leverage (#${g11.r})`, g11.r <= 100);
 
   // The pages' queries.
   const bos = await getBruinsLeverageLeaders("regular", "lg", 200);

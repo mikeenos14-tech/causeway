@@ -99,3 +99,39 @@ export function gameLeverage(ctx: WpGameContext, goals: GoalIn[], end: number, f
   drift += ctx.at(end, h, a) - segStart + (final - ctx.at(end, h, a));
   return { pregame, final, goals: out, goalWpaHome, drift };
 }
+
+// Cup Leverage (spec section 8, V2): a playoff goal's leverage times how
+// much winning its series would move the team's chance of winning the Cup.
+// The later-round opponents are the teams that actually played those
+// rounds (an owner decision, 2026-10-02: simple and explainable, though it
+// uses hindsight about who came through the other side of the bracket).
+
+export type BracketSeries = { teams: [number, number]; winner: number; format: SeriesFormat; isFinal: boolean };
+
+// A whole series' chance from a single game's p. Two-game total-goals and
+// irregular series are treated as one game (no better rule exists).
+export function seriesWinChance(format: SeriesFormat, p: number): number {
+  return format.kind === "best-of" ? seriesChance(0, 0, format.need, p) : p;
+}
+
+// P(team wins the Cup | it wins bracket[from]), following the actual
+// bracket: the slot it would move into is the one its series' real winner
+// moved into, and the opponent there is whoever actually played it. Null
+// if the bracket can't be followed to the Final (or a rating is missing).
+// `bracket` is the season's series in order (round, then series number).
+export function cupChanceIfWon(bracket: BracketSeries[], from: number, teamRating: number, ratingOf: (teamId: number) => number | null): number | null {
+  if (bracket[from].isFinal) return 1;
+  let occupant = bracket[from].winner;
+  let prob = 1;
+  for (let i = from + 1; i < bracket.length; i++) {
+    const s = bracket[i];
+    if (!s.teams.includes(occupant)) continue;
+    const opp = s.teams[0] === occupant ? s.teams[1] : s.teams[0];
+    const r = ratingOf(opp);
+    if (r == null) return null;
+    prob *= seriesWinChance(s.format, neutralGameChance(teamRating, r));
+    if (s.isFinal) return prob;
+    occupant = s.winner;
+  }
+  return null;
+}

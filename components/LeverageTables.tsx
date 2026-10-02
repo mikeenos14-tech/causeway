@@ -20,7 +20,11 @@ const PlayerName = ({ id, name, linked }: { id: number | null; name: string | nu
     <span style={{ fontWeight: 600 }}>{name ?? "Unknown scorer"}</span>
   );
 
-export function GoalTable({ goals, linked, showStakes = false }: { goals: BigGoal[]; linked: Set<number>; showStakes?: boolean }) {
+// measure: what the big number is. "wpa" the goal's win chance added;
+// "series" that times its game's series stakes; "cup" that times how much
+// winning the series moved the Cup chance.
+export function GoalTable({ goals, linked, measure = "wpa" }: { goals: BigGoal[]; linked: Set<number>; measure?: "wpa" | "series" | "cup" }) {
+  const value = (g: BigGoal) => (measure === "cup" ? g.wpa * (g.stakes ?? 0) * (g.cupFactor ?? 0) : measure === "series" ? g.wpa * (g.stakes ?? 0) : g.wpa);
   return (
     <div style={CARD}>
       <ol style={{ listStyle: "none", margin: 0, padding: 0 }}>
@@ -39,9 +43,11 @@ export function GoalTable({ goals, linked, showStakes = false }: { goals: BigGoa
               <span style={{ display: "block", fontSize: ".78rem", color: "var(--text-secondary)" }}>{goalContext(g)}</span>
             </span>
             <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
-              <span style={{ fontWeight: 700, color: "var(--gold)" }}>{showStakes && g.stakes != null ? formatWpa(g.wpa * g.stakes) : formatWpa(g.wpa)}</span>
+              <span style={{ fontWeight: 700, color: "var(--gold)" }}>{formatWpa(value(g))}</span>
               <span style={{ display: "block", fontSize: ".75rem", color: "var(--text-secondary)" }}>
-                {Math.round(100 * g.before)}% → {Math.round(100 * g.after)}%{showStakes && g.stakes != null && g.stakes < 0.995 ? ` · stakes ${g.stakes.toFixed(2)}` : ""}
+                {measure === "wpa" ? `${Math.round(100 * g.before)}% → ${Math.round(100 * g.after)}%` : `game ${formatWpa(g.wpa)}`}
+                {measure !== "wpa" && g.stakes != null && g.stakes < 0.995 ? ` · stakes ${g.stakes.toFixed(2)}` : ""}
+                {measure === "cup" && g.cupFactor != null && g.cupFactor < 0.995 ? ` · Cup ${g.cupFactor.toFixed(2)}` : ""}
               </span>
             </span>
           </li>
@@ -64,7 +70,8 @@ export function LeaderTable({ rows, linked, playoff = false, showTeam = true, so
             <th style={{ ...TH, textAlign: "right" }}>Goals</th>
             <th style={{ ...TH, textAlign: "right" }} className={playoff ? "lev-col-optional" : undefined} title="Win probability added by his goals, in wins">Wins added</th>
             {playoff && <th style={{ ...TH, textAlign: "right" }} title="Wins added, each goal weighted by its game's series stakes">Series added</th>}
-            <th style={{ ...TH, textAlign: "right" }} title="Average win chance added per goal">Per goal</th>
+            {playoff && <th style={{ ...TH, textAlign: "right" }} title="Series added, each goal also weighted by how much its series mattered to the Stanley Cup (1926-27 on)">Cups added</th>}
+            <th style={{ ...TH, textAlign: "right" }} className={playoff ? "lev-col-optional" : undefined} title="Average win chance added per goal">Per goal</th>
             <th style={{ ...TH, textAlign: "right" }} className={decidedClass} title="Goals that moved the win chance under 2 points">Decided</th>
             <th style={{ ...TH, textAlign: "right" }} className="lev-col-optional" title="Win chance added by his assists: half the goal's value as the first assist, a quarter as the second">Assists</th>
           </tr>
@@ -80,7 +87,8 @@ export function LeaderTable({ rows, linked, playoff = false, showTeam = true, so
               <td style={{ ...TD, textAlign: "right" }}>{r.goals}</td>
               <td style={{ ...TD, textAlign: "right", fontWeight: 700, color: playoff ? undefined : "var(--gold)" }} className={playoff ? "lev-col-optional" : undefined}>{r.lg.toFixed(1)}</td>
               {playoff && <td style={{ ...TD, textAlign: "right", fontWeight: 700, color: "var(--gold)" }}>{(r.playoffLg ?? 0).toFixed(2)}</td>}
-              <td style={{ ...TD, textAlign: "right" }}>{formatWpa(r.perGoal)}</td>
+              {playoff && <td style={{ ...TD, textAlign: "right" }}>{(r.cupLg ?? 0).toFixed(2)}</td>}
+              <td style={{ ...TD, textAlign: "right" }} className={playoff ? "lev-col-optional" : undefined}>{formatWpa(r.perGoal)}</td>
               <td style={{ ...TD, textAlign: "right" }} className={decidedClass}>{Math.round(100 * r.garbagePct)}%</td>
               <td style={{ ...TD, textAlign: "right", color: "var(--text-secondary)" }} className="lev-col-optional">{r.assistLg.toFixed(1)}</td>
             </tr>

@@ -2,8 +2,8 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { Masthead, Footer } from "@/components/Masthead";
 import { SeasonPicker } from "@/components/SeasonPicker";
-import { getLeverageLeaders, getLeverageSeasons, playersWithPages, MIN_GOALS_TO_RANK, MIN_CAREER_GOALS_FOR_PERCENTILE, type LeaderSort } from "@/lib/leverage-data";
-import { LeaderTable, LeverageNav, LeverageIntro, H2, SUB } from "@/components/LeverageTables";
+import { getLeverageLeaders, getLeverageSeasons, getBiggestGoals, playersWithPages, MIN_GOALS_TO_RANK, MIN_CAREER_GOALS_FOR_PERCENTILE, type LeaderSort } from "@/lib/leverage-data";
+import { LeaderTable, GoalTable, LeverageNav, LeverageIntro, H2, SUB } from "@/components/LeverageTables";
 import { formatSeasonLabel } from "@/lib/format-date";
 
 // Leverage Goals, league-wide: any season since 1917-18, or all time.
@@ -24,8 +24,11 @@ export default async function LeverageLeaguePage({ searchParams }: { searchParam
   const season = allTime ? null : seasons.includes(sp.season ?? "") ? sp.season! : seasons[0];
   const type = sp.type === "playoff" ? "playoff" : "regular";
   const sort: LeaderSort = sp.sort === "per" || sp.sort === "garbage" || sp.sort === "index" ? sp.sort : "lg";
-  const rows = await getLeverageLeaders({ season, gameType: type, sort, limit: 50 });
-  const linked = await playersWithPages(rows.map((r) => r.playerId));
+  const [rows, cupGoals] = await Promise.all([
+    getLeverageLeaders({ season, gameType: type, sort, limit: 50 }),
+    allTime && type === "playoff" ? getBiggestGoals("cup", { bruins: false, limit: 25 }) : Promise.resolve([]),
+  ]);
+  const linked = await playersWithPages(rows.map((r) => r.playerId).concat(cupGoals.map((g) => g.scorerId ?? 0)));
   const min = season ? MIN_GOALS_TO_RANK : MIN_CAREER_GOALS_FOR_PERCENTILE;
 
   const href = (o: { season?: string | null; sort?: LeaderSort; type?: string }) => {
@@ -74,6 +77,17 @@ export default async function LeverageLeaguePage({ searchParams }: { searchParam
             </Link>
           ))}
         </div>
+
+        {cupGoals.length > 0 && (
+          <section style={{ marginBottom: "2.75rem" }}>
+            <h2 style={H2}>Biggest goals in Stanley Cup history</h2>
+            <p style={SUB}>
+              Every playoff goal since 1926-27 by how much it moved its team&rsquo;s chance of winning the Cup: win chance added, times the game&rsquo;s
+              series stakes, times how much the series mattered to the Cup (against the teams that actually played the later rounds).
+            </p>
+            <GoalTable goals={cupGoals} linked={linked} measure="cup" />
+          </section>
+        )}
 
         <h2 style={H2}>
           {allTime ? "All time" : formatSeasonLabel(season!)} · {type === "playoff" ? "Playoffs" : "Regular season"}

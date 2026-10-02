@@ -15,13 +15,14 @@ export const metadata: Metadata = {
 };
 
 export default async function LeveragePage() {
-  const [playoffGoals, goals, regular, playoff] = await Promise.all([
+  const [cupGoals, playoffGoals, goals, regular, playoff] = await Promise.all([
+    getBruinsBiggestGoals("cup", 25),
     getBruinsBiggestGoals("playoff", 25),
     getBruinsBiggestGoals("wpa", 50),
     getBruinsLeverageLeaders("regular", "lg", 15),
     getBruinsLeverageLeaders("playoff", "lg", 15),
   ]);
-  const linked = await playersWithPages([...playoffGoals, ...goals].map((g) => g.scorerId).concat([...regular, ...playoff].map((r) => r.playerId)));
+  const linked = await playersWithPages([...cupGoals, ...playoffGoals, ...goals].map((g) => g.scorerId).concat([...regular, ...playoff].map((r) => r.playerId)));
 
   return (
     <>
@@ -37,9 +38,19 @@ export default async function LeveragePage() {
         <LeverageNav active="bruins" />
 
         <section style={{ marginBottom: "2.75rem" }}>
-          <h2 style={H2}>Biggest Bruins playoff goals</h2>
-          <p style={SUB}>By how much each goal moved the Bruins&rsquo; chance of winning the series: the goal&rsquo;s win chance added, times how much its game mattered.</p>
-          <GoalTable goals={playoffGoals} linked={linked} showStakes />
+          <h2 style={H2}>Biggest Bruins goals in the chase for the Cup</h2>
+          <p style={SUB}>
+            By how much each goal moved the Bruins&rsquo; chance of winning the Stanley Cup: its win chance added, times how much its game mattered to the
+            series, times how much the series mattered to the Cup (a Final counts fully; an early round, against the teams that actually played the later
+            rounds, much less). Since 1926-27, when the Cup became the NHL&rsquo;s alone.
+          </p>
+          <GoalTable goals={cupGoals} linked={linked} measure="cup" />
+        </section>
+
+        <section style={{ marginBottom: "2.75rem" }}>
+          <h2 style={H2}>Biggest Bruins series goals</h2>
+          <p style={SUB}>By how much each goal moved the Bruins&rsquo; chance of winning its series: the goal&rsquo;s win chance added, times how much its game mattered.</p>
+          <GoalTable goals={playoffGoals} linked={linked} measure="series" />
         </section>
 
         <section style={{ marginBottom: "2.75rem" }}>

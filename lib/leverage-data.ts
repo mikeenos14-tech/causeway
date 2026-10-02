@@ -1,5 +1,6 @@
 import { pool } from "./db";
 import { GARBAGE_WPA, ASSIST_SHARE } from "./stats/leverage";
+import { roundName } from "./history-data";
 
 // Leverage Goals for the pages (stored by scripts/stats/build-leverage.ts):
 // a player's clutch card, season and all-time leaderboards, and the
@@ -20,7 +21,7 @@ const SEASON_AVG = `season_avg as (
 
 export type ClutchCard = {
   regular: { goals: number; lg: number; perGoal: number; garbagePct: number; assistLg: number; index: number | null } | null;
-  playoff: { goals: number; lg: number; playoffLg: number; perGoal: number } | null;
+  playoff: { goals: number; lg: number; playoffLg: number; cupLg: number; perGoal: number } | null;
   percentile: number | null; // clutch index among players with 100+ regular-season goals
   rankedAmong: number;
   bestGoals: BigGoal[];
@@ -40,6 +41,8 @@ export type BigGoal = {
   after: number;
   wpa: number;
   stakes: number | null;
+  cupFactor: number | null; // how much winning the series moved the team's Cup chance (1926-27 on)
+  stage: string | null; // "Final, Game 7" (playoffs)
   scorer: string | null;
   scorerId: number | null;
   scoreAfter: string; // "BOS 4, TOR 4" from the scorer's side
@@ -50,9 +53,12 @@ const GOAL_SELECT = `
          st.tri_code team, case when e.team_id = g.home_team_id then at.tri_code else ht.tri_code end opponent,
          e.period, e.period_type, e.time_in_period_sec, w.wp_before::float before, w.wp_after::float after,
          (w.wp_after - w.wp_before)::float wpa, w.stakes::float stakes, p.full_name scorer, e.scorer_id,
+         (case when e.team_id = g.home_team_id then l.cup_home else l.cup_away end)::float cup_factor,
+         (select max((x.id / 100) % 10) from nhl_games x where x.season = g.season and x.game_type = 'playoff') max_round,
          case when e.team_id = g.home_team_id then e.score_before_home + 1 else e.score_before_away + 1 end team_after,
          case when e.team_id = g.home_team_id then e.score_before_away else e.score_before_home end opp_after
   from goal_wpa w join nhl_goal_events e using (game_id, event_id) join nhl_games g on g.id = w.game_id
+  join leverage_games l on l.game_id = w.game_id
   join nhl_teams st on st.id = e.team_id join nhl_teams ht on ht.id = g.home_team_id join nhl_teams at on at.id = g.away_team_id
   left join nhl_players p on p.id = e.scorer_id`;
 
@@ -71,6 +77,8 @@ const toGoal = (r: any): BigGoal => ({
   after: r.after,
   wpa: r.wpa,
   stakes: r.stakes,
+  cupFactor: r.cup_factor,
+  stage: r.playoff ? `${roundName(r.season, Math.floor(r.game_id / 100) % 10, Number(r.max_round), Math.floor(r.game_id / 10) % 10)}, Game ${r.game_id % 10}` : null,
   scorer: r.scorer,
   scorerId: r.scorer_id,
   scoreAfter: `${r.team} ${r.team_after}, ${r.opponent} ${r.opp_after}`,
@@ -81,7 +89,7 @@ export async function getClutchCard(playerId: number): Promise<ClutchCard | null
     pool.query(
       `with ${SEASON_AVG}
        select l.game_type, sum(l.goals)::int goals, sum(l.lg)::float lg, sum(l.garbage_goals)::int garbage, sum(l.assist_lg)::float assist_lg,
-              sum(l.playoff_lg)::float playoff_lg, (sum(l.lg) / nullif(sum(l.goals * a.avg_wpa), 0))::float idx
+              sum(l.playoff_lg)::float playoff_lg, sum(l.cup_lg)::float cup_lg, (sum(l.lg) / nullif(sum(l.goals * a.avg_wpa), 0))::float idx
        from player_leverage l join season_avg a using (season, game_type) where l.player_id = $1 group by l.game_type`,
       [playerId],
     ),
@@ -104,14 +112,14 @@ export async function getClutchCard(playerId: number): Promise<ClutchCard | null
   const p = pct[0];
   return {
     regular: reg && reg.goals > 0 ? { goals: reg.goals, lg: reg.lg, perGoal: reg.lg / reg.goals, garbagePct: reg.garbage / reg.goals, assistLg: reg.assist_lg, index: reg.idx } : null,
-    playoff: po && po.goals > 0 ? { goals: po.goals, lg: po.lg, playoffLg: po.playoff_lg ?? 0, perGoal: po.lg / po.goals } : null,
+    playoff: po && po.goals > 0 ? { goals: po.goals, lg: po.lg, playoffLg: po.playoff_lg ?? 0, cupLg: po.cup_lg ?? 0, perGoal: po.lg / po.goals } : null,
     percentile: p.ranked ? p.below / Math.max(1, p.n - 1) : null,
     rankedAmong: p.n,
     bestGoals: best.map(toGoal),
   };
 }
 
-export type LeaderRow = { playerId: number; name: string; team: string | null; goals: number; lg: number; perGoal: number; garbagePct: number; assistLg: number; playoffLg: number | null; index: number | null };
+export type LeaderRow = { playerId: number; name: string; team: string | null; goals: number; lg: number; perGoal: number; garbagePct: number; assistLg: number; playoffLg: number | null; cupLg: number | null; index: number | null };
 
 export type LeaderSort = "lg" | "per" | "garbage" | "index";
 
@@ -131,7 +139,7 @@ export async function getLeverageLeaders(opts: { season: string | null; gameType
     `with ${SEASON_AVG},
      t as (
        select l.player_id, sum(l.goals)::int goals, sum(l.lg)::float lg, sum(l.garbage_goals)::int garbage, sum(l.assist_lg)::float assist_lg,
-              sum(l.playoff_lg)::float playoff_lg, (sum(l.lg) / nullif(sum(l.goals * a.avg_wpa), 0))::float idx
+              sum(l.playoff_lg)::float playoff_lg, sum(l.cup_lg)::float cup_lg, (sum(l.lg) / nullif(sum(l.goals * a.avg_wpa), 0))::float idx
        from player_leverage l join season_avg a using (season, game_type)
        where l.game_type = $1 and ($2::text is null or l.season = $2)
        group by l.player_id having sum(l.goals) > 0
@@ -145,7 +153,7 @@ export async function getLeverageLeaders(opts: { season: string | null; gameType
      order by ${order}, t.player_id limit $5`,
     [opts.gameType, opts.season, needsMin, min, opts.limit ?? 25],
   );
-  return rows.map((r) => ({ playerId: r.player_id, name: r.name, team: r.team, goals: r.goals, lg: r.lg, perGoal: r.per_goal, garbagePct: r.garbage_pct, assistLg: r.assist_lg, playoffLg: r.playoff_lg, index: r.idx }));
+  return rows.map((r) => ({ playerId: r.player_id, name: r.name, team: r.team, goals: r.goals, lg: r.lg, perGoal: r.per_goal, garbagePct: r.garbage_pct, assistLg: r.assist_lg, playoffLg: r.playoff_lg, cupLg: r.cup_lg, index: r.idx }));
 }
 
 // Bruins all-time leaders, counting only goals (and assists) for Boston.
@@ -155,13 +163,14 @@ export async function getBruinsLeverageLeaders(gameType: "regular" | "playoff", 
   const { rows } = await pool.query(
     `with ${SEASON_AVG},
      bg as (
-       select e.scorer_id, e.assist1_id, e.assist2_id, g.season, (w.wp_after - w.wp_before) wpa, w.stakes
-       from goal_wpa w join nhl_goal_events e using (game_id, event_id) join nhl_games g on g.id = w.game_id
+       select e.scorer_id, e.assist1_id, e.assist2_id, g.season, (w.wp_after - w.wp_before) wpa, w.stakes,
+              case when e.team_id = g.home_team_id then l.cup_home else l.cup_away end cup
+       from goal_wpa w join nhl_goal_events e using (game_id, event_id) join nhl_games g on g.id = w.game_id join leverage_games l on l.game_id = w.game_id
        where e.team_id = 6 and g.game_type = $1
      ),
      goals as (
        select scorer_id player_id, count(*)::int goals, sum(wpa)::float lg, count(*) filter (where wpa < $2)::int garbage,
-              sum(wpa * stakes)::float playoff_lg, (sum(wpa) / nullif(sum(a.avg_wpa), 0))::float idx
+              sum(wpa * stakes)::float playoff_lg, sum(wpa * stakes * cup)::float cup_lg, (sum(wpa) / nullif(sum(a.avg_wpa), 0))::float idx
        from bg join season_avg a on a.season = bg.season and a.game_type = $1 where scorer_id is not null group by scorer_id
      ),
      assists as (
@@ -175,16 +184,22 @@ export async function getBruinsLeverageLeaders(gameType: "regular" | "playoff", 
      order by ${order}, g.player_id limit $5`,
     [gameType, GARBAGE_WPA, sort, min, limit, ASSIST_SHARE.primary, ASSIST_SHARE.secondary],
   );
-  return rows.map((r) => ({ playerId: r.player_id, name: r.name, team: "BOS", goals: r.goals, lg: r.lg, perGoal: r.per_goal, garbagePct: r.garbage_pct, assistLg: r.assist_lg, playoffLg: r.playoff_lg, index: r.idx }));
+  return rows.map((r) => ({ playerId: r.player_id, name: r.name, team: "BOS", goals: r.goals, lg: r.lg, perGoal: r.per_goal, garbagePct: r.garbage_pct, assistLg: r.assist_lg, playoffLg: r.playoff_lg, cupLg: r.cup_lg, index: r.idx }));
 }
 
-// The Bruins' biggest goals by win chance added (or, in the playoffs, by
-// leverage: WPA times the game's series stakes).
-export async function getBruinsBiggestGoals(kind: "wpa" | "playoff", limit = 50): Promise<BigGoal[]> {
-  const order = kind === "playoff" ? "(w.wp_after - w.wp_before) * w.stakes desc" : "w.wp_after - w.wp_before desc";
-  const { rows } = await pool.query(`${GOAL_SELECT} where e.team_id = 6 ${kind === "playoff" ? "and w.stakes is not null" : ""} order by ${order}, w.game_id limit $1`, [limit]);
+// The biggest goals: by win chance added, by playoff leverage (WPA times
+// the game's series stakes), or by Cup leverage (that, times how much
+// winning the series moved the team's chance of the Stanley Cup). Bruins
+// goals, or the whole league's.
+const CUP = "(w.wp_after - w.wp_before) * w.stakes * case when e.team_id = g.home_team_id then l.cup_home else l.cup_away end";
+export async function getBiggestGoals(kind: "wpa" | "playoff" | "cup", opts: { bruins: boolean; limit?: number }): Promise<BigGoal[]> {
+  const value = kind === "cup" ? CUP : kind === "playoff" ? "(w.wp_after - w.wp_before) * w.stakes" : "w.wp_after - w.wp_before";
+  const where = [opts.bruins ? "e.team_id = 6" : null, kind === "wpa" ? null : `${value} is not null`].filter(Boolean).join(" and ");
+  const { rows } = await pool.query(`${GOAL_SELECT} ${where ? `where ${where}` : ""} order by ${value} desc, w.game_id limit $1`, [opts.limit ?? 50]);
   return rows.map(toGoal);
 }
+
+export const getBruinsBiggestGoals = (kind: "wpa" | "playoff" | "cup", limit = 50) => getBiggestGoals(kind, { bruins: true, limit });
 
 // Seasons for the leaderboard picker. The newest season joins once it has
 // a third as many games as the season before, so the page doesn't open on
