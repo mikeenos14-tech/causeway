@@ -81,16 +81,20 @@ export const FETCH = {
 // training seasons and prints the winners to paste here. The model version
 // changes whenever these do.
 export const ELO = {
-  modelVersion: "elo-v1-untuned",
+  // Tuned 2026-10-02 on 1917-2027 training seasons (every fifth season held
+  // out): training log loss 0.65841 vs 0.66033 for the spec's starting
+  // values. Every value is inside its search range (margin first landed on
+  // the old range's edge, so the range was widened and re-run).
+  modelVersion: "elo-v1-2026-10-02",
   params: {
     initial: 1500,
     expansionStart: 1380,
     leagueMean: 1505,
-    kRegular: 6,
-    kPlayoff: 8,
-    homeIce: { early: 50, "original-six": 50, expansion: 50, "high-scoring": 50, "dead-puck": 50, "cap-shootout": 50, modern: 50 } as Record<string, number>,
-    marginCoef: 0.5,
-    reversion: 0.3,
+    kRegular: 5,
+    kPlayoff: (5 * 4) / 3,
+    homeIce: { early: 70, "original-six": 70, expansion: 80, "high-scoring": 60, "dead-puck": 30, "cap-shootout": 30, modern: 20 } as Record<string, number>,
+    marginCoef: 1.25,
+    reversion: 0.4,
     otWinnerScore: 0.75,
   },
   // Games that aren't real results: the 1918 Montreal Wanderers forfeits

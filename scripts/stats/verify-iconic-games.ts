@@ -32,8 +32,12 @@ async function main() {
       if (rows.length > 1 && anyOpp) return `${rows.length} games for ${e.team} on ${e.date}`;
       return rows[0] ?? `no ${e.team} game vs ${e.opp} on ${e.date}`;
     }
-    const { rows } = await client.query<GameRow>(`select ${cols} from nhl_games where season = $1 and game_type = 'playoff' and ${pair} order by game_date, id`, [e.season, mine, theirs]);
-    return rows[(e.playoffGame ?? 0) - 1] ?? `no Game ${e.playoffGame} (${rows.length} playoff games ${e.team}-${e.opp} in ${e.season})`;
+    // Game N by the NHL's own numbering (the id's last digit), not by
+    // counting games: counting put the 2020 bubble's round-robin game into
+    // the Tampa series, so "Game 5" landed on Game 4. If two series match
+    // (round robin and a real round), the real round (round digit > 0) wins.
+    const { rows } = await client.query<GameRow>(`select ${cols} from nhl_games where season = $1 and game_type = 'playoff' and ${pair} and id % 10 = $4 order by (id / 100) % 10 desc, id`, [e.season, mine, theirs, e.playoffGame ?? 0]);
+    return rows[0] ?? `no Game ${e.playoffGame} between ${e.team} and ${e.opp} in ${e.season}`;
   }
 
   async function check(e: IconicEntry, g: GameRow): Promise<string[]> {

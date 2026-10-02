@@ -10,8 +10,10 @@
 import { Client } from "pg";
 
 // A season's strength flags are real only if power-play goals actually
-// appear: the feed labels every goal "ev" when it doesn't know.
-const MIN_PP_SHARE = 0.03;
+// appear: the feed labels every goal "ev" when it doesn't know. Real
+// seasons run 8-25% PP goals; 1926-27 to 1931-32 sit at 1-4% (mostly
+// missing flags), and a 3% cutoff let two of them through by accident.
+const MIN_PP_SHARE = 0.06;
 
 async function main() {
   const client = new Client({ connectionString: process.env.DATABASE_URL });

@@ -38,9 +38,11 @@ function tune(games: EloGame[], byId: Map<number, EloGame>, start: EloParams): E
   let best = { ...start, homeIce: { ...start.homeIce } };
   let bestLoss = trainLoss(games, byId, best);
   const grid = () => {
-    for (const k of [4, 5, 6, 7, 8, 10, 12])
-      for (const reversion of [0.15, 0.2, 0.25, 0.3, 0.4, 0.5])
-        for (const marginCoef of [0, 0.25, 0.5, 0.75, 1]) {
+    for (const k of [3, 4, 5, 6, 7, 8, 10, 12])
+      for (const reversion of [0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6])
+        // Wide enough that a winner on the edge means something: the first
+        // run picked 1.0, the old maximum.
+        for (const marginCoef of [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5]) {
           const p = { ...best, kRegular: k, kPlayoff: (k * 4) / 3, reversion, marginCoef };
           const loss = trainLoss(games, byId, p);
           if (loss < bestLoss) [best, bestLoss] = [p, loss];

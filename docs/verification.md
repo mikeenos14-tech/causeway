@@ -22,6 +22,6 @@ Owner requirement (2026-10-01): every feature is tested exhaustively and its mat
 
 | Feature | 1 Unit | 2 Second computation | 3 Invariants | 4 Calibration | 5 Golden | 6 Reconciliation | 7 Edge cases | 8 Spot checks | 9 Report |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Phase 0 data layer | Parser 26 checks | Audit vs site games table | Goals add up to finals | — | — | Standings: built, 56/56 team-seasons match so far | Forfeits, non-NHL Finals, ties, shootouts | Famous games traced | After full load |
-| Elo | 16 checks | Planned | Zero-sum, mean | Built | Planned | Planned | Partly | Planned | Planned |
+| Phase 0 data layer | Parser 26 checks | 24,550 overlapping games match the site's table, 0 differences | Goals add up to finals in 70,284 of 70,317 games (33 explained: 2 forfeits, 31 NHL feed gaps in 2009-10, tier C) | — | — | Standings: 56/56 so far; full run after the standings download | Forfeits, non-NHL Finals, ties, shootouts, bubble round robin | 500th goals, 50-goal seasons, Bruins' 20 Finals, longest OTs all match history | Delivered 2026-10-02 |
+| Elo | 16 checks (pinned to spec values) | SQL recomputation: 70,315 expectations match to 4e-16; zero-sum; results; coverage | Mean 1505.00 every season | Beats home-ice baseline in all 7 eras on held-out seasons | Planned | Planned | Forfeits excluded; relocations by lineage | 1970-71 #1, 1971-72 #2 by peak Elo | Delivered 2026-10-02 |
 | WP, Leverage, Misery, Doppelganger, Grudge, Legs | Planned | Planned | Planned | Planned | Planned | Planned | Planned | Planned | Planned |
