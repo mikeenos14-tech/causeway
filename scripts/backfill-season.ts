@@ -458,8 +458,13 @@ async function backfillOnce(teamAbbrev: string, seasonId: string) {
         }
 
         // A shutout is credited only to a goalie who played the whole game
-        // alone with the opponent held scoreless (final score, so a
-        // shootout loss is correctly excluded). Found live: deriving it
+        // alone with the opponent held scoreless in regulation and
+        // overtime. The shootout winner counts in the final score but
+        // isn't a goal against: a 0-0 game lost in a shootout is still a
+        // shutout (the NHL credits it; found 2026-10-02 checking careers
+        // against the NHL, 53 such games had been missed). Empty-net goals
+        // do count against the team, so this uses the team's score, not
+        // the goalie's own goals against. Found live: deriving it
         // from the goalie's own goals_against=0 credited 1,178 relief
         // appearances league-wide (e.g. a 6-minute mop-up stint).
         // A goalie "played" only with real ice time. Older seasons (2007-09)
@@ -467,7 +472,9 @@ async function backfillOnce(teamAbbrev: string, seasonId: string) {
         // empty phantom rows and made real one-goalie shutouts look shared.
         const played = (p: { toi?: string | null }) => !!p.toi && p.toi !== "00:00";
         const goaliesUsed = stats.goalies.filter(played).length;
-        const oppScore = side === "homeTeam" ? g.awayTeam.score : g.homeTeam.score;
+        const oppFinal = side === "homeTeam" ? g.awayTeam.score : g.homeTeam.score;
+        const ownFinal = side === "homeTeam" ? g.homeTeam.score : g.awayTeam.score;
+        const oppScore = endType === "shootout" && oppFinal > ownFinal ? oppFinal - 1 : oppFinal; // less the shootout winner
         for (const p of stats.goalies) {
           if (!played(p)) continue; // dressed but didn't play
           await upsertPlayerFromBoxscore(p, teamId);
