@@ -53,7 +53,7 @@ export function computeLiveWp(g: LiveGame, model: { version: string; params: WpP
   const h = g.home.score, a = g.away.score;
   const final = over ? (h > a ? 1 : h < a ? 0 : 0.5) : null;
 
-  const goals = g.goals.map((x) => ({ t: goalElapsed(x), home: x.team === g.home.abbrev, scorer: x.scorer }));
+  const goals = g.goals.map((x) => ({ t: goalElapsed(x), home: x.team === g.home.abbrev, scorer: x.scorer, id: x.eventId }));
   const shootoutWinner = over && g.status.includes("SO") ? 1 : 0;
   const complete = goals.length === h + a - shootoutWinner && goals.every((x) => x.t != null);
   const lastGoal = Math.max(0, ...goals.map((x) => x.t ?? 0));
@@ -64,7 +64,7 @@ export function computeLiveWp(g: LiveGame, model: { version: string; params: WpP
   const now = final ?? ctx.at(end, h, a);
   if (!complete) return { now, timeline: null };
 
-  const { points, biggestSwing } = buildCurve(ctx, goals as { t: number; home: boolean; scorer: string }[], end, final);
+  const { points, biggestSwing } = buildCurve(ctx, goals as { t: number; home: boolean; scorer: string; id: number | null }[], end, final);
   return {
     now,
     timeline: {

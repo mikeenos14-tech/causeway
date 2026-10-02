@@ -6,6 +6,7 @@ import { trackGoals, startTracking, boardGoals, finalAndComplete, type GoalTrack
 import type { LiveWp } from "@/lib/live-wp";
 import type { WpTimeline } from "@/lib/wp-game";
 import { WinProbChart } from "@/components/WinProbChart";
+import { goalWpaFromCurve, formatWpa } from "@/lib/wp-curve";
 
 const POLL_MS = 20_000;
 const WINDOW_BEFORE_MS = 15 * 60_000; // start polling 15 min before puck drop
@@ -234,8 +235,11 @@ function Scores({ g, big }: { g: LiveGame; big: boolean }) {
   );
 }
 
-function GoalList({ g, limit }: { g: LiveGame; limit?: number }) {
+// Each goal's win chance added, once the curve includes it (the curve
+// comes with the poll that first shows the goal, so the badge lands with it).
+function GoalList({ g, limit, wp }: { g: LiveGame; limit?: number; wp: WpView }) {
   const goals = [...g.goals].reverse().slice(0, limit);
+  const wpa = wp.curve ? goalWpaFromCurve(wp.curve.points) : null;
   if (goals.length === 0) return <p style={{ fontSize: ".85rem", color: "var(--text-muted)", margin: 0 }}>No goals yet.</p>;
   return (
     <ol style={{ listStyle: "none", padding: 0, margin: 0 }}>
@@ -256,6 +260,7 @@ function GoalList({ g, limit }: { g: LiveGame; limit?: number }) {
             <span style={{ display: "block", color: "var(--text-secondary)", fontSize: ".78rem" }}>
               {goal.assists.length ? `from ${goal.assists.join(", ")}` : "unassisted"} · {g.away.abbrev} {goal.awayScore}, {g.home.abbrev} {goal.homeScore}
             </span>
+            {goal.eventId != null && wpa?.has(goal.eventId) && <span className="wpa-badge">{formatWpa(wpa.get(goal.eventId)!.wpa)} win chance for {goal.team}</span>}
           </span>
         </li>
       ))}
@@ -292,7 +297,7 @@ function HeroBoard({ g, title, stale, wp, celebration, overturned }: { g: LiveGa
       </div>
       <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 16, padding: "1.2rem 1.5rem", flex: "1 1 300px", maxWidth: 440 }}>
         <div style={{ fontSize: ".72rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 6 }}>Scoring</div>
-        <GoalList g={g} limit={6} />
+        <GoalList g={g} limit={6} wp={wp} />
       </div>
     </>
   );
@@ -313,7 +318,7 @@ function PageBoard({ g, stale, wp, celebration, overturned }: { g: LiveGame; sta
       </div>
       <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, padding: "1.1rem 1.3rem" }}>
         <div style={{ fontSize: ".72rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 6 }}>Scoring</div>
-        <GoalList g={g} />
+        <GoalList g={g} wp={wp} />
       </div>
     </div>
     {wp.curve && (

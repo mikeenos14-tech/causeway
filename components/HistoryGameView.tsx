@@ -6,6 +6,7 @@ import { formatSavePct } from "@/lib/util/save-pct";
 import { ScoringSummary, periodName } from "@/components/ScoringSummary";
 import { WinProbChart } from "@/components/WinProbChart";
 import type { WpTimeline } from "@/lib/wp-game";
+import { goalWpaFromCurve } from "@/lib/wp-curve";
 
 // A game from before 2007-08, from the audited 1917-on history: the score,
 // who scored when, penalties, period scores and shots where they exist.
@@ -112,7 +113,7 @@ export function HistoryGameView({ g, nav, wp }: { g: HistoryGame; wp?: WpTimelin
         )}
       </section>
 
-      <ScoringSummary g={g} />
+      <ScoringSummary g={g} wpa={wp ? goalWpaFromCurve(wp.points) : undefined} />
       {wp && <WinProbChart tl={wp} sideHome={g.away.id !== BOS_TEAM_ID} />}
 
       {g.periods.some((p) => p.homeShots != null) && (

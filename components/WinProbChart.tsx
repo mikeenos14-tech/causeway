@@ -104,7 +104,7 @@ export function WinProbChart({ tl, sideHome, finalNote }: { tl: WpTimeline; side
         )}
         {swing && (
           <div>
-            <span className="wp-stat-label">Biggest swing{live ? " so far" : ""}</span>
+            <span className="wp-stat-label">Biggest goal{live ? " so far" : ""}</span>
             <span className="wp-stat-value">
               {pct(val(swing.from))} → {pct(val(swing.to))}
             </span>

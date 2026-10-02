@@ -20,6 +20,8 @@ import { getHeadshots } from "@/lib/headshots";
 import { formatSavePct } from "@/lib/util/save-pct";
 import { buildCareerTrend, seasonByDate, MIN_GAMES } from "@/lib/career-trend";
 import { skaterPace, goaliePace } from "@/lib/pace";
+import { getClutchCard } from "@/lib/leverage-data";
+import { ClutchCard } from "@/components/ClutchCard";
 
 export default async function PlayerDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -36,11 +38,12 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
   const ledTeam = Object.entries(LEADERSHIP).find(([, l]) => l.captainId === playerId || l.alternateIds.includes(playerId));
   const ledSeason = ledTeam ? (await getClubSeason(ledTeam[0]))?.currentSeason : null;
   const role = ledTeam && ledSeason === ledTeam[1].season ? (ledTeam[1].captainId === playerId ? "Captain" : "Alternate captain") : null;
-  const [totals, playoffTotals, seasonSplits, gameLog] = await Promise.all([
+  const [totals, playoffTotals, seasonSplits, gameLog, clutch] = await Promise.all([
     isGoalie ? getGoalieCareerTotals(playerId) : getSkaterCareerTotals(playerId),
     isGoalie ? getGoalieCareerTotals(playerId, "playoff") : getSkaterCareerTotals(playerId, "playoff"),
     isGoalie ? getGoalieSeasonSplits(playerId) : getSkaterSeasonSplits(playerId),
     getRecentGameLog(playerId, isGoalie),
+    isGoalie ? Promise.resolve(null) : getClutchCard(playerId).catch(() => null),
   ]);
 
   // Reuses the exact guard from the significance checks — a "career total"
@@ -269,6 +272,8 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
             </div>
           </section>
         )}
+
+        {clutch && <ClutchCard c={clutch} name={player.full_name} />}
 
         <section>
           <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".02em", fontSize: "1.4rem", marginBottom: "1rem" }}>

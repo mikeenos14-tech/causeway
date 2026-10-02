@@ -18,6 +18,7 @@ import { formatSavePct } from "@/lib/util/save-pct";
 import { ScoringSummary, scoringIsComplete } from "@/components/ScoringSummary";
 import { WinProbChart } from "@/components/WinProbChart";
 import { getGameWpTimeline } from "@/lib/wp-game";
+import { goalWpaFromCurve } from "@/lib/wp-curve";
 
 function toi(seconds: number | null) {
   if (seconds == null) return "—";
@@ -206,7 +207,7 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
         </section>
 
         {/* Only when it adds up to the final score; never a partial list. */}
-        {scoring && scoringIsComplete(scoring) && <ScoringSummary g={scoring} linkPlayers />}
+        {scoring && scoringIsComplete(scoring) && <ScoringSummary g={scoring} linkPlayers wpa={wp ? goalWpaFromCurve(wp.points) : undefined} />}
         {wp && <WinProbChart tl={wp} sideHome={game.away_abbrev !== TARGET_TEAM_ABBREV} />}
 
         {thisSeries && (

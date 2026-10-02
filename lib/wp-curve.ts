@@ -10,9 +10,9 @@ import { eraOf, otFormat } from "../config/stats";
 // the tie chance (from 2005-06 on, and in every playoff game, there are no
 // ties and `p` is the plain win chance).
 
-export type WpPoint = { t: number; p: number; goal?: { home: boolean; scorer: string | null; homeScore: number; awayScore: number } };
-export type WpSwing = { t: number; from: number; to: number; home: boolean; scorer: string | null };
-export type CurveGoal = { t: number; home: boolean; scorer: string | null };
+export type WpPoint = { t: number; p: number; goal?: { id: number | null; home: boolean; scorer: string | null; homeScore: number; awayScore: number } };
+export type WpSwing = { t: number; from: number; to: number; home: boolean; scorer: string | null; id: number | null };
+export type CurveGoal = { t: number; home: boolean; scorer: string | null; id?: number | null }; // id: the NHL event id
 
 export type WpGameContext = {
   at: (t: number, home: number, away: number) => number;
@@ -82,7 +82,7 @@ export function buildCurve(ctx: WpGameContext, goals: CurveGoal[], end: number, 
       points.push({ t: x.t, p: ctx.at(x.t, h, a) });
       if (x.home) h++;
       else a++;
-      points.push({ t: x.t, p: ctx.at(x.t, h, a), goal: { home: x.home, scorer: x.scorer, homeScore: h, awayScore: a } });
+      points.push({ t: x.t, p: ctx.at(x.t, h, a), goal: { id: x.id ?? null, home: x.home, scorer: x.scorer, homeScore: h, awayScore: a } });
       gi++;
     }
   };
@@ -98,7 +98,25 @@ export function buildCurve(ctx: WpGameContext, goals: CurveGoal[], end: number, 
     const pt = points[i];
     if (!pt.goal) continue;
     const swing = pt.p - points[i - 1].p;
-    if (!biggestSwing || Math.abs(swing) > Math.abs(biggestSwing.to - biggestSwing.from)) biggestSwing = { t: pt.t, from: points[i - 1].p, to: pt.p, home: pt.goal.home, scorer: pt.goal.scorer };
+    if (!biggestSwing || Math.abs(swing) > Math.abs(biggestSwing.to - biggestSwing.from)) biggestSwing = { t: pt.t, from: points[i - 1].p, to: pt.p, home: pt.goal.home, scorer: pt.goal.scorer, id: pt.goal.id };
   }
   return { points, biggestSwing };
 }
+
+// Each goal's WPA from a curve, from the scoring team's side, by event id:
+// its chance just before and just after the goal (Leverage Goals, spec
+// section 8; the same numbers the daily build stores in goal_wpa).
+export type GoalWpaView = { before: number; after: number; wpa: number };
+export function goalWpaFromCurve(points: WpPoint[]): Map<number, GoalWpaView> {
+  const out = new Map<number, GoalWpaView>();
+  points.forEach((pt, i) => {
+    if (!pt.goal || pt.goal.id == null || i === 0) return;
+    const side = (p: number) => (pt.goal!.home ? p : 1 - p);
+    const before = side(points[i - 1].p), after = side(pt.p);
+    out.set(pt.goal.id, { before, after, wpa: after - before });
+  });
+  return out;
+}
+
+// "+31%", "+<1%" for a tiny one: whole points, signed (spec copy rules).
+export const formatWpa = (wpa: number) => (wpa < 0.005 ? "+<1%" : `+${Math.round(100 * wpa)}%`);

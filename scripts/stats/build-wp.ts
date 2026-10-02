@@ -78,7 +78,11 @@ const outcome = (g: Game) => (g.homeScore > g.awayScore ? "win" : g.homeScore < 
 function stateAt(g: Game, minute: number): WpState {
   const t = minute * 60;
   let h = 0, a = 0;
-  for (const x of g.goals) if (x.t < t) (x.home ? h++ : a++);
+  for (const x of g.goals) {
+    if (x.t >= t) continue;
+    if (x.home) h++;
+    else a++;
+  }
   return { era: eraOf(g.season).id, otRule: otFormat(g.season).label, playoff: g.playoff, elapsed: t, inOvertime: false, homeScore: h, awayScore: a, gap: g.gap };
 }
 

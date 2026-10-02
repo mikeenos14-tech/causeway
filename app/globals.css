@@ -383,3 +383,17 @@ html:not([data-banner-raised]) .banner-raise { animation: banner-raise 900ms cub
 .wp-now { position: absolute; width: 11px; height: 11px; border-radius: 50%; transform: translate(-50%, -50%); background: var(--gold); box-shadow: 0 0 0 0 rgba(255, 184, 28, .6); animation: wp-pulse 1.8s ease-out infinite; }
 @keyframes wp-pulse { to { box-shadow: 0 0 0 10px rgba(255, 184, 28, 0); } }
 @media (prefers-reduced-motion: reduce) { .wp-now { animation: none; } }
+
+/* Leverage: a goal's win probability added (components/ScoringSummary.tsx) */
+.wpa-badge { display: block; margin-top: 3px; font-size: .72rem; font-weight: 600; color: var(--text-secondary); }
+.wpa-badge-top { color: var(--gold); }
+.wpa-badge-label { text-transform: uppercase; letter-spacing: .04em; font-size: .66rem; }
+.clutch-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 20px 24px; }
+.clutch-grid > div { display: flex; flex-direction: column; min-width: 0; }
+.lev-goal-row { display: grid; grid-template-columns: 2rem minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 10px 14px; font-size: .88rem; }
+.lev-rank { color: var(--text-muted); font-variant-numeric: tabular-nums; padding-top: 1px; }
+@media (max-width: 560px) {
+  .lev-col-optional { display: none; }
+  .lev-table th, .lev-table td { padding-left: 8px !important; padding-right: 8px !important; }
+  .lev-table th { white-space: normal !important; }
+}

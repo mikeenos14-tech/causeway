@@ -51,6 +51,9 @@ export default async function HistoryPage() {
           </Link>{" "}
           <Link href="/history/elo" style={{ color: "var(--gold)", textDecoration: "none", fontWeight: 600 }}>
             Every season, ranked →
+          </Link>{" "}
+          <Link href="/history/leverage" style={{ color: "var(--gold)", textDecoration: "none", fontWeight: 600 }}>
+            Biggest goals →
           </Link>
         </p>
 

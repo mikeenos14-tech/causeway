@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { HistoryGame } from "@/lib/history-data";
 import { TeamLogo } from "@/components/TeamLogo";
+import { formatWpa, type GoalWpaView } from "@/lib/wp-curve";
 
 // Every goal in order, grouped by period: time, team, scorer, assists,
 // PP/SH/EN where the era's records mark them, and the score after it.
@@ -23,7 +24,10 @@ export function scoringIsComplete(g: HistoryGame): boolean {
   return g.goals.length === g.home.score + g.away.score - (g.finalState === "SO" ? 1 : 0);
 }
 
-export function ScoringSummary({ g, linkPlayers = false }: { g: HistoryGame; linkPlayers?: boolean }) {
+// wpa: each goal's win probability added (by event id), with the game's
+// biggest goal marked; shown under the score after it.
+export function ScoringSummary({ g, linkPlayers = false, wpa }: { g: HistoryGame; linkPlayers?: boolean; wpa?: Map<number, GoalWpaView> }) {
+  const biggest = wpa && wpa.size ? [...wpa.entries()].reduce((b, e) => (e[1].wpa > b[1].wpa ? e : b))[0] : null;
   const byPeriod = [...new Set(g.goals.map((x) => `${x.period}|${x.periodType}`))];
   const name = (label: string, id: number | null | undefined, bold = false) =>
     linkPlayers && id ? (
@@ -71,8 +75,17 @@ export function ScoringSummary({ g, linkPlayers = false }: { g: HistoryGame; lin
                           ))}
                     </span>
                   </span>
-                  <span style={{ color: "var(--text-secondary)", fontVariantNumeric: "tabular-nums", fontSize: ".82rem", whiteSpace: "nowrap" }}>
+                  <span style={{ color: "var(--text-secondary)", fontVariantNumeric: "tabular-nums", fontSize: ".82rem", whiteSpace: "nowrap", textAlign: "right" }}>
                     {g.away.code} {x.awayAfter}, {g.home.code} {x.homeAfter}
+                    {wpa?.has(x.eventId) && (
+                      <span
+                        className={x.eventId === biggest ? "wpa-badge wpa-badge-top" : "wpa-badge"}
+                        title={`Win chance for ${x.team}: ${Math.round(100 * wpa.get(x.eventId)!.before)}% before this goal, ${Math.round(100 * wpa.get(x.eventId)!.after)}% after`}
+                      >
+                        {x.eventId === biggest && <span className="wpa-badge-label">Biggest goal · </span>}
+                        {formatWpa(wpa.get(x.eventId)!.wpa)} win chance
+                      </span>
+                    )}
                   </span>
                 </div>
               ))}

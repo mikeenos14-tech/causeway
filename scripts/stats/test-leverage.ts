@@ -7,6 +7,7 @@
 import { pool } from "../../lib/db";
 import { getGameWpTimeline } from "../../lib/wp-game";
 import { seriesChance, gameStakes, seriesFormat, neutralGameChance } from "../../lib/stats/leverage";
+import { getClutchCard, getBruinsLeverageLeaders, getBruinsBiggestGoals, getLeverageSeasons } from "../../lib/leverage-data";
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = "") => {
@@ -105,6 +106,19 @@ const near = (a: number, b: number, tol = 1e-6) => Math.abs(a - b) < tol;
             (select sum(s.assists) from nhl_skater_games s join nhl_games g on g.id = s.game_id where s.player_id = 8447400 and g.game_type = 'regular' and s.played)::int box`,
   );
   check(`Gretzky's assists: ${assists.lev} = ${assists.box} official`, assists.lev === assists.box);
+
+  // The pages' queries.
+  const bos = await getBruinsLeverageLeaders("regular", "lg", 200);
+  const bourque = bos.find((r) => r.name === "Ray Bourque");
+  check("Bruins leaders count Boston goals only: Bourque 395 (not his 410 career)", bourque?.goals === 395, String(bourque?.goals));
+  const esp = bos.find((r) => r.name === "Phil Esposito");
+  check("...Esposito 459 for Boston (717 career)", esp?.goals === 459, String(esp?.goals));
+  const card = await getClutchCard(8470638);
+  check("Bergeron's card: 426 goals, best goal the 2013 G7 tier (+50% or more)", card?.regular?.goals === 426 && (card?.bestGoals[0]?.wpa ?? 0) > 0.5);
+  const top = await getBruinsBiggestGoals("playoff", 1);
+  check("Biggest Bruins playoff goal: Bergeron, 2013 Game 7 tying goal", top[0]?.scorer === "Patrice Bergeron" && top[0]?.gameId === 2012030147, JSON.stringify(top[0]));
+  const seasons = await getLeverageSeasons();
+  check("leaderboard seasons include 1917-18 and every Original Six season", seasons.includes("19171918") && ["19421943", "19501951", "19661967"].every((x) => seasons.includes(x)));
 
   await pool.end();
   console.log(`\n${failed === 0 ? "All passed." : `${failed} failed.`}`);

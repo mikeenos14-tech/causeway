@@ -49,7 +49,7 @@ export async function getGameWpTimeline(gameId: number): Promise<WpTimeline | nu
   );
   if (!g || g.rh == null || g.ra == null) return null;
   const { rows: goals } = await pool.query(
-    `select e.period, e.period_type, e.time_elapsed_sec, e.team_id, p.full_name as scorer
+    `select e.event_id, e.period, e.period_type, e.time_elapsed_sec, e.team_id, p.full_name as scorer
      from nhl_goal_events e left join nhl_players p on p.id = e.scorer_id where e.game_id = $1 and e.period_type <> 'SO' order by e.time_elapsed_sec, e.event_id`,
     [gameId],
   );
@@ -60,7 +60,7 @@ export async function getGameWpTimeline(gameId: number): Promise<WpTimeline | nu
   const pen = ELO.params.b2bPenalty ?? 0;
   const gap = g.rh - (g.b2b_h ? pen : 0) - (g.ra - (g.b2b_a ? pen : 0));
   const ctx = wpContext(model, g.season, g.playoff, gap);
-  const curveGoals = goals.map((x) => ({ t: Number(x.time_elapsed_sec), home: Number(x.team_id) === Number(g.home_team_id), scorer: x.scorer }));
+  const curveGoals = goals.map((x) => ({ t: Number(x.time_elapsed_sec), home: Number(x.team_id) === Number(g.home_team_id), scorer: x.scorer, id: Number(x.event_id) }));
   const end = finishedGameEnd(ctx, g.final_state, curveGoals.map((x) => x.t));
   // The final: who won (a tie is half).
   const { points, biggestSwing } = buildCurve(ctx, curveGoals, end, g.home_score > g.away_score ? 1 : g.home_score < g.away_score ? 0 : 0.5);
