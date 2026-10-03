@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { seasonPath } from "@/lib/season-path";
 
 // Pick any season: a native select (the phone's own scroll wheel, which
 // handles 100 seasons comfortably) grouped by decade, plus older / newer
@@ -10,13 +11,15 @@ import { useRouter } from "next/navigation";
 
 const label = (s: string) => `${s.slice(0, 4)}-${s.slice(6)}`;
 
-export function SeasonPicker({ seasons, current, basePath }: { seasons: string[]; current: string; basePath: string }) {
+// mode "path" links to basePath/2010-11 (cacheable pages); "query" to
+// basePath?season=20102011 for pages that combine it with other filters.
+export function SeasonPicker({ seasons, current, basePath, mode = "path" }: { seasons: string[]; current: string; basePath: string; mode?: "path" | "query" }) {
   const router = useRouter();
   const sorted = [...seasons].sort().reverse(); // newest first
   const i = sorted.indexOf(current);
   const newer = i > 0 ? sorted[i - 1] : null;
   const older = i >= 0 && i < sorted.length - 1 ? sorted[i + 1] : null;
-  const href = (s: string) => (s === sorted[0] ? basePath : `${basePath}?season=${s}`);
+  const href = (s: string) => (s === sorted[0] ? basePath : mode === "path" ? `${basePath}/${seasonPath(s)}` : `${basePath}?season=${s}`);
 
   const decades = new Map<string, string[]>();
   for (const s of sorted) {

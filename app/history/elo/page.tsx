@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { scheduleHref } from "@/lib/season-path";
 import type { Metadata } from "next";
 import { Masthead, Footer } from "@/components/Masthead";
 import { formatSeasonLabel } from "@/lib/format-date";
@@ -91,7 +92,7 @@ function Row({ s, rank, sort }: { s: EloSeason; rank: number; sort: Sort }) {
     <tr>
       <td style={{ textAlign: "left", color: "var(--text-secondary)" }}>{rank}</td>
       <td style={{ textAlign: "left" }}>
-        <Link href={`/schedule?season=${s.seasonId}`} style={{ color: "var(--text-primary)", textDecoration: "none", fontWeight: 600 }}>
+        <Link href={scheduleHref(s.seasonId)} style={{ color: "var(--text-primary)", textDecoration: "none", fontWeight: 600 }}>
           {formatSeasonLabel(s.seasonId)}
         </Link>
       </td>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { scheduleHref } from "@/lib/season-path";
 import { notFound } from "next/navigation";
 import { getTeam } from "@/lib/homepage-data";
 import { getAllRegularSeasonResults, longestWinStreak, longestPointStreak, biggestWin, worstLoss, bestAndWorstMonth } from "@/lib/records-data";
@@ -118,7 +119,7 @@ export default async function TeamRecords({ params }: { params: Promise<{ abbrev
             <RecordTile
               label="Best Month"
               value={`${bestMonth.wins}-${bestMonth.losses}-${bestMonth.otl}`}
-              href={abbrev === "BOS" ? `/schedule?season=${bestMonth.seasonId}` : undefined}
+              href={abbrev === "BOS" ? scheduleHref(bestMonth.seasonId) : undefined}
               sub={`${bestMonth.label} · ${bestMonth.points} pts in ${bestMonth.games} games`}
             />
           )}
@@ -126,7 +127,7 @@ export default async function TeamRecords({ params }: { params: Promise<{ abbrev
             <RecordTile
               label="Worst Month"
               value={`${worstMonth.wins}-${worstMonth.losses}-${worstMonth.otl}`}
-              href={abbrev === "BOS" ? `/schedule?season=${worstMonth.seasonId}` : undefined}
+              href={abbrev === "BOS" ? scheduleHref(worstMonth.seasonId) : undefined}
               sub={`${worstMonth.label} · ${worstMonth.points} pts in ${worstMonth.games} games`}
             />
           )}

@@ -108,7 +108,7 @@ export function TeamSubNav({ abbrev }: { abbrev: string }) {
           const active =
             tab.path === ""
               ? pathname === base || (pathname === "/" && abbrev === "BOS")
-              : pathname === href || (ALSO_ACTIVE[tab.path] ?? []).some((p) => pathname === `${base}${p}`);
+              : pathname === href || pathname.startsWith(`${href}/`) || (ALSO_ACTIVE[tab.path] ?? []).some((p) => pathname === `${base}${p}`); // startsWith: a past season's roster, /roster/2010-11
           return (
             <Link
               key={tab.label}

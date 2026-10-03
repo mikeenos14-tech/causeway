@@ -61,7 +61,7 @@ export default async function LeverageLeaguePage({ searchParams }: { searchParam
           <Link href={href({ season: "all" })} style={chip(allTime)} aria-current={allTime ? "page" : undefined}>
             All time
           </Link>
-          <SeasonPicker seasons={seasons} current={season ?? seasons[0]} basePath="/history/leverage/league" />
+          <SeasonPicker seasons={seasons} current={season ?? seasons[0]} basePath="/history/leverage/league" mode="query" />
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: ".6rem" }}>
           {(["regular", "playoff"] as const).map((t) => (

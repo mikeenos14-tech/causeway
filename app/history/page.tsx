@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { scheduleHref } from "@/lib/season-path";
 import type { Metadata } from "next";
 import { Masthead, Footer } from "@/components/Masthead";
 import { TeamLogo } from "@/components/TeamLogo";
@@ -162,7 +163,7 @@ function IconicRow({ g, first }: { g: IconicGame; first: boolean }) {
 function SeasonChip({ s, current }: { s: SeasonLine; current: boolean }) {
   return (
     <Link
-      href={current ? "/schedule" : `/schedule?season=${s.seasonId}`}
+      href={current ? "/schedule" : scheduleHref(s.seasonId)}
       style={{ ...CARD, padding: "10px 12px", textDecoration: "none", color: "inherit", display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, borderColor: s.cup ? "var(--gold)" : "var(--border)" }}
     >
       <span style={{ fontFamily: "var(--font-display)", fontSize: "1.05rem" }}>{formatSeasonLabel(s.seasonId)}</span>

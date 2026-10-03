@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Teko, Source_Serif_4, IBM_Plex_Sans } from "next/font/google";
 import "./globals.css";
+import { RefreshOnReturn } from "@/components/RefreshOnReturn";
 
 const teko = Teko({
   variable: "--font-display",
@@ -61,7 +62,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           }}
         />
       </head>
-      <body className="min-h-full">{children}</body>
+      <body className="min-h-full">
+        {children}
+        <RefreshOnReturn />
+      </body>
     </html>
   );
 }
