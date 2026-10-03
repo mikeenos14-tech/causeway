@@ -65,7 +65,7 @@ const clk = (period: number, periodType: LiveClock["periodType"], secondsRemaini
           continue;
         }
         const gap = r.rh - (r.bh ? pen : 0) - (r.ra - (r.ba ? pen : 0));
-        let last = "", prevT = -1, responses = 0, nulls = 0, incomplete = 0, backwards = 0, outOfRange = 0, nowMismatch = 0, intermissionBad = 0;
+        let last = "", prevT = -1, prevFeedT = -1, responses = 0, nulls = 0, incomplete = 0, backwards = 0, outOfRange = 0, nowMismatch = 0, intermissionBad = 0;
         let finalWp: ReturnType<typeof computeLiveWp> = null;
         for (const line of readFileSync(tlPath, "utf8").split("\n")) {
           if (!line) continue;
@@ -87,9 +87,17 @@ const clk = (period: number, periodType: LiveClock["periodType"], secondsRemaini
             incomplete++;
             continue;
           }
+          // Backwards only counts when the NHL's own clock didn't go back:
+          // officials put time back on (seven seconds in 2026020017, 0:38
+          // at the end of regulation in BOS-WPG), and the feed once ran
+          // 13:37 to 4:01 in 25 seconds then corrected to 12:36
+          // (2026020018). Following those is right; the chart matches the
+          // arena clock. The NHL also nudges times by a second or two.
           const t = wp.timeline.endT;
-          if (t < prevT - 5) backwards++; // the NHL nudges times by a second or two
-          prevT = Math.max(prevT, t);
+          const feedT = g.clock ? liveElapsed(g.clock, wp.timeline.playoff) : t;
+          if (t < prevT - 5 && feedT >= prevFeedT - 5) backwards++;
+          prevT = t;
+          prevFeedT = feedT;
           if (g.clock?.inIntermission && g.clock.periodType === "REG" && t !== g.clock.period * 1200 && t < 3600) intermissionBad++;
           if (Math.abs(wp.timeline.points.at(-1)!.p - wp.now) > 1e-9) nowMismatch++;
           if (wp.timeline.points.some((x) => x.p < 0 || x.p > 1)) outOfRange++;
