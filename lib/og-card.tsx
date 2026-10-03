@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { BannerMark } from "@/components/BannerMark";
+import { ZakimMark } from "@/components/ZakimMark";
 
 // Shared frame for the link-preview images (app/opengraph-image.tsx and
 // app/games/[id]/opengraph-image.tsx): what a Causeway link looks like in
@@ -13,7 +13,7 @@ export function OgFrame({ label, children, footer }: { label: string; children: 
   return (
     <div style={{ width: "100%", height: "100%", background: INK, color: "#f5f5f4", display: "flex", flexDirection: "column", padding: "56px 72px", fontFamily: "sans-serif" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-        <BannerMark width={46} />
+        <ZakimMark size={58} />
         <div style={{ fontSize: 34, fontWeight: 700, letterSpacing: 4 }}>CAUSEWAY</div>
         <div style={{ marginLeft: "auto", fontSize: 26, fontWeight: 700, color: GOLD, letterSpacing: 3, textTransform: "uppercase" }}>{label}</div>
       </div>

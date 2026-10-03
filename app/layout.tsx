@@ -44,24 +44,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    // suppressHydrationWarning: the banner script below sets
-    // data-banner-raised on <html> before React hydrates (by design).
-    <html
-      lang="en"
-      suppressHydrationWarning
-      className={`${teko.variable} ${sourceSerif.variable} ${plexSans.variable} h-full antialiased`}
-    >
-      <head>
-        {/* The header banner rises once per visit: the first full page load
-            plays it, and the data-banner-raised flag (set after it finishes,
-            or right away on later loads this session) stops it replaying on
-            every navigation. */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `try{var k="causeway-banner-raised",d=document.documentElement;if(sessionStorage.getItem(k)){d.dataset.bannerRaised="1"}else{sessionStorage.setItem(k,"1");setTimeout(function(){d.dataset.bannerRaised="1"},1600)}}catch(e){document.documentElement.dataset.bannerRaised="1"}`,
-          }}
-        />
-      </head>
+    <html lang="en" className={`${teko.variable} ${sourceSerif.variable} ${plexSans.variable} h-full antialiased`}>
       <body className="min-h-full">
         {children}
         <RefreshOnReturn />

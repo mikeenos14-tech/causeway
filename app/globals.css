@@ -268,17 +268,6 @@ body {
 .live-dot { animation: live-pulse 1.6s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .live-dot { animation: none; } }
 
-/* Header banner: rises into the rafters with a small settle, once per
-   visit (the flag is set by the script in app/layout.tsx). */
-.banner-raise-wrap { display: inline-flex; overflow: hidden; padding-top: 2px; }
-.banner-raise { display: inline-flex; }
-html:not([data-banner-raised]) .banner-raise { animation: banner-raise 900ms cubic-bezier(.2, .8, .2, 1) 150ms both; }
-@keyframes banner-raise {
-  0% { transform: translateY(115%); }
-  70% { transform: translateY(-6%); }
-  100% { transform: translateY(0); }
-}
-@media (prefers-reduced-motion: reduce) { html:not([data-banner-raised]) .banner-raise { animation: none; } }
 
 /* Goal light: the live score card flashes red three times (~1/second, well
    under the 3-per-second photosensitivity limit) and a banner with the
@@ -413,3 +402,11 @@ html:not([data-banner-raised]) .banner-raise { animation: banner-raise 900ms cub
 .skeleton { border-radius: 10px; background: linear-gradient(90deg, var(--surface-1) 0%, rgba(255, 255, 255, .06) 50%, var(--surface-1) 100%); background-size: 200% 100%; animation: skeleton-shimmer 1.2s ease-in-out infinite; }
 @keyframes skeleton-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 @media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
+
+/* Small phones (360-399px, most Androids): a slightly smaller mark and
+   tighter wordmark keep the logo and search on one row. */
+@media (max-width: 399px) {
+  .masthead-logo svg { width: 34px; height: 34px; }
+  .masthead-logo { gap: 8px !important; }
+  .masthead-wordmark { letter-spacing: .01em !important; }
+}

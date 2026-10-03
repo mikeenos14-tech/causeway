@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BannerMark } from "@/components/BannerMark";
+import { ZakimMark } from "@/components/ZakimMark";
 import { SiteSearch } from "@/components/SiteSearch";
 
 export function Masthead({ scoreline }: { scoreline?: React.ReactNode }) {
@@ -11,15 +11,11 @@ export function Masthead({ scoreline }: { scoreline?: React.ReactNode }) {
           sub-nav before any content). */}
       <div className="masthead-inner" style={{ maxWidth: 1160, margin: "0 auto", padding: "14px 24px" }}>
         <Link href="/" className="masthead-logo" style={{ display: "flex", alignItems: "center", gap: 10, fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "1.7rem", color: "#f1eee5", textDecoration: "none" }}>
-          {/* Raised into the rafters once per visit (see globals.css and the
-              script in app/layout.tsx); still for reduced-motion users. */}
-          <span className="banner-raise-wrap">
-            <span className="banner-raise">
-              <BannerMark width={28} />
-            </span>
-          </span>
+          {/* The Zakim C (owner's design, 2026-10-02). */}
+          <ZakimMark size={40} />
           <span style={{ display: "flex", flexDirection: "column", lineHeight: 1 }}>
-            Causeway
+            {/* Capitals with open tracking, as in the logo file. */}
+            <span className="masthead-wordmark" style={{ textTransform: "uppercase", letterSpacing: ".04em" }}>Causeway</span>
             {/* The approved full lockup: the first game on file is Dec 1, 1924. */}
             <span className="masthead-tagline">
               {/* Phones get the short form so the search button keeps its row. */}
