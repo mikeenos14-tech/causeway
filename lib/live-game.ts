@@ -1,6 +1,6 @@
 // Live game state from the NHL's gamecenter feed, trimmed to what the live
 // scoreboard shows: score, shots, period and clock, power play, and the
-// goals so far. Read by /api/live/[id] (cached ~15s at the edge, so every
+// goals so far. Read by /api/live/[id] (cached ~5s at the edge, so every
 // viewer shares one upstream request) and polled by components/LiveScoreboard.
 // Nothing here is stored or narrated; the hourly refresh still loads the
 // official box score after the game.
@@ -152,7 +152,8 @@ export function parseLanding(d: any): LiveGame {
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-export const LIVE_CACHE_SECONDS = 15;
+// How long the edge and our server reuse one NHL response (was 15).
+export const LIVE_CACHE_SECONDS = 5;
 
 export async function fetchLiveGame(gameId: number): Promise<LiveGame | null> {
   try {

@@ -8,6 +8,10 @@ import type { WpTimeline } from "@/lib/wp-game";
 import { WinProbChart } from "@/components/WinProbChart";
 import { goalWpaFromCurve, formatWpa } from "@/lib/wp-curve";
 
+// Live: every 5 s (with the 5 s edge cache, a goal reaches the screen in
+// about 10-15 s after the NHL posts it; it was up to ~50 s with 20 s polls
+// and 15 s caches, owner report 2026-10-02). Before puck drop: every 20 s.
+const POLL_LIVE_MS = 5_000;
 const POLL_MS = 20_000;
 const WINDOW_BEFORE_MS = 15 * 60_000; // start polling 15 min before puck drop
 const WINDOW_AFTER_MS = 6 * 3600_000; // give up 6h after (a long OT game is ~3.5h)
@@ -57,6 +61,7 @@ export function LiveScoreboard({
   const done = useRef(false);
   const seenGoals = useRef<GoalTracker | null>(null);
   const finalSince = useRef<number | null>(null);
+  const liveNow = useRef(false);
 
   // Each celebration or note clears itself after a few seconds.
   useEffect(() => {
@@ -80,9 +85,15 @@ export function LiveScoreboard({
       const inWindow = now >= start - WINDOW_BEFORE_MS && now <= start + WINDOW_AFTER_MS;
       if (inWindow && !done.current && document.visibilityState === "visible") {
         try {
-          const res = await fetch(`/api/live/${gameId}`, { cache: "no-store" });
-          if (res.ok) {
-            const { wp, ...g }: LiveGame & { wp?: LiveWp | null } = await res.json();
+          // The first poll reuses the request the page started before the
+          // app's code loaded (earlyLiveFetch below), saving the hydration wait.
+          const early = takeEarlyLive(gameId);
+          const body: (LiveGame & { wp?: LiveWp | null }) | null = early
+            ? await early
+            : await fetch(`/api/live/${gameId}`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null));
+          if (body) {
+            const { wp, ...g } = body;
+            liveNow.current = isLive(g) || g.state === "OVER";
             if (cancelled) return;
             setWpNow(wp?.now ?? null);
             if (wp?.timeline) setWpCurve(wp.timeline);
@@ -116,7 +127,7 @@ export function LiveScoreboard({
       }
       // Outside the window, check back each minute (no request) in case
       // the page was opened early and left open until puck drop.
-      if (!cancelled && !done.current) timer = setTimeout(tick, inWindow ? POLL_MS : 60_000);
+      if (!cancelled && !done.current) timer = setTimeout(tick, !inWindow ? 60_000 : liveNow.current ? POLL_LIVE_MS : POLL_MS);
     };
     tick();
     const onVisible = () => {
@@ -133,12 +144,43 @@ export function LiveScoreboard({
     };
   }, [gameId, startTimeUTC, focusTeam]);
 
-  if (!game || !(isLive(game) || isFinal(game))) return <>{children}</>;
+  if (!game || !(isLive(game) || isFinal(game)))
+    return (
+      <>
+        <script dangerouslySetInnerHTML={{ __html: earlyLiveFetch(gameId, startTimeUTC) }} />
+        {children}
+      </>
+    );
   const extras = { celebration, overturned };
   // From the focus team's side when it's playing, else the home team's.
   const sideHome = game.away.abbrev !== focusTeam;
   const wp = { now: wpNow, curve: wpCurve, sideHome };
   return variant === "hero" ? <HeroBoard g={game} title={title} stale={stale} wp={wp} {...extras} /> : <PageBoard g={game} stale={stale} wp={wp} {...extras} />;
+}
+
+// Starts the first live request while the page is still loading (an inline
+// script in the server HTML runs before React hydrates), only inside the
+// game window. takeEarlyLive hands that request to the first poll, once.
+declare global {
+  interface Window {
+    __causewayLive?: Record<string, { p: Promise<unknown>; at: number }>;
+  }
+}
+function earlyLiveFetch(gameId: number, startTimeUTC: string): string {
+  const id = Number(gameId);
+  const start = Date.parse(startTimeUTC);
+  if (!Number.isFinite(id) || !Number.isFinite(start)) return "";
+  return `try{var n=Date.now();if(n>=${start - WINDOW_BEFORE_MS}&&n<=${start + WINDOW_AFTER_MS}){var w=window.__causewayLive=window.__causewayLive||{};w["${id}"]={at:n,p:fetch("/api/live/${id}",{cache:"no-store"}).then(function(r){return r.ok?r.json():null}).catch(function(){return null})}}}catch(e){}`;
+}
+function takeEarlyLive(gameId: number): Promise<(LiveGame & { wp?: LiveWp | null }) | null> | null {
+  const w = typeof window !== "undefined" ? window.__causewayLive : undefined;
+  const entry = w?.[String(gameId)];
+  if (!entry) return null;
+  delete w![String(gameId)];
+  // Only a fresh one: a page opened in the background shouldn't hand over
+  // an old score when it's finally looked at.
+  if (Date.now() - entry.at > 10_000) return null;
+  return entry.p as Promise<(LiveGame & { wp?: LiveWp | null }) | null>;
 }
 
 type Extras = { celebration: { id: number; goal: LiveGoal } | null; overturned: { id: number; goal: LiveGoal } | null };
@@ -284,7 +326,7 @@ function HeroBoard({ g, title, stale, wp, celebration, overturned }: { g: LiveGa
         </div>
         <OverturnedNote overturned={overturned} />
         <p style={{ fontSize: ".85rem", color: "var(--text-secondary)", margin: "0 0 1.2rem" }}>
-          {final ? "The full box score and recap land here within about an hour, once the NHL posts the official stats." : "Updates on its own every 20 seconds."}
+          {final ? "The full box score and recap land here within about an hour, once the NHL posts the official stats." : "Updates live, every few seconds."}
         </p>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           <Link href={`/games/${g.id}`} style={{ background: "var(--gold)", color: "var(--ink)", fontWeight: 700, fontSize: ".9rem", padding: "13px 24px", borderRadius: 8, textDecoration: "none" }}>

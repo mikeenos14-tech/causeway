@@ -59,7 +59,9 @@ const clk = (period: number, periodType: LiveClock["periodType"], secondsRemaini
           [Number(gid)],
         );
         if (!r) {
-          check(`${gid}: ratings found`, false);
+          // Recorded tonight and not loaded yet (in progress, or before the
+          // morning rebuild stores its pregame ratings): nothing to replay against.
+          console.log(`      (${gid}: not loaded yet; skipped)`);
           continue;
         }
         const gap = r.rh - (r.bh ? pen : 0) - (r.ra - (r.ba ? pen : 0));

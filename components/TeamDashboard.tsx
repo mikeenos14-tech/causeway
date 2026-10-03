@@ -522,7 +522,7 @@ function PendingHero({ game, teamName, abbrev, titleSize }: { game: ClubGame; te
         </h1>
         <p style={{ fontSize: ".95rem", color: "var(--text-secondary)", margin: "0 0 1.4rem", maxWidth: 560 }}>
           {live
-            ? "Score updates every few minutes here. Full box score and recap land after the final horn."
+            ? "Loading the live score… The full box score and recap land after the final horn."
             : "The full box score and recap land here within about an hour of the final horn, once the NHL posts the official stats."}
         </p>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
