@@ -145,17 +145,32 @@ export async function verifyTeam(client: Client, abbrev: string): Promise<Verify
   }
 
   // A shutout needs the goalie to have played the whole game alone with
-  // the opponent's final score at 0. Added 2026-09-28 after 1,178 relief
-  // appearances league-wide were found flagged as shutouts.
+  // the opponent held scoreless in regulation and overtime: the shootout
+  // winner counts in the final score but isn't a goal against, so a 0-0
+  // game lost in a shootout is a shutout (the NHL's rule); an empty-net
+  // goal does count. Added 2026-09-28 after 1,178 relief appearances
+  // league-wide were found flagged as shutouts; corrected 2026-10-03 to the
+  // shootout rule (the old check flagged the 53 real shutouts restored the
+  // night before and failed every hourly run until fixed).
+  const OPP_GOALS = `(case when ggs.team_id = g.home_team_id then g.away_score else g.home_score end)
+    - (case when g.game_end_type = 'shootout' and (case when ggs.team_id = g.home_team_id then g.away_score > g.home_score else g.home_score > g.away_score end) then 1 else 0 end)`;
+  const SOLE = `(select count(*) from goalie_game_stats o where o.game_id = ggs.game_id and o.team_id = ggs.team_id and coalesce(o.toi_seconds, 0) > 0) = 1`;
   const { rows: badShutouts } = await client.query(
     `select count(*) as n from goalie_game_stats ggs join games g on g.id = ggs.game_id
-     where ggs.team_id = $1 and ggs.shutout
-       and ((case when ggs.team_id = g.home_team_id then g.away_score else g.home_score end) > 0
-            or (select count(*) from goalie_game_stats o where o.game_id = ggs.game_id and o.team_id = ggs.team_id and coalesce(o.toi_seconds, 0) > 0) > 1)`,
+     where ggs.team_id = $1 and ggs.shutout and (${OPP_GOALS} > 0 or not ${SOLE})`,
     [team.id],
   );
   if (Number(badShutouts[0].n) > 0) {
     issues.push(`${badShutouts[0].n} goalie rows flagged as shutouts that aren't (opponent scored, or a second goalie played).`);
+  }
+  // And the reverse: a real shutout left unflagged (how 53 were missed).
+  const { rows: missedShutouts } = await client.query(
+    `select count(*) as n from goalie_game_stats ggs join games g on g.id = ggs.game_id
+     where ggs.team_id = $1 and not ggs.shutout and coalesce(ggs.toi_seconds, 0) > 0 and ${OPP_GOALS} = 0 and ${SOLE}`,
+    [team.id],
+  );
+  if (Number(missedShutouts[0].n) > 0) {
+    issues.push(`${missedShutouts[0].n} shutouts not flagged (goalie played alone, opponent held scoreless through overtime).`);
   }
 
   // Every goalie row is a real appearance. Added 2026-09-28 after 4,848
