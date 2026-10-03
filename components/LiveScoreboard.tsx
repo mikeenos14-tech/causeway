@@ -6,6 +6,7 @@ import { trackGoals, startTracking, boardGoals, finalAndComplete, type GoalTrack
 import type { LiveWp } from "@/lib/live-wp";
 import type { WpTimeline } from "@/lib/wp-game";
 import { WinProbChart } from "@/components/WinProbChart";
+import { TeamLink, PlayerLink } from "@/components/EntityLinks";
 import { goalWpaFromCurve, formatWpa } from "@/lib/wp-curve";
 
 // Live: every 5 s (with the 5 s edge cache, a goal reaches the screen in
@@ -259,7 +260,7 @@ function ScoreRow({ t, leading, big }: { t: LiveGame["home"]; leading: boolean; 
   return (
     <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 16 }}>
       <span style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: big ? "1.6rem" : "1.2rem", letterSpacing: ".02em", color: leading ? "var(--text-primary)" : "var(--text-secondary)" }}>
-        {t.abbrev}
+        <TeamLink abbrev={t.abbrev} />
         {t.sog != null && <span style={{ fontFamily: "var(--font-body)", fontSize: ".75rem", fontWeight: 400, color: "var(--text-muted)", marginLeft: 8 }}>{t.sog} SOG</span>}
       </span>
       <span style={{ fontFamily: "var(--font-display)", fontSize: big ? "3rem" : "2.2rem", lineHeight: 1, fontVariantNumeric: "tabular-nums", color: leading ? "var(--text-primary)" : "var(--text-secondary)" }}>{t.score}</span>
@@ -282,6 +283,7 @@ function Scores({ g, big }: { g: LiveGame; big: boolean }) {
 function GoalList({ g, limit, wp }: { g: LiveGame; limit?: number; wp: WpView }) {
   const goals = [...g.goals].reverse().slice(0, limit);
   const wpa = wp.curve ? goalWpaFromCurve(wp.curve.points) : null;
+  const linked = new Set(g.playersWithPages ?? []);
   if (goals.length === 0) return <p style={{ fontSize: ".85rem", color: "var(--text-muted)", margin: 0 }}>No goals yet.</p>;
   return (
     <ol style={{ listStyle: "none", padding: 0, margin: 0 }}>
@@ -291,8 +293,10 @@ function GoalList({ g, limit, wp }: { g: LiveGame; limit?: number; wp: WpView })
             {goal.period} {goal.time}
           </span>
           <span>
-            <span style={{ fontWeight: 700, color: "var(--gold)", marginRight: 6 }}>{goal.team}</span>
-            <span style={{ fontWeight: 600 }}>{goal.scorer}</span>
+            <TeamLink abbrev={goal.team} style={{ fontWeight: 700, color: "var(--gold)", marginRight: 6 }} />
+            <PlayerLink id={goal.scorerId} hasPage={goal.scorerId != null && linked.has(goal.scorerId)} style={{ fontWeight: 600 }}>
+              {goal.scorer}
+            </PlayerLink>
             {goal.scorerGoals != null && <span style={{ color: "var(--text-secondary)" }}> ({goal.scorerGoals})</span>}
             {(goal.strength || goal.emptyNet) && (
               <span style={{ fontSize: ".7rem", fontWeight: 700, color: "var(--text-secondary)", border: "1px solid var(--border)", borderRadius: 4, padding: "0 5px", marginLeft: 6 }}>
@@ -300,7 +304,17 @@ function GoalList({ g, limit, wp }: { g: LiveGame; limit?: number; wp: WpView })
               </span>
             )}
             <span style={{ display: "block", color: "var(--text-secondary)", fontSize: ".78rem" }}>
-              {goal.assists.length ? `from ${goal.assists.join(", ")}` : "unassisted"} · {g.away.abbrev} {goal.awayScore}, {g.home.abbrev} {goal.homeScore}
+              {goal.assists.length
+                ? goal.assists.map((a, k) => (
+                    <span key={k}>
+                      {k === 0 ? "from " : ", "}
+                      <PlayerLink id={goal.assistIds?.[k]} hasPage={goal.assistIds?.[k] != null && linked.has(goal.assistIds[k]!)}>
+                        {a}
+                      </PlayerLink>
+                    </span>
+                  ))
+                : "unassisted"}{" "}
+              · {g.away.abbrev} {goal.awayScore}, {g.home.abbrev} {goal.homeScore}
             </span>
             {goal.eventId != null && wpa?.has(goal.eventId) && <span className="wpa-badge">{formatWpa(wpa.get(goal.eventId)!.wpa)} win chance for {goal.team}</span>}
           </span>

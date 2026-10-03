@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { Masthead, Footer } from "@/components/Masthead";
+import { hasTeamPage } from "@/components/EntityLinks";
 
 type QueryRecord = { sql: string; rows: Record<string, unknown>[] | null; error?: string };
 type QAResult = {
   answer: string;
   queries: QueryRecord[];
-  table: { columns: string[]; rows: Record<string, unknown>[] } | null;
+  table: { columns: string[]; rows: Record<string, unknown>[]; linkedPlayers?: number[] } | null;
   logId: number | null;
 };
 
@@ -67,9 +68,14 @@ function getDisplayColumns(columns: string[]): string[] {
 // columns that display them are hidden above). Conservative: a name links
 // to a player only when the row has that player's id, a date or matchup
 // links to a game only when the row has its game id.
-function cellHref(row: Record<string, unknown>, column: string): string | null {
+// linkedPlayers: the ids with a player page (Ask covers 1917 on; most
+// early players have none). Missing (an answer cached before this) links
+// no players rather than risk a dead link.
+function cellHref(row: Record<string, unknown>, column: string, linkedPlayers: Set<number>): string | null {
   const id = (key: string) => (typeof row[key] === "number" || (typeof row[key] === "string" && /^\d+$/.test(row[key] as string)) ? String(row[key]) : null);
-  if (/(^|_)(full_name|player|player_name|scorer|goalie)$/i.test(column) && id("player_id")) return `/players/${id("player_id")}`;
+  if (/(^|_)(full_name|player|player_name|scorer|goalie)$/i.test(column) && id("player_id") && linkedPlayers.has(Number(id("player_id")))) return `/players/${id("player_id")}`;
+  // A team code (BOS, MTL) links to its team page, only for today's clubs.
+  if (/(^|_)(team|abbrev|team_abbrev|opponent|opp|opp_abbrev|opponent_abbrev|tri_code)$/i.test(column) && typeof row[column] === "string" && hasTeamPage(row[column] as string)) return `/teams/${row[column]}`;
   if (/(^|_)(game_date|date|matchup)$/i.test(column) && id("game_id")) return `/games/${id("game_id")}`;
   if (/^(opponent|opp|opp_abbrev|team|team_abbrev|abbrev)$/i.test(column) && typeof row[column] === "string" && /^[A-Z]{3}$/.test(row[column] as string)) return `/teams/${row[column]}`;
   return null;
@@ -297,7 +303,7 @@ export function AskClient({ initialQuestion }: { initialQuestion: string }) {
                         {getDisplayColumns(result.table!.columns).map((c) => (
                           <td key={c}>
                             {(() => {
-                              const href = cellHref(row, c);
+                              const href = cellHref(row, c, new Set(result.table!.linkedPlayers ?? []));
                               const text = formatCell(row[c], c);
                               return href ? (
                                 <a href={href} style={{ color: "inherit", textDecorationColor: "var(--border)", textUnderlineOffset: 3 }}>

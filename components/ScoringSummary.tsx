@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { HistoryGame } from "@/lib/history-data";
 import { TeamLogo } from "@/components/TeamLogo";
+import { TeamLink } from "@/components/EntityLinks";
 import { formatWpa, type GoalWpaView } from "@/lib/wp-curve";
 
 // Every goal in order, grouped by period: time, team, scorer, assists,
@@ -26,11 +27,14 @@ export function scoringIsComplete(g: HistoryGame): boolean {
 
 // wpa: each goal's win probability added (by event id), with the game's
 // biggest goal marked; shown under the score after it.
+// linkPlayers: every player has a page (modern games); otherwise names
+// link only for the game's players who do (g.linkedPlayers).
 export function ScoringSummary({ g, linkPlayers = false, wpa }: { g: HistoryGame; linkPlayers?: boolean; wpa?: Map<number, GoalWpaView> }) {
+  const linked = new Set(g.linkedPlayers ?? []);
   const biggest = wpa && wpa.size ? [...wpa.entries()].reduce((b, e) => (e[1].wpa > b[1].wpa ? e : b))[0] : null;
   const byPeriod = [...new Set(g.goals.map((x) => `${x.period}|${x.periodType}`))];
   const name = (label: string, id: number | null | undefined, bold = false) =>
-    linkPlayers && id ? (
+    id && (linkPlayers || linked.has(id)) ? (
       <Link href={`/players/${id}`} style={{ color: "inherit", textDecoration: "none", fontWeight: bold ? 600 : undefined }}>
         {label}
       </Link>
@@ -52,10 +56,10 @@ export function ScoringSummary({ g, linkPlayers = false, wpa }: { g: HistoryGame
                 <div key={i} style={{ display: "grid", gridTemplateColumns: "3.4rem 1fr auto", gap: 10, padding: "6px 0", borderTop: "1px solid var(--border)", fontSize: ".88rem" }}>
                   <span style={{ color: "var(--text-muted)", fontVariantNumeric: "tabular-nums" }}>{x.time}</span>
                   <span>
-                    <span style={{ fontWeight: 700, color: "var(--gold)", marginRight: 6, whiteSpace: "nowrap" }}>
+                    <TeamLink abbrev={x.team} style={{ fontWeight: 700, color: "var(--gold)", marginRight: 6, whiteSpace: "nowrap" }}>
                       <TeamLogo abbrev={x.team} size={18} gap={3} />
                       {x.team}
-                    </span>
+                    </TeamLink>
                     {name(x.scorer ?? "Unknown scorer", x.scorerId, true)}
                     {(x.strength === "PP" || x.strength === "SH" || x.strength === "PS" || x.emptyNet) && g.hasStrength && (
                       <span style={{ fontSize: ".7rem", fontWeight: 700, color: "var(--text-secondary)", border: "1px solid var(--border)", borderRadius: 4, padding: "0 5px", marginLeft: 6 }}>

@@ -410,3 +410,9 @@ body {
   .masthead-logo { gap: 8px !important; }
   .masthead-wordmark { letter-spacing: .01em !important; }
 }
+
+/* Team and player names that link to their pages (components/EntityLinks.tsx):
+   they keep the surrounding text's colour and weight, and show they're
+   links on hover and keyboard focus. */
+.entity-link { color: inherit; text-decoration: none; text-underline-offset: 3px; }
+.entity-link:hover, .entity-link:focus-visible { text-decoration: underline; text-decoration-color: var(--gold); }

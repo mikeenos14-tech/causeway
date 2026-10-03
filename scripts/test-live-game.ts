@@ -19,7 +19,7 @@ const check = (name: string, ok: boolean, detail = "") => {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${!ok && detail ? ` — ${detail}` : ""}`);
 };
 
-const goal = (over: Partial<LiveGoal>): LiveGoal => ({ eventId: 101, period: "1st", time: "05:00", team: "BOS", scorer: "David Pastrnak", scorerGoals: 1, assists: [], strength: null, emptyNet: false, awayScore: 0, homeScore: 1, ...over });
+const goal = (over: Partial<LiveGoal>): LiveGoal => ({ eventId: 101, period: "1st", time: "05:00", team: "BOS", scorer: "David Pastrnak", scorerId: 8477956, scorerGoals: 1, assists: [], assistIds: [], strength: null, emptyNet: false, awayScore: 0, homeScore: 1, ...over });
 
 // ---- Unit ----
 const a = goal({});

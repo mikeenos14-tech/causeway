@@ -11,7 +11,7 @@
 // in depth, the same principle used throughout tonight's other fixes.
 
 import Anthropic from "@anthropic-ai/sdk";
-import { readonlyPool } from "./db";
+import { readonlyPool, pool } from "./db";
 
 const MODEL = "claude-sonnet-5"; // correctness on the schema-reasoning step matters more here than the narration step's cost — worth the larger model
 // Raised twice now (6 -> 8 -> 10): a previously-100%-reliable question
@@ -299,7 +299,9 @@ export type QAResult = {
   // query that actually returned more than one row worth showing. A
   // single-value result (a count, a yes/no) doesn't need a table; the
   // prose already carries it. Null when nothing qualifies.
-  table: { columns: string[]; rows: Record<string, unknown>[] } | null;
+  // linkedPlayers: player ids in the table that have a player page (since
+  // Ask covers 1917 on, most early players don't); names link only for these.
+  table: { columns: string[]; rows: Record<string, unknown>[]; linkedPlayers?: number[] } | null;
 };
 
 // What's actually loaded, computed from the database rather than written
@@ -458,8 +460,14 @@ export async function answerQuestion(question: string): Promise<QAResult> {
         if (qCols !== bestCols) return qCols > bestCols ? q : best;
         return q; // equal on every measure: prefer the later (more refined) query
       }, null);
-      const table = tableSource?.rows ? { columns: Object.keys(tableSource.rows[0]), rows: tableSource.rows } : null;
-      if (table) await enrichTableWithIdNames(table);
+      const table: QAResult["table"] = tableSource?.rows ? { columns: Object.keys(tableSource.rows[0]), rows: tableSource.rows } : null;
+      if (table) {
+        await enrichTableWithIdNames(table);
+        // Which players have a page: the site's own players table (the
+        // main connection; Ask's read-only role sees the full-history view).
+        const ids = [...new Set(table.rows.map((r) => Number(r.player_id)).filter((x) => Number.isInteger(x) && x > 0))];
+        table.linkedPlayers = ids.length ? (await pool.query(`select id from players where id = any($1::int[])`, [ids])).rows.map((r) => Number(r.id)) : [];
+      }
       return { answer: stripIdLeaks(stripMarkdownArtifacts(text)), queries, table };
     }
 

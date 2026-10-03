@@ -107,7 +107,10 @@ export type HistoryGame = {
   hasStrength: boolean;
   stage: string | null; // "1970 Stanley Cup Final, Game 4"
   goals: { eventId: number; period: number; periodType: string; time: string; team: string; scorer: string | null; scorerId: number | null; assists: string[]; assistIds: number[]; strength: string | null; emptyNet: boolean | null; homeAfter: number; awayAfter: number }[];
-  penalties: { period: number; time: string; team: string | null; player: string | null; minutes: number | null; infraction: string | null }[];
+  penalties: { period: number; time: string; team: string | null; player: string | null; playerId: number | null; minutes: number | null; infraction: string | null }[];
+  // Players in this game who have a player page (2007-08 on, or careers
+  // that reached it): names link only for these.
+  linkedPlayers: number[];
   periods: { period: number; periodType: string; home: number; away: number; homeShots: number | null; awayShots: number | null }[];
   iconic: { label: string; story: string; featurable: boolean } | null;
   labels: string[];
@@ -153,7 +156,7 @@ export async function getHistoryGame(gameId: number): Promise<HistoryGame | null
       [gameId],
     ),
     pool.query(
-      `select e.period, e.time_in_period_sec, t.tri_code as team, p.full_name as player, e.minutes, e.infraction
+      `select e.period, e.time_in_period_sec, t.tri_code as team, p.full_name as player, e.player_id, e.minutes, e.infraction
        from nhl_penalty_events e left join nhl_teams t on t.id = e.team_id left join nhl_players p on p.id = e.player_id
        where e.game_id = $1 order by e.period, e.time_in_period_sec, e.event_id`,
       [gameId],
@@ -165,7 +168,7 @@ export async function getHistoryGame(gameId: number): Promise<HistoryGame | null
   ]);
   const parts = playoffParts(g.id);
   const year = g.season.slice(4);
-  return {
+  const out: HistoryGame = {
     id: g.id,
     season: g.season,
     gameType: g.game_type,
@@ -194,13 +197,25 @@ export async function getHistoryGame(gameId: number): Promise<HistoryGame | null
       homeAfter: r.score_before_home + (r.team_id === g.home_team_id ? 1 : 0),
       awayAfter: r.score_before_away + (r.team_id === g.away_team_id ? 1 : 0),
     })),
-    penalties: pens.map((r) => ({ period: r.period, time: clock(r.time_in_period_sec), team: r.team, player: r.player, minutes: r.minutes, infraction: r.infraction })),
+    penalties: pens.map((r) => ({ period: r.period, time: clock(r.time_in_period_sec), team: r.team, player: r.player, playerId: r.player_id ?? null, minutes: r.minutes, infraction: r.infraction })),
     periods: periods.map((r) => ({ period: r.period, periodType: r.period_type, home: r.home_goals, away: r.away_goals, homeShots: r.home_shots, awayShots: r.away_shots })),
     iconic: iconic[0] ? { label: iconic[0].label, story: iconic[0].short_story, featurable: iconic[0].featurable } : null,
     labels: labels.map((r) => r.label),
     ...(await historyBox(g)),
+    linkedPlayers: [],
     assistsUncertain: (await pool.query(`select 1 from nhl_box_checks where game_id = $1 and not ok and reason like 'assist%'`, [gameId])).rowCount! > 0,
   };
+  // Which of the game's players have a player page, so their names link.
+  const ids = [
+    ...out.goals.flatMap((x) => [x.scorerId, ...x.assistIds]),
+    ...out.penalties.map((x) => x.playerId),
+    ...(out.box?.teams.flatMap((t) => [...t.skaters.map((p) => p.id), ...t.goalies.map((x) => x.id)]) ?? []),
+  ].filter((x): x is number => x != null);
+  if (ids.length) {
+    const { rows } = await pool.query(`select id from players where id = any($1::int[])`, [[...new Set(ids)]]);
+    out.linkedPlayers = rows.map((r) => Number(r.id));
+  }
+  return out;
 }
 
 // The team's previous and next games around a historical one (by date).

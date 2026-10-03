@@ -46,7 +46,8 @@ export async function getPastRoster(abbrev: string, teamId: number, seasonId: st
       `select s.player_id as id, coalesce(p.full_name, 'Unknown player') as full_name, mode() within group (order by s.position) as position,
               count(*)::int as games, sum(s.goals)::int as goals, sum(s.assists)::int as assists, sum(s.goals + s.assists)::int as points,
               sum(s.pim)::int as pim, sum(s.sog)::int as shots, sum(s.plus_minus)::int as plus_minus,
-              bool_and(s.sog is not null) as sog_all, bool_and(s.plus_minus is not null) as pm_all
+              bool_and(s.sog is not null) as sog_all, bool_and(s.plus_minus is not null) as pm_all,
+              exists (select 1 from players pp where pp.id = s.player_id) as has_page
        from nhl_skater_games s join nhl_games g on g.id = s.game_id left join nhl_players p on p.id = s.player_id
        where g.season = $1 and g.game_type = 'regular' and s.team_id = $2 and s.played
        group by s.player_id, p.full_name order by points desc, goals desc`,
@@ -59,7 +60,8 @@ export async function getPastRoster(abbrev: string, teamId: number, seasonId: st
               -- A shutout: no goals against, and the only goalie his team used.
               count(*) filter (where x.goals_against = 0 and not exists (
                 select 1 from nhl_goalie_games o where o.game_id = x.game_id and o.team_id = x.team_id and o.player_id <> x.player_id))::int as shutouts,
-              sum(x.saves)::int as saves, sum(x.shots_against)::int as shots_against, sum(x.goals_against)::int as goals_against, sum(x.toi_sec)::int as toi_seconds
+              sum(x.saves)::int as saves, sum(x.shots_against)::int as shots_against, sum(x.goals_against)::int as goals_against, sum(x.toi_sec)::int as toi_seconds,
+              exists (select 1 from players pp where pp.id = x.player_id) as has_page
        from nhl_goalie_games x join nhl_games g on g.id = x.game_id left join nhl_players p on p.id = x.player_id
        where g.season = $1 and g.game_type = 'regular' and x.team_id = $2
        group by x.player_id, p.full_name order by wins desc`,
@@ -73,6 +75,8 @@ export async function getPastRoster(abbrev: string, teamId: number, seasonId: st
     skaters: sk.map((r) => ({
       id: Number(r.id),
       full_name: r.full_name,
+      // Players from before 2007-08 have a page only if their career reached it.
+      hasPage: r.has_page,
       position: r.position,
       games: r.games,
       goals: r.goals,
@@ -90,6 +94,7 @@ export async function getPastRoster(abbrev: string, teamId: number, seasonId: st
     goalies: gk.map((r) => ({
       ...r,
       id: Number(r.id),
+      hasPage: r.has_page,
       savePct: Number(r.shots_against) > 0 ? Number(r.saves) / Number(r.shots_against) : null,
       gaa: Number(r.toi_seconds) > 0 ? (Number(r.goals_against) * 3600) / Number(r.toi_seconds) : null,
     })),

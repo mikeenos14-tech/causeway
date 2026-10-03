@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { RosterMoves } from "@/lib/roster-moves";
 import { LEADERSHIP, getAlternateNames } from "@/lib/leadership";
 import { TeamLogo } from "@/components/TeamLogo";
+import { TeamLink } from "@/components/EntityLinks";
 import { formatGameDate, formatSeasonLabel } from "@/lib/format-date";
 import { Headshot } from "@/components/Headshot";
 import { getHeadshots } from "@/lib/headshots";
@@ -117,8 +118,11 @@ export async function RosterMovesCard({ teamAbbrev, moves, captainName }: { team
                     API doesn't say which, so neither do we. */}
                 {d.now.kind === "team" ? (
                   <>
-                    now with <TeamLogo abbrev={d.now.abbrev} size={16} gap={3} />
-                    {d.now.abbrev}
+                    now with{" "}
+                    <TeamLink abbrev={d.now.abbrev}>
+                      <TeamLogo abbrev={d.now.abbrev} size={16} gap={3} />
+                      {d.now.abbrev}
+                    </TeamLink>
                   </>
                 ) : d.now.kind === "system" ? `still with ${teamAbbrev}, off the current roster` : d.now.kind === "none" ? "not on an NHL roster" : "current status unavailable"} ·{" "}
                 {d.games} GP here in {last}

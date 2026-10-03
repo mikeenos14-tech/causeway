@@ -1,3 +1,4 @@
+import { TeamLink } from "@/components/EntityLinks";
 import type { EloOdds } from "@/lib/elo-odds";
 import { ELO } from "@/config/stats";
 
@@ -16,10 +17,10 @@ export function EloOddsBar({ odds, away, home }: { odds: EloOdds; away: { abbrev
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "var(--font-display)", fontSize: "1.6rem", marginBottom: 6 }}>
         <span style={{ color: away.abbrev === "BOS" ? "var(--gold)" : "var(--text-primary)" }}>
-          {away.abbrev} {a}%
+          <TeamLink abbrev={away.abbrev} /> {a}%
         </span>
         <span style={{ color: home.abbrev === "BOS" ? "var(--gold)" : "var(--text-primary)" }}>
-          {h}% {home.abbrev}
+          {h}% <TeamLink abbrev={home.abbrev} />
         </span>
       </div>
       <div role="img" aria-label={`${away.name} ${a} percent, ${home.name} ${h} percent`} style={{ display: "flex", height: 10, borderRadius: 999, overflow: "hidden", background: "var(--border)" }}>

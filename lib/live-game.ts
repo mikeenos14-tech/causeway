@@ -17,8 +17,10 @@ export type LiveGoal = {
   time: string; // elapsed in the period, "16:14"
   team: string; // abbrev
   scorer: string; // "JJ Peterka"
+  scorerId: number | null;
   scorerGoals: number | null; // season total after this goal
   assists: string[];
+  assistIds: (number | null)[];
   strength: "PP" | "SH" | null;
   emptyNet: boolean;
   awayScore: number;
@@ -49,6 +51,9 @@ export type LiveGame = {
   situation: string | null; // "BOS power play · 1:23"
   goals: LiveGoal[];
   fetchedAt: string;
+  // Goal scorers and assisters who have a player page (added by
+  // /api/live; a debut tonight may not yet). Names link only for these.
+  playersWithPages?: number[];
 };
 
 const ORD = ["", "1st", "2nd", "3rd"];
@@ -117,8 +122,10 @@ export function parseLanding(d: any): LiveGame {
         time: g.timeInPeriod ?? "",
         team: name(g.teamAbbrev) || g.teamAbbrev,
         scorer: `${name(g.firstName)} ${name(g.lastName)}`.trim(),
+        scorerId: typeof g.playerId === "number" ? g.playerId : null,
         scorerGoals: g.goalsToDate ?? null,
         assists: (g.assists ?? []).map((a: any) => `${name(a.firstName)} ${name(a.lastName)}`.trim()),
+        assistIds: (g.assists ?? []).map((a: any) => (typeof a.playerId === "number" ? a.playerId : null)),
         strength: g.strength === "pp" ? "PP" : g.strength === "sh" ? "SH" : null,
         emptyNet: g.goalModifier === "empty-net" || defendingGoalie === "0",
         awayScore: g.awayScore,

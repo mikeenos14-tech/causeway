@@ -7,6 +7,7 @@ import { ScoringSummary, periodName } from "@/components/ScoringSummary";
 import { WinProbChart } from "@/components/WinProbChart";
 import type { WpTimeline } from "@/lib/wp-game";
 import { goalWpaFromCurve } from "@/lib/wp-curve";
+import { TeamLink, PlayerLink } from "@/components/EntityLinks";
 
 // A game from before 2007-08, from the audited 1917-on history: the score,
 // who scored when, penalties, period scores and shots where they exist.
@@ -51,6 +52,7 @@ function groupPenalties(pens: HistoryGame["penalties"]) {
 }
 
 export function HistoryGameView({ g, nav, wp }: { g: HistoryGame; wp?: WpTimeline | null; nav: { prev: { id: number; date: string; label: string } | null; next: { id: number; date: string; label: string } | null } }) {
+  const linked = new Set(g.linkedPlayers);
   const homeWon = g.home.score > g.away.score;
   const awayWon = g.away.score > g.home.score;
   const end = g.finalState === "OT" ? (g.otPeriods > 1 ? `${g.otPeriods}OT` : "OT") : g.finalState === "SO" ? "SO" : g.finalState === "TIE" ? "Tie" : "";
@@ -132,7 +134,9 @@ export function HistoryGameView({ g, nav, wp }: { g: HistoryGame; wp?: WpTimelin
               <tbody>
                 {[g.away, g.home].map((t) => (
                   <tr key={t.code}>
-                    <td style={{ textAlign: "left", fontWeight: 600 }}>{t.code}</td>
+                    <td style={{ textAlign: "left", fontWeight: 600 }}>
+                      <TeamLink abbrev={t.code} />
+                    </td>
                     {g.periods.map((p) => {
                       const goals = t === g.home ? p.home : p.away;
                       const shots = t === g.home ? p.homeShots : p.awayShots;
@@ -157,8 +161,10 @@ export function HistoryGameView({ g, nav, wp }: { g: HistoryGame; wp?: WpTimelin
           {g.box.teams.map((t) => (
             <div key={t.teamId} style={{ marginBottom: "1.25rem" }}>
               <div style={{ display: "flex", alignItems: "center", fontWeight: 700, margin: "0 0 .5rem", fontSize: ".95rem" }}>
-                <TeamLogo abbrev={t.code} size={22} gap={6} />
-                {t.code}
+                <TeamLink abbrev={t.code} style={{ display: "flex", alignItems: "center" }}>
+                  <TeamLogo abbrev={t.code} size={22} gap={6} />
+                  {t.code}
+                </TeamLink>
               </div>
               <div style={{ ...CARD, padding: "0 1rem", overflowX: "auto" }}>
                 <table className="box-score-table" style={{ minWidth: 360 }}>
@@ -177,7 +183,9 @@ export function HistoryGameView({ g, nav, wp }: { g: HistoryGame; wp?: WpTimelin
                     {t.skaters.map((p) => (
                       <tr key={p.id}>
                         <td style={{ textAlign: "left" }}>
-                          {p.name}
+                          <PlayerLink id={p.id} hasPage={linked.has(p.id)}>
+                            {p.name}
+                          </PlayerLink>
                           {p.pos && <span style={{ color: "var(--text-muted)", fontSize: ".72rem", marginLeft: 6 }}>{p.pos}</span>}
                         </td>
                         <td>{p.g}</td>
@@ -205,7 +213,11 @@ export function HistoryGameView({ g, nav, wp }: { g: HistoryGame; wp?: WpTimelin
                     <tbody>
                       {t.goalies.map((x) => (
                         <tr key={x.id}>
-                          <td style={{ textAlign: "left" }}>{x.name}</td>
+                          <td style={{ textAlign: "left" }}>
+                            <PlayerLink id={x.id} hasPage={linked.has(x.id)}>
+                              {x.name}
+                            </PlayerLink>
+                          </td>
                           <td>{x.decision ?? "—"}</td>
                           <td>{x.sa ?? "—"}</td>
                           <td>{x.sv ?? "—"}</td>
@@ -240,8 +252,14 @@ export function HistoryGameView({ g, nav, wp }: { g: HistoryGame; wp?: WpTimelin
                   {periodName(p.period, "REG")} {p.time}
                 </span>
                 <span>
-                  {p.team && <span style={{ fontWeight: 700, marginRight: 6 }}>{p.team}</span>}
-                  {p.player ?? "Team penalty"}
+                  {p.team && <TeamLink abbrev={p.team} style={{ fontWeight: 700, marginRight: 6 }} />}
+                  {p.player ? (
+                    <PlayerLink id={p.playerId} hasPage={p.playerId != null && linked.has(p.playerId)}>
+                      {p.player}
+                    </PlayerLink>
+                  ) : (
+                    "Team penalty"
+                  )}
                   {p.infraction && (
                     <span style={{ color: "var(--text-secondary)" }}>
                       {" "}

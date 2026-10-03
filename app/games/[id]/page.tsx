@@ -14,6 +14,7 @@ import { HistoryGameView } from "@/components/HistoryGameView";
 import { getHistoryGame, getHistoryAdjacent, BOX_SCORES_FROM, BOS_TEAM_ID } from "@/lib/history-data";
 import { getPreview } from "@/lib/preview-data";
 import { TeamLogo } from "@/components/TeamLogo";
+import { TeamLink } from "@/components/EntityLinks";
 import { formatSavePct } from "@/lib/util/save-pct";
 import { ScoringSummary, scoringIsComplete } from "@/components/ScoringSummary";
 import { WinProbChart } from "@/components/WinProbChart";
@@ -191,18 +192,14 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <TeamLogo abbrev={game.away_abbrev} size={52} gap={0} />
               <div>
-              <Link href={`/teams/${game.away_abbrev}`} style={{ display: "block", fontSize: ".78rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 4 }}>
-                {game.away_abbrev}
-              </Link>
+              <TeamLink abbrev={game.away_abbrev} style={{ display: "block", fontSize: ".78rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 4 }} />
               <div style={{ fontFamily: "var(--font-display)", fontSize: "2.6rem", color: awayWon ? "var(--gold)" : "var(--text-secondary)" }}>{game.away_score}</div>
               </div>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <TeamLogo abbrev={game.home_abbrev} size={52} gap={0} />
               <div>
-              <Link href={`/teams/${game.home_abbrev}`} style={{ display: "block", fontSize: ".78rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 4 }}>
-                {game.home_abbrev}
-              </Link>
+              <TeamLink abbrev={game.home_abbrev} style={{ display: "block", fontSize: ".78rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 4 }} />
               <div style={{ fontFamily: "var(--font-display)", fontSize: "2.6rem", color: homeWon ? "var(--gold)" : "var(--text-secondary)" }}>{game.home_score}</div>
               </div>
             </div>
@@ -230,7 +227,7 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
               {seriesVerb(thisSeries.wins, thisSeries.losses + thisSeries.otl) === "tied"
                 ? `Series tied, ${TARGET_TEAM_ABBREV} ${thisSeries.wins}-${thisSeries.losses}-${thisSeries.otl}`
                 : `${TARGET_TEAM_ABBREV} ${seriesVerb(thisSeries.wins, thisSeries.losses + thisSeries.otl)} ${thisSeries.wins}-${thisSeries.losses}-${thisSeries.otl}`}
-              {" "}vs {opponentAbbrev}
+              {" "}vs <TeamLink abbrev={opponentAbbrev} />
             </div>
             <Link href={`/teams/${TARGET_TEAM_ABBREV}/series`} style={{ fontSize: ".8rem", fontWeight: 600, color: "var(--gold)", textDecoration: "none", display: "inline-block", marginTop: 8 }}>
               Full season series →
@@ -287,8 +284,10 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
           return (
             <section key={side} style={{ marginBottom: "2.5rem" }}>
               <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".02em", fontSize: "1.5rem", marginBottom: "1rem", display: "flex", alignItems: "center" }}>
-                <TeamLogo abbrev={abbrev} size={30} gap={8} />
-                {abbrev}
+                <TeamLink abbrev={abbrev} style={{ display: "flex", alignItems: "center" }}>
+                  <TeamLogo abbrev={abbrev} size={30} gap={8} />
+                  {abbrev}
+                </TeamLink>
               </h2>
               <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".85rem", fontVariantNumeric: "tabular-nums", minWidth: 560 }}>
@@ -404,15 +403,15 @@ function TeamStats({ lines }: { lines: TeamGameLine[] }) {
   return (
     <section style={{ marginBottom: "2.5rem", background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, padding: "1.1rem 1.5rem" }}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", fontSize: ".78rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8 }}>
-        <span>
+        <TeamLink abbrev={away.abbrev}>
           <TeamLogo abbrev={away.abbrev} size={18} gap={4} />
           {away.abbrev}
-        </span>
+        </TeamLink>
         <span>Team stats</span>
-        <span style={{ textAlign: "right" }}>
+        <TeamLink abbrev={home.abbrev} style={{ textAlign: "right" }}>
           <TeamLogo abbrev={home.abbrev} size={18} gap={4} />
           {home.abbrev}
-        </span>
+        </TeamLink>
       </div>
       {rows.map((r) => {
         const aLead = r.a! > r.h!;

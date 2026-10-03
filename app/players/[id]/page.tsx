@@ -14,6 +14,7 @@ import { Sparkline } from "@/components/Sparkline";
 import { LEADERSHIP } from "@/lib/leadership";
 import { getClubSeason, isFinal } from "@/lib/nhl-schedule";
 import { TeamLogo } from "@/components/TeamLogo";
+import { TeamLink, hasTeamPage } from "@/components/EntityLinks";
 import { Headshot } from "@/components/Headshot";
 import { getHeadshots } from "@/lib/headshots";
 import { formatSavePct } from "@/lib/util/save-pct";
@@ -111,7 +112,7 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
               {player.full_name}
             </h1>
             {/* A way back out: the player's most recent team and its roster. */}
-            {latestTeam && (
+            {hasTeamPage(latestTeam) && (
               <p style={{ margin: "0 0 .4rem", fontSize: ".9rem" }}>
                 <Link href={`/teams/${latestTeam}/roster`} style={{ color: "var(--gold)", textDecoration: "none", fontWeight: 600 }}>
                   <TeamLogo abbrev={latestTeam} size={20} gap={4} />
@@ -323,16 +324,14 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
                       </Link>
                     </td>
                     <td style={tdStyle("left")}>
-                      <Link href={`/teams/${g.team_abbrev}`} style={{ color: "inherit" }}>
-                        {g.team_abbrev}
-                      </Link>
+                      <TeamLink abbrev={g.team_abbrev} />
                     </td>
                     <td style={tdStyle("left")}>
                       {g.is_home ? "vs" : "@"}{" "}
-                      <Link href={`/teams/${g.opp_abbrev}`} style={{ color: "inherit", whiteSpace: "nowrap" }}>
+                      <TeamLink abbrev={g.opp_abbrev} style={{ whiteSpace: "nowrap" }}>
                         <TeamLogo abbrev={g.opp_abbrev} size={18} gap={4} />
                         {g.opp_abbrev}
-                      </Link>
+                      </TeamLink>
                     </td>
                     {isGoalie ? (
                       <>

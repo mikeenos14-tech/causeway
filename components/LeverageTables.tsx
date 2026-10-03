@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { BigGoal, LeaderRow } from "@/lib/leverage-data";
 import { formatWpa } from "@/lib/wp-curve";
+import { TeamLink } from "@/components/EntityLinks";
 import { goalContext } from "@/components/ClutchCard";
 
 // Tables for the Leverage Goals pages (app/history/leverage).
@@ -83,7 +84,7 @@ export function LeaderTable({ rows, linked, playoff = false, showTeam = true, so
               <td style={TD}>
                 <PlayerName id={r.playerId} name={r.name} linked={linked} />
               </td>
-              {showTeam && <td style={{ ...TD, color: "var(--text-secondary)" }} className="lev-col-optional">{r.team ?? "—"}</td>}
+              {showTeam && <td style={{ ...TD, color: "var(--text-secondary)" }} className="lev-col-optional">{r.team ? <TeamLink abbrev={r.team} /> : "—"}</td>}
               <td style={{ ...TD, textAlign: "right" }}>{r.goals}</td>
               <td style={{ ...TD, textAlign: "right", fontWeight: 700, color: playoff ? undefined : "var(--gold)" }} className={playoff ? "lev-col-optional" : undefined}>{r.lg.toFixed(1)}</td>
               {playoff && <td style={{ ...TD, textAlign: "right", fontWeight: 700, color: "var(--gold)" }}>{(r.playoffLg ?? 0).toFixed(2)}</td>}

@@ -8,6 +8,7 @@ import { LiveScoreboard } from "@/components/LiveScoreboard";
 
 import { AskAboutGame, gameQuestions } from "@/components/AskAboutGame";
 import { TeamLogo } from "@/components/TeamLogo";
+import { TeamLink } from "@/components/EntityLinks";
 import { EloOddsBar } from "@/components/EloOdds";
 
 const H2 = { margin: "0 0 .9rem", fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "1.35rem", textTransform: "uppercase" as const, letterSpacing: ".02em" };
@@ -36,7 +37,7 @@ export function GamePreview({ p }: { p: Preview }) {
           <TeamLogo abbrev={p.home.abbrev} size={56} gap={0} />
         </div>
         <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "clamp(2.2rem,5vw,3.6rem)", lineHeight: 0.96, textTransform: "uppercase", margin: "0 0 .8rem" }}>
-          {p.away.name} at {p.home.name}
+          <TeamLink abbrev={p.away.abbrev}>{p.away.name}</TeamLink> at <TeamLink abbrev={p.home.abbrev}>{p.home.name}</TeamLink>
         </h1>
         <p style={{ margin: 0, color: "var(--text-primary)" }}>
           {p.venue}
@@ -73,15 +74,15 @@ export function GamePreview({ p }: { p: Preview }) {
           </div>
           <div style={CARD}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", ...LABEL, marginBottom: 6 }}>
-              <span>
+              <TeamLink abbrev={p.away.abbrev}>
                 <TeamLogo abbrev={p.away.abbrev} size={18} gap={4} />
                 {p.away.abbrev}
-              </span>
+              </TeamLink>
               <span />
-              <span style={{ textAlign: "right" }}>
+              <TeamLink abbrev={p.home.abbrev} style={{ textAlign: "right" }}>
                 <TeamLogo abbrev={p.home.abbrev} size={18} gap={4} />
                 {p.home.abbrev}
-              </span>
+              </TeamLink>
             </div>
             {p.away.stats.map((s, i) => {
               const h = p.home.stats[i];
@@ -168,7 +169,9 @@ export function GamePreview({ p }: { p: Preview }) {
 function TeamPlayers({ t }: { t: PreviewTeam }) {
   return (
     <div style={CARD}>
-      <div style={{ ...LABEL, color: "var(--text-primary)", marginBottom: 8 }}>{t.fullName}</div>
+      <div style={{ ...LABEL, color: "var(--text-primary)", marginBottom: 8 }}>
+        <TeamLink abbrev={t.abbrev}>{t.fullName}</TeamLink>
+      </div>
       {t.milestonesTonight.length > 0 && (
         <div style={{ marginBottom: 10 }}>
           <div style={{ ...LABEL, color: "var(--gold)" }}>Within reach tonight</div>
