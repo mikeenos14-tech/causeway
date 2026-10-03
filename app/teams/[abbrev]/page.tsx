@@ -7,6 +7,14 @@ import { TeamLogo } from "@/components/TeamLogo";
 
 export const revalidate = 300;
 
+// No pages prebuilt at deploy; each renders on its first visit and is then
+// cached for the revalidate period above. A route with a [param] segment
+// ignores revalidate unless this is declared (found 2026-10-02: every
+// team page was rendering from scratch on every visit, 0.5-0.9 s).
+export async function generateStaticParams() {
+  return [];
+}
+
 // Any team's overview — the same dashboard as the homepage, in compact form
 // under the team's name. Season logic (which season each module shows, and
 // when it flips) lives in TeamDashboard.

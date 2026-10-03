@@ -22,6 +22,13 @@ import { skaterPace, goaliePace } from "@/lib/pace";
 import { getClutchCard } from "@/lib/leverage-data";
 import { ClutchCard } from "@/components/ClutchCard";
 
+// Cached 10 minutes (stats change at most a few times a night). A [param]
+// route only caches with generateStaticParams declared; none prebuilt.
+export const revalidate = 600;
+export async function generateStaticParams() {
+  return [];
+}
+
 export default async function PlayerDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const playerId = Number(id);

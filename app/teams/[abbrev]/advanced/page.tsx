@@ -10,6 +10,14 @@ import { RosterViewToggle } from "@/components/RosterViewToggle";
 
 export const revalidate = 300;
 
+// No pages prebuilt at deploy; each renders on its first visit and is then
+// cached for the revalidate period above. A route with a [param] segment
+// ignores revalidate unless this is declared (found 2026-10-02: every
+// team page was rendering from scratch on every visit, 0.5-0.9 s).
+export async function generateStaticParams() {
+  return [];
+}
+
 const STAT_DEFINITIONS = [
   { term: "ixG (Individual Expected Goals)", definition: "The expected-goal value of this player's own shots — what an average shooter would score from the same attempts." },
   { term: "G vs xG", definition: "Actual goals minus ixG. Positive means he's finishing above what his shot quality alone suggests; negative means below." },

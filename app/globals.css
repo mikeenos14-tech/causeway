@@ -408,3 +408,8 @@ html:not([data-banner-raised]) .banner-raise { animation: banner-raise 900ms cub
 .dest-card:hover .dest-card-arrow { transform: translateX(3px); }
 .dest-card-teaser { font-size: .85rem; color: var(--text-secondary); line-height: 1.4; }
 @media (prefers-reduced-motion: reduce) { .dest-card, .dest-card-arrow { transition: none; } .dest-card:hover { transform: none; } }
+
+/* Loading placeholders (app/loading.tsx) */
+.skeleton { border-radius: 10px; background: linear-gradient(90deg, var(--surface-1) 0%, rgba(255, 255, 255, .06) 50%, var(--surface-1) 100%); background-size: 200% 100%; animation: skeleton-shimmer 1.2s ease-in-out infinite; }
+@keyframes skeleton-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
