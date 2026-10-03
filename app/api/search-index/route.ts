@@ -18,7 +18,7 @@ export async function GET() {
     pool.query(
       `with appearances as (
          select player_id, game_id, team_id from skater_game_stats
-         union all select player_id, game_id, team_id from goalie_game_stats where coalesce(toi_seconds, 0) > 0),
+         union all select player_id, game_id, team_id from goalie_game_stats where coalesce(toi_seconds, 0) > 0 or decision is not null),
        stats as (
          select a.player_id, max(g.season_id) as last_season,
                 (array_agg(t.abbrev order by g.game_date desc))[1] as last_team, count(*)::int as gp,

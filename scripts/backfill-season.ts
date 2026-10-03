@@ -27,6 +27,7 @@ const API = "https://api-web.nhle.com/v1";
 // Neon instance), not the NHL API fetch. Kept anyway since it's free and
 // harmless; the real win is the multi-row batched inserts below.
 const BOXSCORE_BATCH_SIZE = 5;
+const RECHECK_HOURS = 48;
 
 // Real bug found live (2026-09-19): a request that stalls mid-flight
 // (found here after the host machine's network interface dropped and came
@@ -387,9 +388,18 @@ async function backfillOnce(teamAbbrev: string, seasonId: string) {
     `select id from games where id = any($1::int[])`,
     [games.map((g) => g.id)],
   );
+  //
+  // Except the last 48 hours: the NHL corrects box scores after a game
+  // (a goal's on-ice players, a shot taken back), and a game loaded the
+  // night it ended kept the first version forever. Found 2026-10-03:
+  // Winnipeg's plus-minus from the night before and a Guentzel shot from
+  // two nights before no longer matched the NHL. Re-fetched games are
+  // overwritten below, every stat, and players the NHL dropped are removed.
   const loadedIds = new Set(alreadyLoaded.map((r) => r.id));
-  const gamesToFetch = games.filter((g) => !loadedIds.has(g.id));
-  console.log(`${gamesToFetch.length} of ${games.length} completed games need fetching (${loadedIds.size} already loaded).`);
+  const recheckFrom = new Date(Date.now() - RECHECK_HOURS * 3600_000).toISOString().slice(0, 10);
+  const gamesToFetch = games.filter((g) => !loadedIds.has(g.id) || g.gameDate >= recheckFrom);
+  const rechecks = gamesToFetch.filter((g) => loadedIds.has(g.id)).length;
+  console.log(`${gamesToFetch.length - rechecks} of ${games.length} completed games need fetching (${loadedIds.size} already loaded; ${rechecks} from the last ${RECHECK_HOURS} hours re-checked).`);
 
   let count = 0;
   for (let i = 0; i < gamesToFetch.length; i += BOXSCORE_BATCH_SIZE) {
@@ -471,12 +481,18 @@ async function backfillOnce(teamAbbrev: string, seasonId: string) {
         // list the dressed backup with toi: null, which once loaded 4,848
         // empty phantom rows and made real one-goalie shutouts look shared.
         const played = (p: { toi?: string | null }) => !!p.toi && p.toi !== "00:00";
+        // Except a goalie sent in only for the shootout: 0:00 of ice time,
+        // but the NHL charges him the decision and counts the game played
+        // (Curtis Joseph, 2008-10-21; found 2026-10-03, those decisions had
+        // been pinned on the starter). He doesn't count toward sharing the
+        // net for a shutout, which is about the 65 minutes.
+        const appeared = (p: { toi?: string | null; decision?: string | null }) => played(p) || !!p.decision;
         const goaliesUsed = stats.goalies.filter(played).length;
         const oppFinal = side === "homeTeam" ? g.awayTeam.score : g.homeTeam.score;
         const ownFinal = side === "homeTeam" ? g.homeTeam.score : g.awayTeam.score;
         const oppScore = endType === "shootout" && oppFinal > ownFinal ? oppFinal - 1 : oppFinal; // less the shootout winner
         for (const p of stats.goalies) {
-          if (!played(p)) continue; // dressed but didn't play
+          if (!appeared(p)) continue; // dressed but didn't play
           await upsertPlayerFromBoxscore(p, teamId);
           // The API's own codes are authoritative: "O" is an OT/shootout
           // loss, "L" is always a loss. Two real bugs came from deriving
@@ -484,9 +500,12 @@ async function backfillOnce(teamAbbrev: string, seasonId: string) {
           // OT loss ("O") became a null decision; and "L" in an OT game
           // was rewritten to OTL, but that's either a playoff OT loss
           // (playoffs have no OTL) or the pulled-goalie-in-OT rule, where
-          // the NHL charges a regulation loss (MIN, 2024-03-30).
-          const decision =
-            p.decision === "W" ? "W" : p.decision === "O" ? (g.gameType === 3 ? "L" : "OTL") : p.decision === "L" ? "L" : null;
+          // the NHL charges a regulation loss (MIN, 2024-03-30). "O" in a
+          // playoff game is real too: the 2020 bubble's seeding round-robin
+          // used regular-season overtime, and the NHL charges those losses
+          // as OTL (Holtby, 2020-08-03); an ordinary playoff OT loss comes
+          // through as "L".
+          const decision = p.decision === "W" ? "W" : p.decision === "O" ? "OTL" : p.decision === "L" ? "L" : null;
           goalieRows.push([
             g.id,
             p.playerId,
@@ -497,7 +516,7 @@ async function backfillOnce(teamAbbrev: string, seasonId: string) {
             p.goalsAgainst ?? null,
             p.savePctg ?? null,
             timeToSeconds(p.toi),
-            goaliesUsed === 1 && oppScore === 0,
+            played(p) && goaliesUsed === 1 && oppScore === 0,
             "nhl-api",
           ]);
         }
@@ -524,7 +543,11 @@ async function backfillOnce(teamAbbrev: string, seasonId: string) {
         ["game_id", "player_id", "team_id", "goals", "assists", "shots", "hits", "blocked_shots", "giveaways", "takeaways", "penalty_minutes", "plus_minus", "pp_goals", "toi_seconds", "source"],
         skaterRows,
         "game_id, player_id",
-        "updated_at = now()",
+        // Every stat, so a re-checked game takes the NHL's corrections.
+        `team_id = excluded.team_id, goals = excluded.goals, assists = excluded.assists, shots = excluded.shots,
+         hits = excluded.hits, blocked_shots = excluded.blocked_shots, giveaways = excluded.giveaways,
+         takeaways = excluded.takeaways, penalty_minutes = excluded.penalty_minutes, plus_minus = excluded.plus_minus,
+         pp_goals = excluded.pp_goals, toi_seconds = excluded.toi_seconds, updated_at = now()`,
       );
       await client.query(skaterInsert.sql, skaterInsert.params);
     }
@@ -537,9 +560,25 @@ async function backfillOnce(teamAbbrev: string, seasonId: string) {
         "game_id, player_id",
         // Overwrite the derived fields on a re-run so a corrected mapping
         // actually heals existing rows (same lesson as the player-bio upsert).
-        "decision = excluded.decision, shutout = excluded.shutout, updated_at = now()",
+        `team_id = excluded.team_id, decision = excluded.decision, shots_against = excluded.shots_against,
+         saves = excluded.saves, goals_against = excluded.goals_against, save_pct = excluded.save_pct,
+         toi_seconds = excluded.toi_seconds, shutout = excluded.shutout, updated_at = now()`,
       );
       await client.query(goalieInsert.sql, goalieInsert.params);
+    }
+
+    // A re-checked game: anyone the NHL no longer lists for it goes. Only
+    // when the box score came back with both teams' goalies, so a partial
+    // response can't empty a game.
+    for (let j = 0; j < batch.length; j++) {
+      const pbs = boxscores[j].playerByGameStats;
+      if (!loadedIds.has(batch[j].id) || !pbs?.homeTeam?.goalies?.length || !pbs?.awayTeam?.goalies?.length) continue;
+      const id = batch[j].id;
+      const sk = skaterRows.filter((r) => r[0] === id).map((r) => r[1]);
+      const gk = goalieRows.filter((r) => r[0] === id).map((r) => r[1]);
+      const a = await client.query(`delete from skater_game_stats where game_id = $1 and not (player_id = any($2::int[]))`, [id, sk]);
+      const b = await client.query(`delete from goalie_game_stats where game_id = $1 and not (player_id = any($2::int[]))`, [id, gk]);
+      if (a.rowCount || b.rowCount) console.log(`  ${id}: removed ${a.rowCount} skater and ${b.rowCount} goalie rows the NHL no longer lists`);
     }
   }
 
@@ -622,7 +661,7 @@ async function backfillOnce(teamAbbrev: string, seasonId: string) {
   }
 
   console.log(
-    `Done. ${gamesToFetch.length} new games fetched (${games.length} completed total), ${seenPlayers.size} players touched, ${standingsWritten} standings rows loaded.`,
+    `Done. ${gamesToFetch.length - rechecks} new games fetched, ${rechecks} re-checked (${games.length} completed total), ${seenPlayers.size} players touched, ${standingsWritten} standings rows loaded.`,
   );
   } finally {
     // Always release the connection, success or failure — the missing

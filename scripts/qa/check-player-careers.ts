@@ -20,10 +20,10 @@ async function nhlCareers(kind: "skater" | "goalie", gameTypeId: 2 | 3): Promise
   for (let start = 0; ; start += 100) {
     const url = `https://api.nhle.com/stats/rest/en/${kind}/summary?isAggregate=true&isGame=false&start=${start}&limit=100&sort=${sort}&cayenneExp=${exp}`;
     let body: { data: Row[]; total: number } | null = null;
-    for (let attempt = 0; attempt < 4 && !body; attempt++) {
-      const res = await fetch(url);
-      if (res.ok) body = await res.json();
-      else await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+    for (let attempt = 0; attempt < 8 && !body; attempt++) {
+      const res = await fetch(url).catch(() => null);
+      if (res?.ok) body = await res.json();
+      else await new Promise((r) => setTimeout(r, 3000 * (attempt + 1))); // the stats API drops some under load
     }
     if (!body) throw new Error(`NHL stats API failed: ${url}`);
     for (const r of body.data) out.set(Number(r.playerId), r);

@@ -177,7 +177,9 @@ export async function verifyTeam(client: Client, abbrev: string): Promise<Verify
   // rows for dressed-but-unused backups (toi null) were found in 2007-09:
   // they inflated goalie GP and hid 333 real shutouts.
   const { rows: phantoms } = await client.query(
-    `select count(*) as n from goalie_game_stats where team_id = $1 and coalesce(toi_seconds, 0) = 0`,
+    // A shootout-only goalie has no ice time but the NHL's decision: real.
+    // So is a row added from the NHL's game log (scripts/repair-log-only-appearances.ts).
+    `select count(*) as n from goalie_game_stats where team_id = $1 and coalesce(toi_seconds, 0) = 0 and decision is null and source <> 'nhl-gamelog'`,
     [team.id],
   );
   if (Number(phantoms[0].n) > 0) {

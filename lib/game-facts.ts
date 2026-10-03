@@ -165,13 +165,15 @@ export async function buildGameFacts(client: Client, gameId: number, targetAbbre
     `select t.abbrev, p.full_name, gs.saves, gs.shots_against, gs.decision, gs.toi_seconds, gs.shutout,
             count(*) over (partition by gs.team_id) as goalies_used
      from goalie_game_stats gs join players p on p.id = gs.player_id join teams t on t.id = gs.team_id
-     where gs.game_id = $1 and coalesce(gs.toi_seconds, 0) > 0 order by gs.toi_seconds desc`,
+     where gs.game_id = $1 and (coalesce(gs.toi_seconds, 0) > 0 or gs.decision is not null) order by gs.toi_seconds desc`,
     [gameId],
   );
   for (const abbrev of [g.away_abbrev, g.home_abbrev]) {
     const gs = goalies.filter((r) => r.abbrev === abbrev);
     if (!gs.length) continue;
     const describe = (r: (typeof gs)[number]) => {
+      // In only for the shootout: the NHL charges him the decision.
+      if (!r.toi_seconds) return `${r.full_name} came in for the shootout only and was charged the ${r.decision === "W" ? "win" : "shootout loss"}`;
       const mins = `${Math.floor(r.toi_seconds / 60)}:${String(r.toi_seconds % 60).padStart(2, "0")}`;
       const dec = r.decision ? `, ${r.decision === "W" ? "win" : r.decision === "OTL" ? "overtime/shootout loss" : "loss"}` : ", no decision";
       return `${r.full_name} made ${r.saves} saves on ${r.shots_against} shots in ${mins}${dec}${r.shutout ? ", shutout" : ""}`;

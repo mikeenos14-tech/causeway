@@ -16,7 +16,8 @@ export async function getPlayer(playerId: number) {
 export type GameType = "regular" | "playoff";
 
 // Full careers: the NHL's history tables before 2007-08 (nhl_skater_games
-// rows marked played, nhl_goalie_games) joined to the site's own tables
+// rows marked played, nhl_goalie_games; games from nhl_stat_games, which
+// adds the 1988 Final's suspended game, whose stats count) joined to the site's own tables
 // from 2007-08 on, which carry more (ice time, hits). Checked against the
 // NHL's official career totals by scripts/qa/check-player-careers.ts.
 // Before 2007-08 there's no ice time, and plus-minus and shots exist from
@@ -28,7 +29,7 @@ export async function getSkaterCareerTotals(playerId: number, gameType: GameType
     `select sum(games)::int as games, sum(goals)::int as goals, sum(assists)::int as assists, sum(goals + assists)::int as points
      from (
        select count(*) games, coalesce(sum(s.goals), 0) goals, coalesce(sum(s.assists), 0) assists
-       from nhl_skater_games s join nhl_games g on g.id = s.game_id
+       from nhl_skater_games s join nhl_stat_games g on g.id = s.game_id
        where s.player_id = $1 and g.game_type = $2 and s.played and g.season < $3
        union all
        select count(*), coalesce(sum(s.goals), 0), coalesce(sum(s.assists), 0)
@@ -48,9 +49,10 @@ const historyGoalie = (gameType: string, season: string) => `
   select x.game_id, g.season, x.team_id, x.decision, x.shots_against, x.saves,
          ((case when x.team_id = g.home_team_id then g.away_score else g.home_score end)
             - (case when g.final_state = 'SO' and (case when x.team_id = g.home_team_id then g.away_score > g.home_score else g.home_score > g.away_score end) then 1 else 0 end) = 0
+          and coalesce(x.toi_sec, 1) > 0
           and not exists (select 1 from nhl_goalie_games o where o.game_id = x.game_id and o.team_id = x.team_id and o.player_id <> x.player_id and coalesce(o.toi_sec, 1) > 0)) as shutout
-  from nhl_goalie_games x join nhl_games g on g.id = x.game_id
-  where x.player_id = $1 and g.game_type = ${gameType} and g.season < ${season} and coalesce(x.toi_sec, 1) > 0`;
+  from nhl_goalie_games x join nhl_stat_games g on g.id = x.game_id
+  where x.player_id = $1 and g.game_type = ${gameType} and g.season < ${season} and (coalesce(x.toi_sec, 1) > 0 or x.decision is not null)`;
 
 export async function getGoalieCareerTotals(playerId: number, gameType: GameType = "regular") {
   const { rows } = await pool.query(
@@ -85,7 +87,7 @@ export async function getSkaterSeasonSplits(playerId: number) {
             case when count(h.plus_minus) = count(*) then sum(h.plus_minus)::int end as plus_minus, sum(h.pim)::int as pim,
             case when count(h.sog) = count(*) then sum(h.sog)::int end as shots, null::int as toi_seconds_total
      from (select g.season, s.team_id, s.goals, s.assists, s.plus_minus, s.pim, s.sog
-           from nhl_skater_games s join nhl_games g on g.id = s.game_id
+           from nhl_skater_games s join nhl_stat_games g on g.id = s.game_id
            where s.player_id = $1 and g.game_type = 'regular' and s.played and g.season < $2) h
      join nhl_teams t on t.id = h.team_id
      group by h.season, t.tri_code

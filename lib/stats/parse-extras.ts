@@ -22,9 +22,13 @@ export function goalieRows(box: any, g: { id: number; game_type: string; home_te
     // most ice time.
     const flagged = played.find((x) => x.starter === true);
     const starter = flagged ?? [...played].sort((a, b) => (toSec(b.toi) ?? 0) - (toSec(a.toi) ?? 0))[0];
-    for (const x of played) {
-      // "O" is an OT/SO loss; playoffs have no OTL (same rule as the site).
-      const d = x.decision === "W" ? "W" : x.decision === "L" ? "L" : x.decision === "O" ? (g.game_type === "playoff" ? "L" : "OTL") : x.decision === "T" ? "T" : null;
+    // A goalie sent in only for the shootout has 0:00 but the NHL's
+    // decision and a game played (Kari Lehtonen, 2006-10-26), so he's an
+    // appearance too (stored with toi 0, never a starter).
+    for (const x of goalies.filter((y) => played.includes(y) || y.decision)) {
+      // The NHL's own code, as on the site: "O" is an OT/SO loss, charged
+      // in a playoff game only in the 2020 bubble's round-robin.
+      const d = x.decision === "W" ? "W" : x.decision === "L" ? "L" : x.decision === "O" ? "OTL" : x.decision === "T" ? "T" : null;
       out.push([g.id, x.playerId, teamId, x === starter, d, toSec(x.toi), x.shotsAgainst ?? null, x.saves ?? null, x.goalsAgainst ?? null]);
     }
   }

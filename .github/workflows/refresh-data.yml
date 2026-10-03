@@ -103,7 +103,7 @@ jobs:
   refresh-moneypuck:
     if: github.event.schedule == '23 14 * * *' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -158,6 +158,25 @@ jobs:
         run: npx tsx scripts/qa/check-rosters.ts https://causeway-ten.vercel.app
       - name: Player-level xG/Corsi (MoneyPuck), current season only
         run: npx tsx scripts/backfill-moneypuck-players.ts ${{ steps.season.outputs.year }} ${{ steps.season.outputs.year }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      # Every player's season totals, every season since 1917-18 and every
+      # player (Ask reads them all), against the NHL's own: GP, goals,
+      # assists, goalie decisions. Found the shootout-only goalies, resumed
+      # games and the 1988 blackout game (2026-10-03). Known NHL
+      # self-contradictions are listed in the script; anything else fails.
+      - name: Audit every player's season totals against the NHL
+        if: always()
+        timeout-minutes: 50
+        run: npx tsx scripts/qa/audit-season-totals.ts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      # Every player page's career totals (what the page itself computes)
+      # against the NHL's official career totals.
+      - name: Check every player page's career totals against the NHL
+        if: always()
+        timeout-minutes: 40
+        run: npx tsx scripts/qa/check-player-careers.ts
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
