@@ -9,10 +9,13 @@ import { WinProbChart } from "@/components/WinProbChart";
 import { TeamLink, PlayerLink } from "@/components/EntityLinks";
 import { goalWpaFromCurve, formatWpa } from "@/lib/wp-curve";
 
-// Live: every 5 s (with the 5 s edge cache, a goal reaches the screen in
-// about 10-15 s after the NHL posts it; it was up to ~50 s with 20 s polls
-// and 15 s caches, owner report 2026-10-02). Before puck drop: every 20 s.
-const POLL_LIVE_MS = 5_000;
+// Live: every 2 s, with a 1 s edge cache and no server cache, so a goal
+// reaches the screen about 1-4 s after the NHL posts it. It was 8-9 s
+// behind the NHL's feed (measured 2026-10-03) with 5 s polls and 5 s caches
+// at two layers, and up to ~50 s before that (owner report 2026-10-02). The
+// NHL's free feed itself updates every 10-20 s; its endpoints are within
+// a second of each other (raced, 2026-10-03). Before puck drop: every 20 s.
+const POLL_LIVE_MS = 2_000;
 const POLL_MS = 20_000;
 const WINDOW_BEFORE_MS = 15 * 60_000; // start polling 15 min before puck drop
 const WINDOW_AFTER_MS = 6 * 3600_000; // give up 6h after (a long OT game is ~3.5h)
