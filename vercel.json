@@ -1,4 +1,3 @@
 {
-  "regions": ["cle1"],
-  "crons": [{ "path": "/api/cron/load-finished", "schedule": "*/5 * * * *" }]
+  "regions": ["cle1"]
 }
