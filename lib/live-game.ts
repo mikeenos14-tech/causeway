@@ -159,12 +159,16 @@ export function parseLanding(d: any): LiveGame {
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-// How long the edge and our server reuse one NHL response (was 15).
-export const LIVE_CACHE_SECONDS = 5;
+// How long the edge shares one response (was 15, then 5). Our server
+// always asks the NHL fresh: a server-side cache stacked on the edge's
+// added its own delay (measured 8-9 s behind the NHL's feed, 2026-10-03,
+// with 5 s at each layer). With 1 s at the edge, the NHL still sees about
+// one request a second per game however many people are watching.
+export const LIVE_CACHE_SECONDS = 1;
 
 export async function fetchLiveGame(gameId: number): Promise<LiveGame | null> {
   try {
-    const res = await fetch(`${API}/gamecenter/${gameId}/landing`, { next: { revalidate: LIVE_CACHE_SECONDS } });
+    const res = await fetch(`${API}/gamecenter/${gameId}/landing`, { cache: "no-store" });
     if (!res.ok) return null;
     return parseLanding(await res.json());
   } catch {

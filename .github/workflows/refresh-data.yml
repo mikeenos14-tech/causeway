@@ -109,6 +109,15 @@ jobs:
         run: npx tsx scripts/verify-all.ts
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      # Tells the site this job ran (/api/health alerts after 3 hours
+      # without one: GitHub dropped eight hours of runs on 2026-10-03).
+      - name: Record that the hourly refresh ran
+        if: always()
+        timeout-minutes: 2
+        continue-on-error: true
+        run: npx tsx scripts/ops-heartbeat.ts hourly-refresh ${{ job.status == 'success' && 'ok' || 'failed' }} "GitHub run ${{ github.run_id }}"
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
   refresh-moneypuck:
     if: github.event.schedule == '23 14 * * *' || github.event_name == 'workflow_dispatch'

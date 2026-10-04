@@ -17,6 +17,7 @@
 //    backfill is a later, separate concern).
 
 import { Client } from "pg";
+import { gameRows, writeGameRows, writeStandings, type GameRows } from "../lib/game-rows";
 
 const API = "https://api-web.nhle.com/v1";
 
@@ -57,33 +58,6 @@ async function fetchJson<T>(url: string, timeoutMs = 30000): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-// Builds a single multi-row INSERT so a batch of rows costs one DB round
-// trip instead of one per row — the actual bottleneck this script has,
-// confirmed by measurement (see BOXSCORE_BATCH_SIZE above). All values
-// stay bound parameters; nothing here is string-interpolated into SQL.
-function buildMultiRowInsert(
-  table: string,
-  columns: string[],
-  rows: unknown[][],
-  conflictTarget: string,
-  conflictUpdate: string,
-): { sql: string; params: unknown[] } {
-  const params: unknown[] = [];
-  const valueRows = rows.map((row) => `(${row.map((v) => `$${params.push(v)}`).join(", ")})`);
-  return {
-    sql: `insert into ${table} (${columns.join(", ")})
-          values ${valueRows.join(", ")}
-          on conflict (${conflictTarget}) do update set ${conflictUpdate}`,
-    params,
-  };
-}
-
-function timeToSeconds(mmss: string | undefined): number | null {
-  if (!mmss) return null;
-  const [m, s] = mmss.split(":").map(Number);
-  return m * 60 + s;
-}
-
 function buildTeamName(placeName: string, commonName: string): string {
   // Most teams: placeName ("Boston") + commonName ("Bruins") -> "Boston
   // Bruins". A placeholder identity like "Utah Hockey Club" already has
@@ -94,12 +68,6 @@ function buildTeamName(placeName: string, commonName: string): string {
   // case another team ever gets a similar placeholder identity.
   if (commonName.toLowerCase().startsWith(placeName.toLowerCase())) return commonName;
   return `${placeName} ${commonName}`;
-}
-
-function gameEndType(periodType: string | undefined): string {
-  if (periodType === "SO") return "shootout";
-  if (periodType === "OT") return "overtime";
-  return "regulation";
 }
 
 // Real bug found live during the full-league rollout (2026-09-19): a
@@ -408,178 +376,17 @@ async function backfillOnce(teamAbbrev: string, seasonId: string) {
       batch.map((g) => fetchJson<any>(`${API}/gamecenter/${g.id}/boxscore`)),
     );
 
-    const gameRows: unknown[][] = [];
-    const skaterRows: unknown[][] = [];
-    const goalieRows: unknown[][] = [];
-
+    // Rows for each game, built by lib/game-rows.ts (shared with the
+    // site's load-on-final, so the rules live in one place).
+    const built: GameRows[] = [];
     for (let j = 0; j < batch.length; j++) {
-      const g = batch[j];
-      const box = boxscores[j];
-      const endType = gameEndType(g.gameOutcome?.lastPeriodType);
-      const series = gameSeriesInfo.get(g.id);
-      gameRows.push([
-        g.id,
-        seasonId,
-        g.gameDate,
-        g.startTimeUTC,
-        g.gameType === 3 ? "playoff" : "regular",
-        endType,
-        series?.seriesId ?? null,
-        series?.gameNumber ?? null,
-        g.homeTeam.id,
-        g.awayTeam.id,
-        g.homeTeam.score,
-        g.awayTeam.score,
-        g.venue.default,
-        "nhl-api",
-      ]);
-
-      for (const side of ["homeTeam", "awayTeam"] as const) {
-        const teamId = side === "homeTeam" ? g.homeTeam.id : g.awayTeam.id;
-        const stats = box.playerByGameStats?.[side];
-        if (!stats) continue;
-
-        // A skater "played" only with real ice time, like goalies below. A
-        // dressed skater who never took a shift is listed with 0:00 and no
-        // stats; the NHL doesn't count it as a game played (63 such rows
-        // once each added a phantom GP, all checked against the NHL's game
-        // logs on 2026-10-01).
-        const skated = (p: { toi?: string | null }) => !!p.toi && p.toi !== "00:00";
-        for (const p of [...stats.forwards, ...stats.defense]) {
-          if (!skated(p)) continue;
-          await upsertPlayerFromBoxscore(p, teamId);
-          skaterRows.push([
-            g.id,
-            p.playerId,
-            teamId,
-            p.goals ?? 0,
-            p.assists ?? 0,
-            p.sog ?? null,
-            p.hits ?? null,
-            p.blockedShots ?? null,
-            p.giveaways ?? null,
-            p.takeaways ?? null,
-            p.pim ?? null,
-            p.plusMinus ?? null,
-            p.powerPlayGoals ?? null,
-            timeToSeconds(p.toi),
-            "nhl-api",
-          ]);
-        }
-
-        // A shutout is credited only to a goalie who played the whole game
-        // alone with the opponent held scoreless in regulation and
-        // overtime. The shootout winner counts in the final score but
-        // isn't a goal against: a 0-0 game lost in a shootout is still a
-        // shutout (the NHL credits it; found 2026-10-02 checking careers
-        // against the NHL, 53 such games had been missed). Empty-net goals
-        // do count against the team, so this uses the team's score, not
-        // the goalie's own goals against. Found live: deriving it
-        // from the goalie's own goals_against=0 credited 1,178 relief
-        // appearances league-wide (e.g. a 6-minute mop-up stint).
-        // A goalie "played" only with real ice time. Older seasons (2007-09)
-        // list the dressed backup with toi: null, which once loaded 4,848
-        // empty phantom rows and made real one-goalie shutouts look shared.
-        const played = (p: { toi?: string | null }) => !!p.toi && p.toi !== "00:00";
-        // Except a goalie sent in only for the shootout: 0:00 of ice time,
-        // but the NHL charges him the decision and counts the game played
-        // (Curtis Joseph, 2008-10-21; found 2026-10-03, those decisions had
-        // been pinned on the starter). He doesn't count toward sharing the
-        // net for a shutout, which is about the 65 minutes.
-        const appeared = (p: { toi?: string | null; decision?: string | null }) => played(p) || !!p.decision;
-        const goaliesUsed = stats.goalies.filter(played).length;
-        const oppFinal = side === "homeTeam" ? g.awayTeam.score : g.homeTeam.score;
-        const ownFinal = side === "homeTeam" ? g.homeTeam.score : g.awayTeam.score;
-        const oppScore = endType === "shootout" && oppFinal > ownFinal ? oppFinal - 1 : oppFinal; // less the shootout winner
-        for (const p of stats.goalies) {
-          if (!appeared(p)) continue; // dressed but didn't play
-          await upsertPlayerFromBoxscore(p, teamId);
-          // The API's own codes are authoritative: "O" is an OT/shootout
-          // loss, "L" is always a loss. Two real bugs came from deriving
-          // it instead: only "L" was recognized, so every regular-season
-          // OT loss ("O") became a null decision; and "L" in an OT game
-          // was rewritten to OTL, but that's either a playoff OT loss
-          // (playoffs have no OTL) or the pulled-goalie-in-OT rule, where
-          // the NHL charges a regulation loss (MIN, 2024-03-30). "O" in a
-          // playoff game is real too: the 2020 bubble's seeding round-robin
-          // used regular-season overtime, and the NHL charges those losses
-          // as OTL (Holtby, 2020-08-03); an ordinary playoff OT loss comes
-          // through as "L".
-          const decision = p.decision === "W" ? "W" : p.decision === "O" ? "OTL" : p.decision === "L" ? "L" : null;
-          goalieRows.push([
-            g.id,
-            p.playerId,
-            teamId,
-            decision,
-            p.shotsAgainst ?? null,
-            p.saves ?? null,
-            p.goalsAgainst ?? null,
-            p.savePctg ?? null,
-            timeToSeconds(p.toi),
-            played(p) && goaliesUsed === 1 && oppScore === 0,
-            "nhl-api",
-          ]);
-        }
-      }
-
+      const rows = gameRows(seasonId, batch[j], boxscores[j], gameSeriesInfo.get(batch[j].id));
+      for (const { p, teamId } of rows.players) await upsertPlayerFromBoxscore(p, teamId);
+      built.push(rows);
       count++;
       if (count % 10 === 0) console.log(`  ${count}/${gamesToFetch.length} games loaded`);
     }
-
-    const gamesInsert = buildMultiRowInsert(
-      "games",
-      ["id", "season_id", "game_date", "game_datetime", "game_type", "game_end_type", "series_id", "series_game_number", "home_team_id", "away_team_id", "home_score", "away_score", "venue", "source"],
-      gameRows,
-      "id",
-      `home_score = excluded.home_score, away_score = excluded.away_score,
-       game_end_type = excluded.game_end_type, series_id = excluded.series_id,
-       series_game_number = excluded.series_game_number, updated_at = now()`,
-    );
-    await client.query(gamesInsert.sql, gamesInsert.params);
-
-    if (skaterRows.length > 0) {
-      const skaterInsert = buildMultiRowInsert(
-        "skater_game_stats",
-        ["game_id", "player_id", "team_id", "goals", "assists", "shots", "hits", "blocked_shots", "giveaways", "takeaways", "penalty_minutes", "plus_minus", "pp_goals", "toi_seconds", "source"],
-        skaterRows,
-        "game_id, player_id",
-        // Every stat, so a re-checked game takes the NHL's corrections.
-        `team_id = excluded.team_id, goals = excluded.goals, assists = excluded.assists, shots = excluded.shots,
-         hits = excluded.hits, blocked_shots = excluded.blocked_shots, giveaways = excluded.giveaways,
-         takeaways = excluded.takeaways, penalty_minutes = excluded.penalty_minutes, plus_minus = excluded.plus_minus,
-         pp_goals = excluded.pp_goals, toi_seconds = excluded.toi_seconds, updated_at = now()`,
-      );
-      await client.query(skaterInsert.sql, skaterInsert.params);
-    }
-
-    if (goalieRows.length > 0) {
-      const goalieInsert = buildMultiRowInsert(
-        "goalie_game_stats",
-        ["game_id", "player_id", "team_id", "decision", "shots_against", "saves", "goals_against", "save_pct", "toi_seconds", "shutout", "source"],
-        goalieRows,
-        "game_id, player_id",
-        // Overwrite the derived fields on a re-run so a corrected mapping
-        // actually heals existing rows (same lesson as the player-bio upsert).
-        `team_id = excluded.team_id, decision = excluded.decision, shots_against = excluded.shots_against,
-         saves = excluded.saves, goals_against = excluded.goals_against, save_pct = excluded.save_pct,
-         toi_seconds = excluded.toi_seconds, shutout = excluded.shutout, updated_at = now()`,
-      );
-      await client.query(goalieInsert.sql, goalieInsert.params);
-    }
-
-    // A re-checked game: anyone the NHL no longer lists for it goes. Only
-    // when the box score came back with both teams' goalies, so a partial
-    // response can't empty a game.
-    for (let j = 0; j < batch.length; j++) {
-      const pbs = boxscores[j].playerByGameStats;
-      if (!loadedIds.has(batch[j].id) || !pbs?.homeTeam?.goalies?.length || !pbs?.awayTeam?.goalies?.length) continue;
-      const id = batch[j].id;
-      const sk = skaterRows.filter((r) => r[0] === id).map((r) => r[1]);
-      const gk = goalieRows.filter((r) => r[0] === id).map((r) => r[1]);
-      const a = await client.query(`delete from skater_game_stats where game_id = $1 and not (player_id = any($2::int[]))`, [id, sk]);
-      const b = await client.query(`delete from goalie_game_stats where game_id = $1 and not (player_id = any($2::int[]))`, [id, gk]);
-      if (a.rowCount || b.rowCount) console.log(`  ${id}: removed ${a.rowCount} skater and ${b.rowCount} goalie rows the NHL no longer lists`);
-    }
+    for (const note of await writeGameRows(client, built, loadedIds)) console.log(`  ${note}`);
   }
 
   // 7. One standings snapshot per team per season — not per team per date.
@@ -614,51 +421,8 @@ async function backfillOnce(teamAbbrev: string, seasonId: string) {
     }
   }
 
-  let standingsWritten = 0;
-  for (const t of standings.standings) {
-    const teamId = standingsIds.get(t.teamAbbrev.default);
-    if (!teamId) {
-      console.warn(`  no team id for ${t.teamAbbrev.default}, skipping standings row`);
-      continue;
-    }
-    await client.query(
-      `insert into standings_snapshots
-         (team_id, season_id, snapshot_date, division, conference, games_played, wins, losses,
-          ot_losses, points, points_pct, goals_for, goals_against, division_rank, conference_rank,
-          league_rank, source)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'nhl-api')
-       on conflict (team_id, season_id) do update set
-         snapshot_date = excluded.snapshot_date, division = excluded.division,
-         conference = excluded.conference, games_played = excluded.games_played,
-         wins = excluded.wins, losses = excluded.losses, ot_losses = excluded.ot_losses,
-         points = excluded.points, points_pct = excluded.points_pct,
-         goals_for = excluded.goals_for, goals_against = excluded.goals_against,
-         division_rank = excluded.division_rank, conference_rank = excluded.conference_rank,
-         league_rank = excluded.league_rank, updated_at = now()
-       where excluded.games_played > standings_snapshots.games_played
-          or (excluded.games_played = standings_snapshots.games_played
-              and excluded.snapshot_date >= standings_snapshots.snapshot_date)`,
-      [
-        teamId,
-        seasonId,
-        t.date,
-        t.divisionName,
-        t.conferenceName,
-        t.gamesPlayed,
-        t.wins,
-        t.losses,
-        t.otLosses,
-        t.points,
-        t.pointPctg,
-        t.goalFor,
-        t.goalAgainst,
-        t.divisionSequence,
-        t.conferenceSequence,
-        t.leagueSequence,
-      ],
-    );
-    standingsWritten++;
-  }
+  const { written: standingsWritten, skipped: noId } = await writeStandings(client, seasonId, standings.standings, standingsIds);
+  for (const abbrev of noId) console.warn(`  no team id for ${abbrev}, skipping standings row`);
 
   console.log(
     `Done. ${gamesToFetch.length - rechecks} new games fetched, ${rechecks} re-checked (${games.length} completed total), ${seenPlayers.size} players touched, ${standingsWritten} standings rows loaded.`,
