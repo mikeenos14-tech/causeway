@@ -165,6 +165,15 @@ jobs:
       # box scores and careers plus standings and the Bruins' season. Runs
       # at 10 AM ET, when no games are in progress. Fails the run (GitHub
       # emails) on any difference.
+      # Any finished game not loaded yet goes in first: GitHub started this
+      # job six hours late on 2026-10-04, after an afternoon game ended but
+      # before anything loaded it, and every check below failed on it.
+      - name: Load any finished games
+        timeout-minutes: 5
+        continue-on-error: true
+        run: npx tsx scripts/load-finished-games.ts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
       - name: Cross-check the site's data against the NHL
         timeout-minutes: 15
         run: npx tsx scripts/qa/cross-check-nhl.ts

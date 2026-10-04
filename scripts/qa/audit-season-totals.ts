@@ -10,6 +10,7 @@
 // Usage: npx tsx --env-file=.env.local scripts/qa/audit-season-totals.ts [--from 20052006]
 
 import { pool } from "../../lib/db";
+import { gamesInProgress } from "./games-in-progress";
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- the NHL feed is untyped JSON */
 async function nhl(kind: "skater" | "goalie", season: string, gameTypeId: 2 | 3): Promise<any[]> {
@@ -63,6 +64,14 @@ const OURS_GOALIES = `
     `select distinct season from nhl_games where season >= $1 union select distinct season_id from games where season_id >= $1 order by 1`,
     [from],
   );
+  // A game under way (or just ended, not yet official) makes this season's
+  // totals differ for no real reason: check every other season and say so.
+  const busy = await gamesInProgress();
+  if (busy.length) {
+    const current = seasons.at(-1)?.season;
+    seasons.splice(seasons.length - 1, 1);
+    console.log(`Skipping ${current}: games in progress (${busy.join(", ")}); every other season checked.`);
+  }
   const diffs: string[] = [];
   const known: string[] = [];
   for (const { season } of seasons) {

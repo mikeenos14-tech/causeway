@@ -9,6 +9,7 @@
 // Run when no games are in progress (live games make the two sides differ).
 
 import { pool } from "../../lib/db";
+import { gamesInProgress } from "./games-in-progress";
 import { getSkaterCareerTotals, getGoalieCareerTotals, getSkaterSeasonSplits, getGoalieSeasonSplits } from "../../lib/player-detail-data";
 
 type Row = Record<string, number | string | null>;
@@ -34,6 +35,14 @@ async function nhlCareers(kind: "skater" | "goalie", gameTypeId: 2 | 3): Promise
 }
 
 (async () => {
+  // Careers include this season, which a game under way makes differ for
+  // no real reason; skip (and say so) rather than fail.
+  const busy = await gamesInProgress();
+  if (busy.length) {
+    console.log(`Skipped: games in progress (${busy.join(", ")}). Run again once they're official.`);
+    await pool.end();
+    return;
+  }
   const onlyPre = process.argv.includes("--only-pre2007");
   const [skR, skP, gkR, gkP] = [await nhlCareers("skater", 2), await nhlCareers("skater", 3), await nhlCareers("goalie", 2), await nhlCareers("goalie", 3)];
   console.log(`NHL careers: ${skR.size} skaters, ${gkR.size} goalies.`);

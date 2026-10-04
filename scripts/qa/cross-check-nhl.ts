@@ -4,13 +4,17 @@
 //   1. current standings, all 32 teams
 //   2. last season's Bruins player totals (skaters and goalies)
 //   3. 40 random box scores since 2007-08: score and every player's G/A/SOG
-//   4. regular-season career totals for 25 random players whose whole
-//      career is in our data (debut 2007-08 or later)
+//   4. regular-season career totals for 25 random players with 100+ games
+//      since 2008-09, as their player page computes them (full careers,
+//      including the history tables before 2007-08)
 //   5. every Bruins result last season (score and OT/SO)
 //
 // Usage: npx tsx --env-file=.env.local scripts/qa/cross-check-nhl.ts [--seed N]
 
 import { Client } from "pg";
+import { getSkaterCareerTotals } from "../../lib/player-detail-data";
+import { pool } from "../../lib/db";
+import { gamesInProgress } from "./games-in-progress";
 
 const API = "https://api-web.nhle.com/v1";
 const seedArg = process.argv.indexOf("--seed");
@@ -35,6 +39,14 @@ function same(what: string, ours: unknown, theirs: unknown) {
 }
 
 async function main() {
+  // Standings and this season's numbers move while a game is under way;
+  // skip (and say so) rather than fail.
+  const busy = await gamesInProgress();
+  if (busy.length) {
+    console.log(`Skipped: games in progress (${busy.join(", ")}). Run again once they're official.`);
+    await pool.end();
+    return;
+  }
   console.log(`seed ${seed}`);
   const db = new Client({ connectionString: process.env.DATABASE_URL });
   await db.connect();
@@ -124,7 +136,11 @@ async function main() {
   }
   console.log(`3. box scores: ${sample.length} random games compared`);
 
-  // 4. Career totals, players whose whole career is in our data
+  // 4. Career totals, exactly as the player page computes them. This once
+  // summed only the site's tables and picked players whose first game
+  // there was 2008-09 or later, assuming that was the whole career: Matt
+  // Carkner's one 2005-06 game (in the history tables, shown on his page)
+  // made it fail the morning run on 2026-10-04.
   const { rows: debuts } = await db.query(
     `select s.player_id, min(g.season_id) as first from skater_game_stats s join games g on g.id = s.game_id
      group by s.player_id having min(g.season_id) >= '20082009' and count(*) > 100`,
@@ -134,11 +150,8 @@ async function main() {
     const land = await get(`${API}/player/${pid}/landing`);
     const nhl = land.careerTotals?.regularSeason;
     if (!nhl) continue;
-    const { rows: [o] } = await db.query(
-      `select count(*)::int gp, sum(goals)::int g, sum(assists)::int a from skater_game_stats s join games g on g.id = s.game_id
-       where s.player_id = $1 and g.game_type = 'regular'`,
-      [pid],
-    );
+    const t = await getSkaterCareerTotals(pid, "regular");
+    const o = { gp: t.games, g: t.goals, a: t.assists };
     const who = `${land.firstName.default} ${land.lastName.default}`;
     same(`career ${who} GP`, o.gp, nhl.gamesPlayed);
     same(`career ${who} G-A`, `${o.g}-${o.a}`, `${nhl.goals}-${nhl.assists}`);
@@ -162,6 +175,7 @@ async function main() {
   console.log(`5. 2025-26 Bruins results: ${played.length} games compared`);
 
   await db.end();
+  await pool.end();
   console.log(`\n${checks} values compared, ${problems.length} differences.`);
   for (const p of problems.slice(0, 60)) console.log(`  DIFF ${p}`);
   process.exit(problems.length ? 1 : 0);
