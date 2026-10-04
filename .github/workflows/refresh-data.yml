@@ -21,16 +21,26 @@ name: Refresh Bruins Data
 # be dropped. Monthly: a keepalive commit — GitHub disables scheduled
 # workflows in a public repo after 60 days with no repository activity,
 # which would silently stop this refresh mid-season.
+#
+# The hourly refresh is scheduled twice an hour (:17 and :47): on
+# 2026-10-03 GitHub dropped every hourly run from 10:25 to 18:30 UTC with
+# no reported incident, which left rosters stale. A second slot halves the
+# odds of a missed hour; a concurrency group keeps two runs from
+# overlapping, and the refresh is cheap when there's nothing new.
 on:
   schedule:
     - cron: "17 * * * *"
+    - cron: "47 * * * *"
     - cron: "23 14 * * *"
     - cron: "41 9 1 * *"
   workflow_dispatch: {}
 
 jobs:
   refresh-current-season:
-    if: github.event.schedule == '17 * * * *' || github.event_name == 'workflow_dispatch'
+    if: github.event.schedule == '17 * * * *' || github.event.schedule == '47 * * * *' || github.event_name == 'workflow_dispatch'
+    concurrency:
+      group: refresh-current-season
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
