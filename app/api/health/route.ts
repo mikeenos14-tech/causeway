@@ -31,7 +31,9 @@ export async function GET() {
     const age = (name: string) => (beat.has(name) ? (Date.now() - new Date(beat.get(name).at).getTime()) / 60_000 : null);
     const loader = age("load-finished");
     info.loaderMinutesAgo = loader === null ? null : Math.round(loader);
-    if (loader !== null && loader > 20) problems.push(`the 5-minute game loader last ran ${Math.round(loader)} min ago`);
+    // Checked once the 5-minute cron is set up (CRON_SECRET goes in with it,
+    // on Vercel Pro); until then the loader only runs on final whistles.
+    if (process.env.CRON_SECRET && loader !== null && loader > 20) problems.push(`the 5-minute game loader last ran ${Math.round(loader)} min ago`);
     if (beat.get("load-finished")?.ok === false) problems.push(`the game loader's last run failed: ${beat.get("load-finished").detail}`);
     const hourly = age("hourly-refresh");
     info.hourlyMinutesAgo = hourly === null ? null : Math.round(hourly);
