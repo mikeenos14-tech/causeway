@@ -10,10 +10,13 @@ import { finishedGames, recentNhlDates } from "@/lib/load-game";
 //   - every game the NHL has made official is on the site (3 h after puck drop)
 //   - live scores come through for a game in progress
 //   - the site's 5-minute loader and the hourly GitHub refresh are running
-//   - the database isn't about to hit its storage limit
+//   - the database isn't growing out of control
 export const dynamic = "force-dynamic";
 
-const STORAGE_LIMIT_MB = Number(process.env.DB_STORAGE_LIMIT_MB ?? 1024);
+// Neon's paid plan (2026-10-05) has no practical cap; this alarm now
+// catches runaway growth (storage is billed per GB). The database was
+// about 930 MB then.
+const STORAGE_LIMIT_MB = Number(process.env.DB_STORAGE_LIMIT_MB ?? 5000);
 
 export async function GET() {
   const problems: string[] = [];
