@@ -21,7 +21,10 @@ export type VerifyResult = {
   degradedCount: number;
 };
 
-export async function verifyTeam(client: Client, abbrev: string): Promise<VerifyResult> {
+// unofficial: the team has a game under way or not yet official, so its
+// newest game can be loaded without the NHL's goalie decisions (filled in
+// minutes after the horn); its record checks wait for the next run.
+export async function verifyTeam(client: Client, abbrev: string, opts: { unofficial?: boolean } = {}): Promise<VerifyResult> {
   const issues: string[] = [];
 
   const { rows: teamRows } = await client.query(
@@ -135,6 +138,7 @@ export async function verifyTeam(client: Client, abbrev: string): Promise<Verify
     [team.id],
   );
   for (const st of standingsRecords) {
+    if (opts.unofficial) break;
     if (Number(st.games_played) !== (regularGamesBySeason.get(st.season_id) ?? -1)) continue;
     const gr = goalieRecords.find((r) => r.season_id === st.season_id);
     const goalieLine = gr ? `${gr.w}-${gr.l}-${gr.otl}` : "none";

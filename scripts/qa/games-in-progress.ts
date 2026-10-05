@@ -10,3 +10,18 @@ export async function gamesInProgress(): Promise<string[]> {
     .filter((g: any) => ["LIVE", "CRIT", "OVER", "FINAL"].includes(g.gameState))
     .map((g: any) => `${g.awayTeam.abbrev}@${g.homeTeam.abbrev} (${g.gameState})`);
 }
+
+// The teams in those games (a game is official once the NHL marks it OFF).
+export async function teamsInUnofficialGames(): Promise<Set<string>> {
+  const res = await fetch("https://api-web.nhle.com/v1/score/now");
+  if (!res.ok) throw new Error(`NHL score feed: ${res.status}`);
+  const day = await res.json();
+  const out = new Set<string>();
+  for (const g of day.games ?? []) {
+    if (["LIVE", "CRIT", "OVER", "FINAL"].includes(g.gameState)) {
+      out.add(g.awayTeam.abbrev);
+      out.add(g.homeTeam.abbrev);
+    }
+  }
+  return out;
+}

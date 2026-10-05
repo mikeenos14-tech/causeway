@@ -22,14 +22,25 @@ type ApiGame = { id: number; gameType: number; gameState: string; startTimeUTC: 
 export async function checkFreshness(client: Client, targetAbbrev = "BOS", now = Date.now()): Promise<string[]> {
   const issues: string[] = [];
   const from = new Date(now - LOOKBACK_HOURS * 3600 * 1000).toISOString().slice(0, 10);
-  let games: ApiGame[];
-  try {
-    const res = await fetch(`${API}/schedule/${from}`);
-    if (!res.ok) return [`Freshness check couldn't reach the NHL schedule API (HTTP ${res.status}).`];
-    const data = await res.json();
-    games = (data.gameWeek ?? []).flatMap((d: { games: ApiGame[] }) => d.games);
-  } catch (err) {
-    return [`Freshness check couldn't reach the NHL schedule API: ${err instanceof Error ? err.message : String(err)}`];
+  // The NHL rate-limits busy game nights (HTTP 429), and one refused
+  // request once failed the whole run: retry with backoff, and if the NHL
+  // still won't answer, say so without failing (this checks our data, not
+  // the NHL's uptime; /api/health and the next run check again).
+  let games: ApiGame[] | null = null;
+  let lastError = "";
+  for (let attempt = 0; attempt < 5 && !games; attempt++) {
+    try {
+      const res = await fetch(`${API}/schedule/${from}`);
+      if (res.ok) games = ((await res.json()).gameWeek ?? []).flatMap((d: { games: ApiGame[] }) => d.games);
+      else lastError = `HTTP ${res.status}`;
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : String(err);
+    }
+    if (!games) await new Promise((r) => setTimeout(r, 3000 * 2 ** attempt));
+  }
+  if (!games) {
+    console.warn(`Freshness check skipped: the NHL schedule API didn't answer after 5 tries (${lastError}).`);
+    return issues;
   }
 
   // Final games whose start was long enough ago that the hourly refresh has

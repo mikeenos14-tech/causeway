@@ -14,25 +14,28 @@ export const maxDuration = 60;
 // Load-on-final: the first time this endpoint sees a game final that the
 // site doesn't have, it loads it (after the response goes out), so the
 // result, box score and standings are on the site within seconds of the
-// horn. /api/cron/load-finished is the backstop. Remembered per server
-// instance so a final game's polls don't each check the database.
-const handled = new Set<number>();
-async function loadOnFinal(gameId: number) {
-  if (handled.has(gameId)) return;
-  handled.add(gameId);
+// horn. Loaded again once the NHL makes it official (OFF): the box score
+// at the horn (FINAL) can still be missing pieces, like the goalies'
+// decisions. /api/cron/load-finished is the backstop. Remembered per
+// server instance so a final game's polls don't each check the database.
+const handled = new Set<string>();
+async function loadOnFinal(gameId: number, state: "FINAL" | "OFF") {
+  const key = `${gameId}:${state}`;
+  if (handled.has(key)) return;
+  handled.add(key);
   try {
     const { rowCount } = await pool.query(`select 1 from games where id = $1`, [gameId]);
-    if (rowCount) return;
+    if (rowCount && state === "FINAL") return;
     const r = await loadFinishedGame(gameId);
     console.log("load-on-final", gameId, r.status, r.status === "skipped" ? r.reason : r.notes.join("; "));
     if (r.status === "skipped") {
       if (r.reason === "another load is running") return;
-      handled.delete(gameId); // e.g. not final in the box score yet: try again on a later poll
+      handled.delete(key); // e.g. not final in the box score yet: try again on a later poll
       return;
     }
     for (const path of pathsForGame(gameId, r.teams)) revalidatePath(path);
   } catch (e) {
-    handled.delete(gameId);
+    handled.delete(key);
     console.error("load-on-final failed", gameId, e);
   }
 }
@@ -62,7 +65,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     ids.some((x) => x != null) ? slow(playersWithPages(ids), new Set<number>()) : Promise.resolve(new Set<number>()),
   ]);
   game.playersWithPages = [...pages];
-  if (game.state === "FINAL" || game.state === "OFF") after(() => loadOnFinal(gameId));
+  if (game.state === "FINAL" || game.state === "OFF") {
+    const state = game.state;
+    after(() => loadOnFinal(gameId, state));
+  }
   return NextResponse.json({ ...game, wp }, {
     headers: { "Cache-Control": `public, s-maxage=${LIVE_CACHE_SECONDS}, stale-while-revalidate=${LIVE_CACHE_SECONDS}` },
   });

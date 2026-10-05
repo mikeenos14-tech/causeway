@@ -11,14 +11,20 @@
 import { Client } from "pg";
 import { verifyTeam } from "./verify-team";
 import { checkFreshness } from "./verify-freshness";
+import { teamsInUnofficialGames } from "./qa/games-in-progress";
 
 async function main() {
   const client = new Client({ connectionString: process.env.DATABASE_URL });
   await client.connect();
   const { rows: teams } = await client.query(`select abbrev from teams where is_active order by abbrev`);
+  // Teams playing now or just finished (not yet official): their record
+  // check waits a run. 2026-10-04, 8:44 PM: the hourly check ran minutes
+  // after UTA@NYR ended and failed.
+  const unofficial = await teamsInUnofficialGames().catch(() => new Set<string>());
+  if (unofficial.size) console.log(`Record checks wait for official results: ${[...unofficial].join(", ")}`);
   let failing = 0;
   for (const { abbrev } of teams) {
-    const r = await verifyTeam(client, abbrev);
+    const r = await verifyTeam(client, abbrev, { unofficial: unofficial.has(abbrev) });
     if (r.issues.length === 0) {
       console.log(`PASS  ${abbrev}`);
       continue;
