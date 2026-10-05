@@ -7,6 +7,7 @@ import { formatGameDate, formatSeasonLabel } from "@/lib/format-date";
 import { getBruinsCups, getBruinsIconicGames, getBruinsSeasonLines, getBruinsSeriesRecord, type IconicGame, type SeasonLine } from "@/lib/history-hub-data";
 import { getBruinsEloSeasons } from "@/lib/elo-seasons";
 import { getBruinsBiggestGoals } from "@/lib/leverage-data";
+import { getTeamRivalries } from "@/lib/grudge-data";
 import { DestinationCard } from "@/components/DestinationCard";
 
 // Everything from 1924 on in one place: the six Cups, the iconic games and
@@ -38,12 +39,13 @@ function byDecade<T>(items: T[], seasonOf: (t: T) => string): [string, T[]][] {
 
 export default async function HistoryPage() {
   const cups = await getBruinsCups();
-  const [iconic, seasons, series, eloSeasons, [topGoal]] = await Promise.all([
+  const [iconic, seasons, series, eloSeasons, [topGoal], [topRivalry]] = await Promise.all([
     getBruinsIconicGames(),
     getBruinsSeasonLines(new Set(cups.map((c) => c.seasonId))),
     getBruinsSeriesRecord(),
     getBruinsEloSeasons(),
     getBruinsBiggestGoals("cup", 1),
+    getTeamRivalries("BOS").catch(() => []),
   ]);
   // Teasers for the cards: the same #1s the linked pages open on.
   const ranked = eloSeasons.filter((s) => !s.current);
@@ -68,6 +70,15 @@ export default async function HistoryPage() {
             href="/history/elo"
             title="Every season, ranked"
             teaser={topSeason ? `#1: the ${formatSeasonLabel(topSeason.seasonId)} Bruins (${topSeason.record}). All ${rankedCount} seasons by Elo.` : "Every season by Elo."}
+          />
+          <DestinationCard
+            href="/rivalries"
+            title="Rivalries"
+            teaser={
+              topRivalry
+                ? `Hottest now: ${topRivalry.ba.index >= topRivalry.ab.index ? `${topRivalry.b.abbrev} toward BOS` : `BOS toward ${topRivalry.b.abbrev}`}, ${Math.round(Math.max(topRivalry.ab.index, topRivalry.ba.index))} of 100. Every grudge since 1917.`
+                : "How heated every rivalry is, both ways, since 1917."
+            }
           />
           <DestinationCard
             href="/history/leverage"

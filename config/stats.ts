@@ -124,3 +124,34 @@ export const ELO = {
 // Spec section 13: hold out every fifth season (those ending in 0 and 5)
 // for calibration checks; never tune on them.
 export const isHeldOutSeason = (season: string) => ["0", "5"].includes(season.slice(-1));
+
+// Grudge Index (spec section 9): each event adds heat that halves every
+// half-life; a franchise's heat toward another is the sum. Weights and
+// half-lives are the spec's V1 judgment calls, not fitted (V2 calibrates
+// them against later penalties and fights). Readings of the spec's table:
+//  - fight: 3 per fight (two fighting majors), both directions
+//  - game misconduct / match / gross misconduct: 4 each, from the team the
+//    penalty was against (the wronged side) toward the penalized team
+//  - lost a 3+ goal lead: only when the game was lost; a comeback game
+//    also gives the winner 5 (pride) and the loser +3, as the spec lists
+//  - one-goal games include ties and every OT/shootout game
+//  - same division: once per season, dated at the season's last game
+export const GRUDGE = {
+  modelVersion: "grudge-v1-2026-10-05",
+  events: {
+    playoffSeries: { weight: 20, halfLifeYears: 6 },
+    eliminated: { weight: 25, halfLifeYears: 10 },
+    gameSeven: { weight: 10, halfLifeYears: 10 },
+    fight: { weight: 3, halfLifeYears: 2 },
+    ejection: { weight: 4, halfLifeYears: 2 },
+    excessPim: { weight: 0.2, halfLifeYears: 1 }, // per minute above the season's average game
+    closeGame: { weight: 1.5, halfLifeYears: 1 },
+    blownLead: { weight: 7, halfLifeYears: 4 },
+    comebackWinner: { weight: 5, halfLifeYears: 3 },
+    comebackLoser: { weight: 3, halfLifeYears: 3 },
+    regularMeeting: { weight: 0.5, halfLifeYears: 1 },
+    sameDivision: { weight: 4, halfLifeYears: 3 },
+  },
+  blownLeadGoals: 3,
+};
+export type GrudgeEventType = keyof typeof GRUDGE.events;

@@ -1,5 +1,7 @@
 import Link from "next/link";
 import type { Preview, PreviewTeam } from "@/lib/preview-data";
+import type { GrudgePair } from "@/lib/grudge-data";
+import { TwoWayGauge } from "@/components/Grudge";
 import { formatStartTimeET } from "@/lib/nhl-schedule";
 import { formatGameDate } from "@/lib/format-date";
 import { milestoneText } from "@/lib/milestones-data";
@@ -18,7 +20,7 @@ const LABEL = { fontSize: ".72rem", fontWeight: 600, color: "var(--text-secondar
 // The pre-game page for a game that hasn't been played (or is in progress):
 // /games/[id] renders this until the game is in our database, then the box
 // score. Every number is from our own database or the NHL's feed; no model.
-export function GamePreview({ p }: { p: Preview }) {
+export function GamePreview({ p, grudge = null }: { p: Preview; grudge?: GrudgePair | null }) {
   // Bruins games only: the follow-ups a fan would ask before puck drop.
   const bos = p.home.abbrev === "BOS" ? p.home : p.away.abbrev === "BOS" ? p.away : null;
   const opp = bos === p.home ? p.away : p.home;
@@ -64,6 +66,8 @@ export function GamePreview({ p }: { p: Preview }) {
       {p.odds && !(p.state === "LIVE" || p.state === "CRIT" || p.state === "OVER" || p.state === "FINAL" || p.state === "OFF") && (
         <EloOddsBar odds={p.odds} away={{ abbrev: p.away.abbrev, name: p.away.name }} home={{ abbrev: p.home.abbrev, name: p.home.name }} />
       )}
+
+      {grudge && <TwoWayGauge p={grudge} compact />}
 
       {/* Tale of the tape */}
       {(p.away.stats.length > 0 || p.home.stats.length > 0) && (

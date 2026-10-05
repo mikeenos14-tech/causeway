@@ -167,6 +167,8 @@ jobs:
           npx tsx scripts/stats/build-leverage.ts
           npx tsx scripts/stats/test-leverage.ts
           npx tsx scripts/stats/test-xg.ts
+          npx tsx scripts/stats/build-grudge.ts
+          npx tsx scripts/stats/test-grudge.ts
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
       # Reliability guard (docs/verification.md, layer 6): the site's data

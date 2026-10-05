@@ -13,6 +13,7 @@ import { GamePreview } from "@/components/GamePreview";
 import { HistoryGameView } from "@/components/HistoryGameView";
 import { getHistoryGame, getHistoryAdjacent, BOX_SCORES_FROM, BOS_TEAM_ID } from "@/lib/history-data";
 import { getPreview } from "@/lib/preview-data";
+import { getGrudge } from "@/lib/grudge-data";
 import { TeamLogo } from "@/components/TeamLogo";
 import { TeamLink } from "@/components/EntityLinks";
 import { formatSavePct } from "@/lib/util/save-pct";
@@ -89,11 +90,14 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
     }
     const preview = await getPreview(gameId);
     if (!preview) notFound();
+    // The rivalry's heat, the Bruins' side first when they're playing.
+    const [ga, gb] = preview.away.abbrev === TARGET_TEAM_ABBREV ? [preview.away.abbrev, preview.home.abbrev] : [preview.home.abbrev, preview.away.abbrev];
+    const grudge = await getGrudge(ga, gb).catch(() => null);
     return (
       <>
         <Masthead />
         <main style={{ maxWidth: 1160, margin: "0 auto", padding: "3rem 24px 3.5rem" }}>
-          <GamePreview p={preview} />
+          <GamePreview p={preview} grudge={grudge} />
         </main>
         <Footer />
       </>

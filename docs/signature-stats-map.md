@@ -93,7 +93,7 @@ Owner decisions so far (2026-10-01): history back to **1917**; Utah inherits Ari
 | V2 manpower state | Planned | 2009-10 on (situation codes) |
 | V2 empty net | Planned | 2009-10 on |
 | V2 team strength (Elo) | **Built** | kappa 0.003 fitted on training seasons; beats no-strength 0.475 vs 0.490 log loss |
-| V2 pressure term | Planned | Shot events 2005-06 on |
+| V2 pressure term | **Cut** | Studied 2026-10-05: in-game xG adds at most 0.1% log loss and about half a point of WP in a tied game. Shown as the chances bar and Deserved to Win instead (lib/xg.ts) |
 | V2 final-minute 10-second buckets | Planned | |
 | V2 OT/shootout model from Elo | Planned | |
 | V2 uncertainty band | Planned | |
@@ -109,7 +109,7 @@ Owner decisions so far (2026-10-01): history back to **1917**; Utah inherits Ari
 | elo_history / elo_current | Built | Migration 0015 |
 | Forfeits excluded | Done | 1918 Wanderers forfeits |
 | Time Machine: franchise rankings | Done (Bruins) | `/history/elo`: every Bruins season by peak, average or final Elo, with record and result (2026-10-02) |
-| Time Machine: series simulator | Built (engine) | Seeded 2-2-1-1-1 simulator, ms for 10,000 series; UI planned |
+| Time Machine: series simulator | Built (engine); UI **Deferred** | Seeded 2-2-1-1-1 simulator, ms for 10,000 series; UI shelved by the owner 2026-10-05 |
 | Time Machine: twin team | Planned | |
 | Pregame Elo odds on previews | Done | Win chance from the Elo gap + era home ice (`config ELO.winProb`, `lib/elo-odds.ts`); held-out log loss 0.6737 vs 0.6882, calibration error 2.7 pts; owner chose whole % with a "How this works" note (2026-10-02) |
 | V2 goalie adjustment | Planned | Needs historical goalie-per-game fetch |
@@ -146,7 +146,7 @@ Owner decisions so far (2026-10-01): history back to **1917**; Utah inherits Ari
 | goal_wpa / player_leverage storage | **Built** | Plus leverage_games (per-game reconciliation); goal_wpa kept lean (DB near plan limit) |
 | Live WPA badge, Biggest Goal of the Night | **Built** | Badge on the live goal list; "Biggest goal" marked in the scoring summary and chart |
 | UI: leaderboards, clutch card, Bruins top 50 | **Built** | /history/leverage, /history/leverage/league, player card |
-| V2 Cup Leverage | Planned | Next; needs a rule for future-round opponents (owner decision) |
+| V2 Cup Leverage | **Built** | Actual later-round opponents (owner decision 2026-10-02) |
 | V2 manpower-aware WPA | Planned | |
 | V2 goalie save leverage | Planned | Shot events with outcomes, 2009-10 on |
 | V2 leverage for early eras (estimated times) | **Not needed** | Real goal times exist back to 1917 |
@@ -157,17 +157,17 @@ Owner decisions so far (2026-10-01): history back to **1917**; Utah inherits Ari
 
 | Item | Status | Notes |
 | --- | --- | --- |
-| Event heat with half-lives, directional | Planned | Penalty events and playoff results loaded |
-| Same-division event | Planned | Needs historical standings fetch |
-| Monthly percentile scaling, reasons text | Planned | |
-| grudge_events / monthly / current storage | Planned | |
+| Event heat with half-lives, directional | **Built** | 310,113 events since 1917 from nhl_games, penalties, goals and standings (scripts/stats/build-grudge.ts); weights in config/stats.ts GRUDGE; readings of ambiguous rows noted there |
+| Same-division event | **Built** | From nhl_standings divisions (1926-38, 1967 on) |
+| Monthly percentile scaling, reasons text | **Built** (Changed) | Log scale against the all-time high (BOS-MTL, Apr 1988) instead of percentile: a percentile pinned BOS-MTL at 99-100 from the 1950s to 2016 and hid the peaks the acceptance test expects. Reasons stored per event |
+| grudge_events / monthly / current storage | **Built** | Migration 0034; grudge_current adds peak index and month (Cold Wars) |
 | Live provisional events | Planned | |
-| UI: thermometer, timeline, hottest, cold wars, two-way gauge | Planned | |
+| UI: thermometer, timeline, hottest, cold wars, two-way gauge | **Built** | /rivalries, /rivalries/BOS-MTL, two-way gauge on every game preview (2026-10-05) |
 | V2 player grudges | Planned | Penalty player ids available |
 | V2 transactions | **Blocked** | No source |
 | V2 calibration from behavior | Planned | Recommended: makes the weights defensible |
 | V2 fan pulse, notifications | **Blocked** | No accounts or push |
-| Acceptance: non-negative, 20-year decay, asymmetry, Montreal/Toronto smell tests | Planned | |
+| Acceptance: non-negative, 20-year decay, asymmetry, Montreal/Toronto smell tests | **Built** | scripts/stats/test-grudge.ts, 16 checks, daily. 20-year decay read as raw heat < 10 (a 7-game elimination still reads 10.7 after 20 years) |
 
 ## Section 10: Misery and Euphoria
 
