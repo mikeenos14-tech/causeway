@@ -6,6 +6,7 @@ import { trackGoals, startTracking, boardGoals, finalAndComplete, type GoalTrack
 import type { LiveWp } from "@/lib/live-wp";
 import type { WpTimeline } from "@/lib/wp-game";
 import { WinProbChart } from "@/components/WinProbChart";
+import { ChancesLive } from "@/components/ChancesLive";
 import { TeamLink, PlayerLink } from "@/components/EntityLinks";
 import { goalWpaFromCurve, formatWpa } from "@/lib/wp-curve";
 
@@ -343,7 +344,7 @@ function HeroBoard({ g, title, stale, wp, celebration, overturned }: { g: LiveGa
         </div>
         <OverturnedNote overturned={overturned} />
         <p style={{ fontSize: ".85rem", color: "var(--text-secondary)", margin: "0 0 1.2rem" }}>
-          {final ? "The full box score and recap land here within about an hour, once the NHL posts the official stats." : "Updates live, every few seconds."}
+          {final ? "The box score is on the game page now; the recap follows within the hour." : "Updates live, every few seconds."}
         </p>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           <Link href={`/games/${g.id}`} style={{ background: "var(--gold)", color: "var(--ink)", fontWeight: 700, fontSize: ".9rem", padding: "13px 24px", borderRadius: 8, textDecoration: "none" }}>
@@ -385,6 +386,9 @@ function PageBoard({ g, stale, wp, celebration, overturned }: { g: LiveGame; sta
         <WinProbChart tl={wp.curve} sideHome={wp.sideHome} />
       </div>
     )}
+    <div style={{ marginTop: "1.75rem" }}>
+      <ChancesLive gameId={g.id} homeAbbrev={g.home.abbrev} awayAbbrev={g.away.abbrev} sideHome={wp.sideHome} active={g.state !== "FUT" && g.state !== "PRE"} />
+    </div>
     </>
   );
 }

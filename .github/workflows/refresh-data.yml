@@ -89,6 +89,14 @@ jobs:
         run: npx tsx scripts/stats/ingest-recent-games.ts
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      # Each game's chances (expected goals, deserved to win): new games and
+      # the last 48 hours, from the NHL's play-by-play.
+      - name: Game chances
+        timeout-minutes: 8
+        continue-on-error: true
+        run: npx tsx scripts/stats/build-game-chances.ts --recent
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
       - name: Warm question of the day
         timeout-minutes: 3
         continue-on-error: true
@@ -158,6 +166,7 @@ jobs:
           npx tsx scripts/stats/test-wp.ts
           npx tsx scripts/stats/build-leverage.ts
           npx tsx scripts/stats/test-leverage.ts
+          npx tsx scripts/stats/test-xg.ts
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
       # Reliability guard (docs/verification.md, layer 6): the site's data

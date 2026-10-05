@@ -18,6 +18,8 @@ import { TeamLink } from "@/components/EntityLinks";
 import { formatSavePct } from "@/lib/util/save-pct";
 import { ScoringSummary, scoringIsComplete } from "@/components/ScoringSummary";
 import { WinProbChart } from "@/components/WinProbChart";
+import { ChancesCard } from "@/components/Chances";
+import { getGameChances } from "@/lib/game-chances";
 import { getGameWpTimeline } from "@/lib/wp-game";
 import { goalWpaFromCurve } from "@/lib/wp-curve";
 
@@ -104,7 +106,7 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
   // only meaningful relative to one team's perspective.
   const bosInGame = game.home_abbrev === TARGET_TEAM_ABBREV || game.away_abbrev === TARGET_TEAM_ABBREV;
 
-  const [skaters, goalies, seasonSeries, playoffSeries, teamLines, scoring, wp] = await Promise.all([
+  const [skaters, goalies, seasonSeries, playoffSeries, teamLines, scoring, wp, chances] = await Promise.all([
     getGameSkaters(gameId),
     getGameGoalies(gameId),
     bosInGame && game.game_type === "regular" ? getSeasonSeriesAsOfGame(gameId, TARGET_TEAM_ABBREV) : Promise.resolve(null),
@@ -113,6 +115,7 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
     // Goal-by-goal from the audited NHL history tables (same game ids).
     getHistoryGame(gameId).catch(() => null),
     getGameWpTimeline(gameId).catch(() => null),
+    getGameChances(gameId).catch(() => null),
   ]);
   const opponentAbbrev = game.home_abbrev === TARGET_TEAM_ABBREV ? game.away_abbrev : game.home_abbrev;
   // Previous / next arrows follow the Bruins in their games, the home team
@@ -217,6 +220,7 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
         {/* Only when it adds up to the final score; never a partial list. */}
         {scoring && scoringIsComplete(scoring) && <ScoringSummary g={scoring} linkPlayers wpa={wp ? goalWpaFromCurve(wp.points) : undefined} />}
         {wp && <WinProbChart tl={wp} sideHome={game.away_abbrev !== TARGET_TEAM_ABBREV} />}
+        {chances && <ChancesCard c={chances} homeAbbrev={game.home_abbrev} awayAbbrev={game.away_abbrev} sideHome={game.away_abbrev !== TARGET_TEAM_ABBREV} final />}
 
         {thisSeries && (
           <section style={{ marginBottom: "2.5rem", background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, padding: "1.25rem 1.5rem" }}>

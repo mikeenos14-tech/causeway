@@ -1,5 +1,6 @@
 import { pool } from "./db";
 import { gameRows, writeGameRows, writeStandings } from "./game-rows";
+import { gameChances, saveGameChances, shotsFromPlayByPlay } from "./xg";
 
 // Loads one finished game into the site's tables the moment the NHL calls
 // it final: the game, every player's line, and the league standings. Run
@@ -94,6 +95,15 @@ export async function loadFinishedGame(gameId: number): Promise<LoadResult> {
       if (skipped.length) notes.push(`standings: no team id for ${skipped.join(", ")}`);
     }
     await db.query("commit");
+    // The game's chances (expected goals, deserved to win), from its
+    // play-by-play. Never holds up the result: a failure here is retried
+    // by the hourly job (scripts/stats/build-game-chances.ts --recent).
+    try {
+      const shots = shotsFromPlayByPlay(await get(`${API}/gamecenter/${gameId}/play-by-play`));
+      if (shots?.length) await saveGameChances(pool, gameId, gameChances(shots));
+    } catch (e) {
+      notes.push(`chances not stored: ${e instanceof Error ? e.message : e}`);
+    }
     return { status: existing.length ? "rechecked" : "loaded", gameId, teams: teams.map((t) => t.abbrev), notes };
   } catch (e) {
     await db.query("rollback").catch(() => {});
