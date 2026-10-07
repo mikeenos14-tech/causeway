@@ -173,26 +173,49 @@ async function buildTeam(
   const goalieIds = roster.filter((p) => p.pos === "G").map((p) => p.id);
   const skaterIds = roster.filter((p) => p.pos !== "G").map((p) => p.id);
 
-  const { rows: goalieRows } = goalieIds.length
-    ? await pool.query(
-        `with latest as (
-           select distinct on (s.player_id) s.player_id, g.season_id
-           from goalie_game_stats s join games g on g.id = s.game_id
-           where s.player_id = any($1::int[]) and g.game_type = 'regular'
-           order by s.player_id, g.game_date desc)
-         select l.player_id, l.season_id, count(*)::int as gp,
-                count(*) filter (where s.decision = 'W')::int as w, count(*) filter (where s.decision = 'L')::int as l,
-                count(*) filter (where s.decision = 'OTL')::int as otl, count(*) filter (where s.shutout)::int as so,
-                sum(s.saves)::float / nullif(sum(s.shots_against), 0) as sv,
-                sum(s.goals_against)::float * 3600 / nullif(sum(s.toi_seconds), 0) as gaa,
-                (array_agg(t.abbrev order by g.game_date desc))[1] as last_team
-         from latest l join goalie_game_stats s on s.player_id = l.player_id
-         join games g on g.id = s.game_id and g.season_id = l.season_id and g.game_type = 'regular'
-         join teams t on t.id = s.team_id
-         group by l.player_id, l.season_id`,
-        [goalieIds],
-      )
-    : { rows: [] };
+  // One season for the whole list: this season once anyone on the roster
+  // has played in it, otherwise the latest one before it. Each player's own
+  // latest season used to be mixed together (2026-10-07): an injured
+  // McAvoy's 61 points from last season led four games of this season's.
+  const listSeason = async (table: "skater_game_stats" | "goalie_game_stats", ids: number[]) =>
+    ids.length
+      ? ((await pool.query(
+          `select max(g.season_id) as s from ${table} x join games g on g.id = x.game_id
+           where x.player_id = any($1::int[]) and g.game_type = 'regular' and g.season_id <= $2`,
+          [ids, season],
+        )).rows[0]?.s as string | null)
+      : null;
+  const goalieSeason = await listSeason("goalie_game_stats", goalieIds);
+  const goalieLines = (ids: number[], seasonFilter: "chosen" | "latest") =>
+    pool.query(
+      `with latest as (
+         select distinct on (s.player_id) s.player_id, g.season_id
+         from goalie_game_stats s join games g on g.id = s.game_id
+         where s.player_id = any($1::int[]) and g.game_type = 'regular' and ($2::text is null or g.season_id = $2)
+         order by s.player_id, g.game_date desc)
+       select l.player_id, l.season_id, count(*)::int as gp,
+              count(*) filter (where s.decision = 'W')::int as w, count(*) filter (where s.decision = 'L')::int as l,
+              count(*) filter (where s.decision = 'OTL')::int as otl, count(*) filter (where s.shutout)::int as so,
+              sum(s.saves)::float / nullif(sum(s.shots_against), 0) as sv,
+              sum(s.goals_against)::float * 3600 / nullif(sum(s.toi_seconds), 0) as gaa,
+              (array_agg(t.abbrev order by g.game_date desc))[1] as last_team
+       from latest l join goalie_game_stats s on s.player_id = l.player_id
+       join games g on g.id = s.game_id and g.season_id = l.season_id and g.game_type = 'regular'
+       join teams t on t.id = s.team_id
+       group by l.player_id, l.season_id`,
+      [ids, seasonFilter === "chosen" ? goalieSeason : null],
+    );
+  // This season's lines first; a goalie who hasn't played in it yet shows
+  // his latest season, labeled, after them.
+  const chosenRows = goalieIds.length && goalieSeason ? (await goalieLines(goalieIds, "chosen")).rows : [];
+  const rest = goalieIds.filter((id) => !chosenRows.some((r) => Number(r.player_id) === id));
+  const restRows = rest.length ? (await goalieLines(rest, "latest")).rows : [];
+  const goalieRows = [...chosenRows, ...restRows];
+  const goalieRank = (id: number) => {
+    const c = chosenRows.find((x) => Number(x.player_id) === id);
+    if (c) return 100000 + c.gp;
+    return restRows.find((x) => Number(x.player_id) === id)?.gp ?? -1;
+  };
   const goalies = roster
     .filter((p) => p.pos === "G")
     .map((p) => {
@@ -205,31 +228,26 @@ async function buildTeam(
           : null,
       };
     })
-    // Most games played first — the likelier starter leads.
-    .sort((a, b) => (goalieRows.find((x) => Number(x.player_id) === b.id)?.gp ?? -1) - (goalieRows.find((x) => Number(x.player_id) === a.id)?.gp ?? -1));
+    // This season's starts first (the likelier starter leads).
+    .sort((a, b) => goalieRank(b.id) - goalieRank(a.id));
 
-  const { rows: skaterRows } = skaterIds.length
+  const skaterSeason = await listSeason("skater_game_stats", skaterIds);
+  const { rows: skaterRows } = skaterIds.length && skaterSeason
     ? await pool.query(
-        `with latest as (
-           select distinct on (s.player_id) s.player_id, g.season_id
-           from skater_game_stats s join games g on g.id = s.game_id
-           where s.player_id = any($1::int[]) and g.game_type = 'regular'
-           order by s.player_id, g.game_date desc)
-         select l.player_id, l.season_id, count(*)::int as gp, sum(s.goals)::int as g, sum(s.assists)::int as a,
+        `select s.player_id, count(*)::int as gp, sum(s.goals)::int as g, sum(s.assists)::int as a,
                 sum(s.goals + s.assists)::int as p,
                 (array_agg(t.abbrev order by g.game_date desc))[1] as last_team
-         from latest l join skater_game_stats s on s.player_id = l.player_id
-         join games g on g.id = s.game_id and g.season_id = l.season_id and g.game_type = 'regular'
-         join teams t on t.id = s.team_id
-         group by l.player_id, l.season_id
-         order by p desc limit 3`,
-        [skaterIds],
+         from skater_game_stats s join games g on g.id = s.game_id join teams t on t.id = s.team_id
+         where s.player_id = any($1::int[]) and g.game_type = 'regular' and g.season_id = $2
+         group by s.player_id
+         order by p desc, g desc, gp asc limit 3`,
+        [skaterIds, skaterSeason],
       )
     : { rows: [] };
   const topSkaters = skaterRows.map((r) => ({
     id: Number(r.player_id),
     name: roster.find((p) => p.id === Number(r.player_id))?.name ?? "",
-    line: `${r.g} G, ${r.a} A, ${r.p} P in ${r.gp} GP (${seasonLabel(String(r.season_id))}${r.last_team !== api.abbrev ? `, with ${r.last_team}` : ""})`,
+    line: `${r.g} G, ${r.a} A, ${r.p} P in ${r.gp} GP (${seasonLabel(skaterSeason!)}${r.last_team !== api.abbrev ? `, with ${r.last_team}` : ""})`,
   }));
 
   // Within reach tonight: a single game's worth of each stat.
