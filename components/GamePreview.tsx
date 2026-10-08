@@ -121,7 +121,7 @@ export function GamePreview({ p, grudge = null }: { p: Preview; grudge?: GrudgeP
           <TeamPlayers t={p.home} />
         </div>
         <p style={{ fontSize: ".72rem", color: "var(--text-muted)", marginTop: 8 }}>
-          Current NHL rosters, with each player&apos;s most recent regular season on file. Starting goalies aren&apos;t announced until close to puck drop.
+          Current NHL rosters. Scorers are from this season once the team has played (last season before that); a goalie who hasn&apos;t played yet this season shows his most recent one. Starting goalies aren&apos;t announced until close to puck drop.
         </p>
       </section>
 

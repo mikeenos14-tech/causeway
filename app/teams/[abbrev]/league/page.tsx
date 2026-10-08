@@ -68,7 +68,7 @@ function RankCard({
         <span style={{ fontFamily: "var(--font-display)", fontSize: "1.3rem" }}>
           {format(rank.value)}{" "}
           <span style={{ fontSize: ".95rem", color: third === "top" ? "var(--win)" : third === "bottom" ? "var(--loss)" : "var(--gold)" }}>
-            {ordinal(rank.rank)} of {rank.outOf}
+            {rank.tied ? "T-" : ""}{ordinal(rank.rank)} of {rank.outOf}
           </span>
         </span>
       </div>

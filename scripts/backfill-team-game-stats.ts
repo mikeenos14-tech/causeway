@@ -12,7 +12,8 @@
 // already does for games/skaters/goalies.
 //
 // Usage: npx tsx scripts/backfill-team-game-stats.ts [gameId ...]
-// No args: every game missing a complete pair of team_game_stats rows.
+// No args: every game missing a complete pair of team_game_stats rows,
+// plus the last 48 hours re-checked for the NHL's corrections.
 
 import { Client } from "pg";
 
@@ -172,13 +173,17 @@ async function backfillOnce() {
 
   let gameIds = process.argv.slice(2).map(Number);
   if (gameIds.length === 0) {
+    // Plus every game from the last 48 hours, re-read: the NHL corrects a
+    // game's power-play numbers after the horn, and a game loaded that
+    // night kept the first version (STL 0/2 that became 1/2, 2026-10-06).
     const { rows } = await client.query(
       `select g.id, g.home_team_id, g.away_team_id from games g
        where (select count(*) from team_game_stats tgs where tgs.game_id = g.id) < 2
+          or g.game_date >= current_date - 2
        order by g.game_date desc`,
     );
     gameIds = rows.map((r) => r.id);
-    console.log(`No game IDs given — backfilling ${gameIds.length} games missing team_game_stats.`);
+    console.log(`No game IDs given — loading ${gameIds.length} games missing team_game_stats or from the last 48 hours.`);
   }
 
   // team ids aren't in argv, so look them up regardless of how gameIds was populated

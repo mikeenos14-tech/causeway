@@ -123,7 +123,7 @@ async function buildTeam(
   const own = league.find((t) => t.abbrev === api.abbrev);
   const rank = (metric: (t: LeagueTeamStats) => number | null, higherIsBetter: boolean) => {
     const r = rankTeam(league, api.abbrev, metric, higherIsBetter);
-    return r ? `${ordinal(r.rank)} of ${r.outOf}` : null;
+    return r ? `${r.tied ? "T-" : ""}${ordinal(r.rank)} of ${r.outOf}` : null;
   };
   const specialTeams = (own?.specialTeamsCoverage ?? 0) >= 0.99;
   const stats = own

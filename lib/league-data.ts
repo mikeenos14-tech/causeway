@@ -141,7 +141,7 @@ export async function getLeagueTeamStats(seasonId: string): Promise<LeagueTeamSt
 
 // bestTeam / worstTeam: who holds each end of the range, so the page can
 // name and link them.
-export type LeagueRank = { value: number; rank: number; outOf: number; min: number; max: number; leagueAvg: number; bestTeam: string; worstTeam: string };
+export type LeagueRank = { value: number; rank: number; tied: boolean; outOf: number; min: number; max: number; leagueAvg: number; bestTeam: string; worstTeam: string };
 
 // Rank + the full league's min/max/avg for one metric — everything a
 // percentile bar needs to draw itself. `higherIsBetter` flips the rank
@@ -158,13 +158,20 @@ export function rankTeam(
   if (!target) return null;
 
   const sorted = [...withValues].sort((a, b) => (higherIsBetter ? b.value - a.value : a.value - b.value));
-  const rank = sorted.findIndex((t) => t.abbrev === teamAbbrev) + 1;
+  // Ties share a rank (1st, T-2nd, T-2nd, 4th). It used to be the position
+  // in the sorted list, so early in a season, with half the league tied at
+  // a 0% power play, a team's rank was arbitrary (found 2026-10-07).
+  const same = (a: number, b: number) => Math.abs(a - b) < 1e-9;
+  const better = withValues.filter((t) => !same(t.value, target.value) && (higherIsBetter ? t.value > target.value : t.value < target.value)).length;
+  const rank = better + 1;
+  const tied = withValues.filter((t) => same(t.value, target.value)).length > 1;
   const values = withValues.map((t) => t.value);
   const leagueAvg = values.reduce((a, b) => a + b, 0) / values.length;
 
   return {
     value: target.value,
     rank,
+    tied,
     outOf: withValues.length,
     min: Math.min(...values),
     max: Math.max(...values),
