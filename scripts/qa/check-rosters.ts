@@ -16,17 +16,36 @@ async function nhl(url: string) {
 }
 const decode = (s: string) => s.replace(/&#x27;|&#39;/g, "'").replace(/&amp;/g, "&").replace(/<!-- -->/g, "");
 
+const missingOn = async (t: string) => {
+  const d = await nhl(`https://api-web.nhle.com/v1/roster/${t}/current`);
+  const names = [...d.forwards, ...d.defensemen, ...d.goalies].map((p: { firstName: { default: string }; lastName: { default: string } }) => `${p.firstName.default} ${p.lastName.default}`);
+  const html = decode(await fetch(`${BASE}/teams/${t}/roster`).then((r) => r.text()));
+  return { names, absent: names.filter((n) => !html.includes(`>${n}<`)) };
+};
+
 (async () => {
-  let checked = 0, missing = 0;
+  let checked = 0;
+  const first = new Map<string, string[]>();
   for (const t of TEAMS) {
-    const d = await nhl(`https://api-web.nhle.com/v1/roster/${t}/current`);
-    const names = [...d.forwards, ...d.defensemen, ...d.goalies].map((p: { firstName: { default: string }; lastName: { default: string } }) => `${p.firstName.default} ${p.lastName.default}`);
-    const html = decode(await fetch(`${BASE}/teams/${t}/roster`).then((r) => r.text()));
-    const absent = names.filter((n) => !html.includes(`>${n}<`));
+    const { names, absent } = await missingOn(t);
     checked += names.length;
-    missing += absent.length;
+    if (absent.length) first.set(t, absent);
     console.log(`${t}: ${names.length} rostered, ${absent.length} missing${absent.length ? ` (${absent.join(", ")})` : ""}`);
     await new Promise((r) => setTimeout(r, 400));
+  }
+  // A roster move in the minutes before this check isn't on the page yet:
+  // rosters sync every 30 minutes and the page caches for 5 (found
+  // 2026-10-07). The workflow syncs right before this; wait out the page
+  // cache and look again. Only players still missing count.
+  let missing = 0;
+  if (first.size) {
+    console.log(`\nRechecking ${first.size} team(s) in 5.5 minutes, after the page cache refreshes...`);
+    await new Promise((r) => setTimeout(r, 330_000));
+    for (const t of first.keys()) {
+      const { absent } = await missingOn(t);
+      missing += absent.length;
+      console.log(`${t} recheck: ${absent.length ? `still missing ${absent.join(", ")}` : "all listed now"}`);
+    }
   }
   console.log(`\n${checked} rostered players checked, ${missing} missing from their team's Roster page.`);
   process.exit(missing ? 1 : 0);
