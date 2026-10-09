@@ -14,7 +14,6 @@ import type { Client } from "pg";
 // for the first shot against each team. The box score's own starter flag
 // is sometimes wrong (it named Utah's relief goalie on 2026-10-08). Null
 // when the feed can't be read; callers then don't name a starter.
-/* eslint-disable @typescript-eslint/no-explicit-any -- the NHL feed is untyped JSON */
 async function startingGoalies(gameId: number): Promise<Map<string, number> | null> {
   try {
     const res = await fetch(`https://api-web.nhle.com/v1/gamecenter/${gameId}/play-by-play`, { signal: AbortSignal.timeout(10_000) });
@@ -34,7 +33,6 @@ async function startingGoalies(gameId: number): Promise<Map<string, number> | nu
     return null;
   }
 }
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 export type GameFacts = {
   lines: string[];
