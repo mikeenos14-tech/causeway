@@ -10,6 +10,32 @@
 
 import type { Client } from "pg";
 
+// Each team's starting goalie, from the play-by-play: the goalie in net
+// for the first shot against each team. The box score's own starter flag
+// is sometimes wrong (it named Utah's relief goalie on 2026-10-08). Null
+// when the feed can't be read; callers then don't name a starter.
+/* eslint-disable @typescript-eslint/no-explicit-any -- the NHL feed is untyped JSON */
+async function startingGoalies(gameId: number): Promise<Map<string, number> | null> {
+  try {
+    const res = await fetch(`https://api-web.nhle.com/v1/gamecenter/${gameId}/play-by-play`, { signal: AbortSignal.timeout(10_000) });
+    if (!res.ok) return null;
+    const d = await res.json();
+    const out = new Map<string, number>();
+    const byId = new Map([[d.homeTeam.id, d.homeTeam.abbrev], [d.awayTeam.id, d.awayTeam.abbrev]]);
+    for (const e of d.plays ?? []) {
+      const det = e.details ?? {};
+      if (!det.goalieInNetId || !["shot-on-goal", "goal"].includes(e.typeDescKey)) continue;
+      const defending = det.eventOwnerTeamId === d.homeTeam.id ? d.awayTeam.id : d.homeTeam.id;
+      const abbrev = byId.get(defending);
+      if (abbrev && !out.has(abbrev)) out.set(abbrev, det.goalieInNetId);
+    }
+    return out;
+  } catch {
+    return null;
+  }
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
 export type GameFacts = {
   lines: string[];
   text: string; // lines joined, for validators
@@ -162,7 +188,7 @@ export async function buildGameFacts(client: Client, gameId: number, targetAbbre
 
   // Goalies — including who was pulled, which a score alone can't show.
   const { rows: goalies } = await client.query(
-    `select t.abbrev, p.full_name, gs.saves, gs.shots_against, gs.decision, gs.toi_seconds, gs.shutout,
+    `select t.abbrev, gs.player_id, p.full_name, gs.saves, gs.shots_against, gs.goals_against, gs.decision, gs.toi_seconds, gs.shutout,
             count(*) over (partition by gs.team_id) as goalies_used
      from goalie_game_stats gs join players p on p.id = gs.player_id join teams t on t.id = gs.team_id
      where gs.game_id = $1 and (coalesce(gs.toi_seconds, 0) > 0 or gs.decision is not null) order by gs.toi_seconds desc`,
@@ -179,6 +205,26 @@ export async function buildGameFacts(client: Client, gameId: number, targetAbbre
       return `${r.full_name} made ${r.saves} saves on ${r.shots_against} shots in ${mins}${dec}${r.shutout ? ", shutout" : ""}`;
     };
     lines.push(`${abbrev} goaltending: ${gs.map(describe).join("; ")}${gs.length > 1 ? ` (${abbrev} changed goalies during the game)` : ""}.`);
+    // Who did what, spelled out: "UTA changed goalies" next to "UTA
+    // outshot BOS" was written up as "Utah forced a goalie change" (it was
+    // Boston's six goals that chased Utah's starter, 2026-10-08).
+    const played = gs.filter((r) => r.toi_seconds > 0);
+    if (played.length > 1) {
+      const opp = abbrev === g.home_abbrev ? g.away_abbrev : g.home_abbrev;
+      const starterId = (await startingGoalies(gameId))?.get(abbrev);
+      const starter = played.find((r) => Number(r.player_id) === starterId);
+      const relief = played.filter((r) => r !== starter).map((r) => r.full_name).join(" and ");
+      if (starter) {
+        const mins = `${Math.floor(starter.toi_seconds / 60)}:${String(starter.toi_seconds % 60).padStart(2, "0")}`;
+        lines.push(
+          starter.goals_against >= 3
+            ? `Goalie change: ${opp} forced ${abbrev} into a goalie change. ${abbrev}'s starter ${starter.full_name} was pulled after allowing ${starter.goals_against} goals on ${starter.shots_against} shots in ${mins}; ${relief} replaced him. ${opp} did not change goalies.`
+            : `Goalie change: ${abbrev}'s starter ${starter.full_name} left after ${mins} (${starter.goals_against} goals allowed); ${relief} replaced him. ${opp} did not change goalies.`,
+        );
+      } else {
+        lines.push(`Goalie change: ${abbrev} used ${played.length} goalies. ${opp} did not change goalies.`);
+      }
+    }
   }
 
   // Team totals, only the groups actually loaded for this game.

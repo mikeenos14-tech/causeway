@@ -231,6 +231,45 @@ export function validateRecap(parsed: { headline: string; body: string }, sheet:
     if (team && lead && team === lead[1]) reject(`says ${lead[1]} was "${m[1]}", but the sheet has ${lead[1]} leading`);
   }
 
+  // Goalie changes: who forced it and who made it. A published recap said
+  // "Utah actually outshot Boston 37-22 and forced a goalie change" when
+  // Boston's goals had chased Utah's starter (2026-10-08): the sheet's
+  // "UTA changed goalies" sat next to "UTA outshot BOS". The team that
+  // forced a change must not be the one that changed; the team that was
+  // forced into one, or made one, must be.
+  const changers = new Set([...facts.text.matchAll(/(\w+) changed goalies during the game/g)].map((m) => m[1]));
+  // The headline is its own sentence (it has no period to split on).
+  for (const sentence of [parsed.headline, ...parsed.body.split(/(?<=[.!?])\s+/)]) {
+    if (!/goalie change|changed goalies|swapped goalies/i.test(sentence)) continue;
+    if (!changers.size) reject(`mentions a goalie change ("${sentence.trim()}"), but no team changed goalies`);
+    const firstTeamBefore = (index: number) => {
+      for (const w of sentence.slice(0, index).match(/\p{L}+/gu) ?? []) {
+        const t = teamOf(w);
+        if (t) return t;
+      }
+      return null;
+    };
+    const into = /forc\w*\s+(?:the\s+)?(\p{L}+)(?:['’]s)?\s+(?:\w+\s+){0,2}?into\s+(?:a|the)\s+goalie change/iu.exec(sentence);
+    if (into) {
+      const object = teamOf(into[1]);
+      if (object && !changers.has(object)) reject(`says ${object} was forced into a goalie change, but ${[...changers].join("/")} changed goalies`);
+      const subject = firstTeamBefore(into.index);
+      if (subject && changers.has(subject)) reject(`credits ${subject} with forcing a goalie change, but ${subject} is the team that changed goalies`);
+      continue;
+    }
+    const passive = /\b(?:was|were|got|been|being)\s+forced\b|\b(?:made|needed|went to|turned to)\s+(?:a|the)\s+goalie change|\bchanged goalies\b|\bswapped goalies\b/i.exec(sentence);
+    if (passive) {
+      const subject = firstTeamBefore(passive.index);
+      if (subject && !changers.has(subject)) reject(`says ${subject} changed goalies, but ${[...changers].join("/")} did`);
+      continue;
+    }
+    const forced = /\bforc\w*\s+(?:a|the)\s+goalie change/i.exec(sentence);
+    if (forced) {
+      const subject = firstTeamBefore(forced.index);
+      if (subject && changers.has(subject)) reject(`credits ${subject} with forcing a goalie change, but ${subject} is the team that changed goalies`);
+    }
+  }
+
   // W-L-OTL records: every one must be a record on the sheet (the team's
   // season record, or the season series vs this opponent), and the series
   // record must not be passed off as the season record — a trial recap

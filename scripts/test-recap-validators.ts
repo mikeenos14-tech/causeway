@@ -14,6 +14,13 @@ import type { SignificanceFact } from "../lib/significance-checks";
 type Case = { name: string; game: number; headline: string; body: string; expect: "pass" | "reject"; notable?: SignificanceFact[] };
 
 const cases: Case[] = [
+  // Goalie changes (2026-10-08, BOS 6 UTA 1: Boston's goals chased Utah's starter Cossa).
+  { name: "goalie change credited to the team that changed (the published error)", game: 2026020056, headline: "Bruins roll Mammoth 6-1 despite getting outshot", body: "Pastrnak had 2 goals and 2 assists. Utah actually outshot Boston 37-22 and forced a goalie change, but Swayman stood on his head with 36 saves while the power play went 3-for-4.", expect: "reject" },
+  { name: "goalie change: Boston forced Utah into it", game: 2026020056, headline: "Bruins roll Mammoth 6-1", body: "Boston forced Utah into a goalie change after three first-period goals, and Swayman made 36 saves as Utah outshot Boston 37-22.", expect: "pass" },
+  { name: "goalie change: Utah was forced into it", game: 2026020056, headline: "Bruins roll Mammoth 6-1", body: "Utah was forced into a goalie change, and Swayman made 36 saves.", expect: "pass" },
+  { name: "goalie change: Bruins forced a goalie change", game: 2026020056, headline: "Bruins roll Mammoth 6-1", body: "The Bruins chased Sebastian Cossa and forced a goalie change in the first, then Swayman made 36 saves.", expect: "pass" },
+  { name: "goalie change: says Boston made the change", game: 2026020056, headline: "Bruins roll Mammoth 6-1", body: "Boston made a goalie change, but Swayman still made 36 saves.", expect: "reject" },
+  { name: "goalie change claimed where nobody changed", game: 2026020003, headline: "Bruins blank the Rangers", body: "New York forced a goalie change before Jeremy Swayman stopped all 24 shots in a 3-0 win.", expect: "reject" },
   // Must pass — real trial output.
   // Notable facts woven into the full recap (2026-10-01).
   { name: "notable: shutout meeting count, paraphrased as a first", game: 2026020003, notable: [{"category": "head_to_head_shutout", "population": "head-to-head, loaded data only", "fact": "BOS's first shutout of NYR in 17 meetings."}], headline: "Swayman blanks the Rangers in the opener", body: "It's the first time Boston has blanked New York in 17 meetings. Jeremy Swayman stopped all 24 shots in a 3-0 season-opening win.", expect: "pass" },
