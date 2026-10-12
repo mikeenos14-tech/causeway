@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { PLAYER_DATA_GAPS } from "@/config/data-gaps";
 import {
   getPlayer,
   getSkaterCareerTotals,
   getGoalieCareerTotals,
   getSkaterSeasonSplits,
   getGoalieSeasonSplits,
-  getRecentGameLog,
+  getRecentGameLog, getCurrentTeam, getHistoryFinalGames,
 } from "@/lib/player-detail-data";
 import { formatGameDate, formatSeasonLabel } from "@/lib/format-date";
 import { Masthead, Footer } from "@/components/Masthead";
@@ -45,24 +46,30 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
   const ledTeam = Object.entries(LEADERSHIP).find(([, l]) => l.captainId === playerId || l.alternateIds.includes(playerId));
   const ledSeason = ledTeam ? (await getClubSeason(ledTeam[0]))?.currentSeason : null;
   const role = ledTeam && ledSeason === ledTeam[1].season ? (ledTeam[1].captainId === playerId ? "Captain" : "Alternate captain") : null;
-  const [totals, playoffTotals, seasonSplits, gameLog, clutch] = await Promise.all([
+  const [totals, playoffTotals, seasonSplits, modernLog, clutch, currentTeam] = await Promise.all([
     isGoalie ? getGoalieCareerTotals(playerId) : getSkaterCareerTotals(playerId),
     isGoalie ? getGoalieCareerTotals(playerId, "playoff") : getSkaterCareerTotals(playerId, "playoff"),
     isGoalie ? getGoalieSeasonSplits(playerId) : getSkaterSeasonSplits(playerId),
     getRecentGameLog(playerId, isGoalie),
     isGoalie ? Promise.resolve(null) : getClutchCard(playerId).catch(() => null),
+    getCurrentTeam(playerId),
   ]);
+  // A career that ended before 2007-08 has no games in the site's tables:
+  // its last games come from the history tables instead.
+  const gameLog = modernLog.length ? modernLog : await getHistoryFinalGames(playerId, isGoalie);
 
   // Careers are complete: the NHL's history tables (1917-18 on) joined to
   // the site's (lib/player-detail-data.ts), checked against the NHL's own
   // career totals by scripts/qa/check-player-careers.ts.
   // The team of the player's most recent game (the log is newest first).
   const latestTeam: string | undefined = gameLog[0]?.team_abbrev ?? seasonSplits.at(-1)?.team_abbrev;
+  const firstSeason: string | undefined = seasonSplits[0]?.season_id;
+  const lastSeason: string | undefined = seasonSplits.at(-1)?.season_id;
 
   // Career trend as a rate, one point per season of 10+ games; the season
   // in progress joins as a hollow "so far" point at 10 games (see
   // lib/career-trend.ts for why totals were misleading).
-  const club = latestTeam ? await getClubSeason(latestTeam).catch(() => null) : null;
+  const club = currentTeam ? await getClubSeason(currentTeam).catch(() => null) : null; // pace and the season in progress: rostered players only
   const inProgressSeason = club
     ? club.games.some((g) => g.season === club.currentSeason && g.gameType === 2 && !isFinal(g))
       ? club.currentSeason
@@ -111,14 +118,28 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
             <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "clamp(2.4rem,5.5vw,4rem)", lineHeight: 0.98, textTransform: "uppercase", letterSpacing: ".01em", margin: "0 0 .6rem" }}>
               {player.full_name}
             </h1>
-            {/* A way back out: the player's most recent team and its roster. */}
-            {hasTeamPage(latestTeam) && (
+            {/* On a roster now: a way to it. Otherwise (retired, or between
+                teams) when and where he last played, never a current roster
+                he isn't on (Bourque used to point at today's Avalanche). */}
+            {currentTeam && hasTeamPage(currentTeam) ? (
               <p style={{ margin: "0 0 .4rem", fontSize: ".9rem" }}>
-                <Link href={`/teams/${latestTeam}/roster`} style={{ color: "var(--gold)", textDecoration: "none", fontWeight: 600 }}>
-                  <TeamLogo abbrev={latestTeam} size={20} gap={4} />
-                  {latestTeam} roster →
+                <Link href={`/teams/${currentTeam}/roster`} style={{ color: "var(--gold)", textDecoration: "none", fontWeight: 600 }}>
+                  <TeamLogo abbrev={currentTeam} size={20} gap={4} />
+                  {currentTeam} roster →
                 </Link>
               </p>
+            ) : (
+              lastSeason && (
+                <p style={{ margin: "0 0 .4rem", fontSize: ".9rem", color: "var(--text-secondary)" }}>
+                  Last played {formatSeasonLabel(lastSeason)}
+                  {latestTeam ? (
+                    <>
+                      {" "}with <TeamLink abbrev={latestTeam} />
+                    </>
+                  ) : null}
+                  {firstSeason && firstSeason !== lastSeason ? ` · NHL career ${formatSeasonLabel(firstSeason)} to ${formatSeasonLabel(lastSeason)}` : ""}
+                </p>
+              )
             )}
             {player.birth_date ? (
               <p style={{ color: "var(--text-secondary)", fontSize: ".95rem" }}>
@@ -128,13 +149,16 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
                 {player.shoots_catches ? ` · ${isGoalie ? "Catches" : "Shoots"} ${player.shoots_catches}` : ""}
               </p>
             ) : (
-              <p style={{ color: "var(--text-secondary)", fontSize: ".9rem" }}>
-                No bio on file — this player joined a team after that season&apos;s roster was last fetched.
-              </p>
+              <p style={{ color: "var(--text-secondary)", fontSize: ".9rem" }}>No birth date on file.</p>
             )}
           </div>
         </section>
 
+        {PLAYER_DATA_GAPS[playerId] && (
+          <p role="note" style={{ fontSize: ".85rem", color: "var(--text-secondary)", border: "1px solid var(--border)", borderRadius: 10, padding: ".7rem 1rem", margin: "0 0 2rem", maxWidth: "75ch" }}>
+            {PLAYER_DATA_GAPS[playerId]}
+          </p>
+        )}
         <section style={{ marginBottom: "2.5rem" }}>
           <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".02em", fontSize: "1.4rem", marginBottom: ".2rem" }}>
             Career Totals
@@ -290,7 +314,7 @@ export default async function PlayerDetail({ params }: { params: Promise<{ id: s
 
         <section>
           <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".02em", fontSize: "1.4rem", marginBottom: "1rem" }}>
-            Recent Games
+            {currentTeam ? "Recent Games" : "Last Games"}
           </h2>
           <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: ".85rem", fontVariantNumeric: "tabular-nums", minWidth: 540 }}>

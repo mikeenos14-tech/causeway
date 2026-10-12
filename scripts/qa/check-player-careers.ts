@@ -9,6 +9,7 @@
 // Run when no games are in progress (live games make the two sides differ).
 
 import { pool } from "../../lib/db";
+import { PLAYER_DATA_GAPS } from "../../config/data-gaps";
 import { gamesInProgress } from "./games-in-progress";
 import { getSkaterCareerTotals, getGoalieCareerTotals, getSkaterSeasonSplits, getGoalieSeasonSplits } from "../../lib/player-detail-data";
 
@@ -55,13 +56,16 @@ async function nhlCareers(kind: "skater" | "goalie", gameTypeId: 2 | 3): Promise
   const todo = players.filter((p) => !onlyPre || p.pre2007);
   let checked = 0, notInNhl = 0;
   const bad: string[] = [];
+  const known: string[] = []; // the NHL's records disagree with each other (config/data-gaps.ts)
   const pre = { n: 0, bad: 0 };
-  for (const p of todo) {
+  // Eight players at a time (the pool's connections): with every pre-2007
+  // career on a page (2026-10-11) there are about 8,800 to check.
+  const checkOne = async (p: (typeof todo)[number]) => {
     const nhlReg = (p.goalie ? gkR : skR).get(p.id);
     const nhlPo = (p.goalie ? gkP : skP).get(p.id);
     if (!nhlReg && !nhlPo) {
       notInNhl++;
-      continue;
+      return;
     }
     checked++;
     if (p.pre2007) pre.n++;
@@ -107,14 +111,18 @@ async function nhlCareers(kind: "skater" | "goalie", gameTypeId: 2 | 3): Promise
       const splits = await getGoalieSeasonSplits(p.id);
       cmp("season-table GP", splits.reduce((s, r) => s + Number(r.games), 0), nhlReg?.gamesPlayed);
     }
-    if (diffs.length) {
+    if (diffs.length && PLAYER_DATA_GAPS[p.id]) known.push(`${p.full_name} (${p.id}): ${diffs.join("; ")}`);
+    else if (diffs.length) {
       bad.push(`${p.full_name} (${p.id}${p.pre2007 ? ", pre-2007 career" : ""}): ${diffs.join("; ")}`);
       if (p.pre2007) pre.bad++;
     }
-  }
+  };
+  for (let i = 0; i < todo.length; i += 8) await Promise.all(todo.slice(i, i + 8).map(checkOne));
+  bad.sort();
   console.log(`Checked ${checked} players with pages (${pre.n} with pre-2007 careers); ${notInNhl} not in the NHL's totals (no NHL games yet).`);
   console.log(`Match: ${checked - bad.length} of ${checked}. Pre-2007 careers: ${pre.n - pre.bad} of ${pre.n}.`);
   for (const b of bad) console.log(`  DIFF ${b}`);
+  for (const k of known) console.log(`  known ${k}`);
   await pool.end();
   process.exit(bad.length ? 1 : 0);
 })();

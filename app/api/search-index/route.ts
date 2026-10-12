@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { pool } from "@/lib/db";
 
 // Everything the header search needs, sent once and searched in the
-// browser: every player with a page (anyone who's played since 2007-08)
-// and the active teams. Built at most hourly (the aggregate scans every
+// browser: every player with a page (every NHL player since 1917-18: the
+// site's tables from 2007-08, the history tables before) and the active
+// teams. Built at most hourly (the aggregate scans every
 // game row, ~1.5 s), so typing never waits on the database.
 export const revalidate = 3600;
 
@@ -17,14 +18,25 @@ export async function GET() {
   const [{ rows: players }, { rows: teams }] = await Promise.all([
     pool.query(
       `with appearances as (
-         select player_id, game_id, team_id from skater_game_stats
-         union all select player_id, game_id, team_id from goalie_game_stats where coalesce(toi_seconds, 0) > 0 or decision is not null),
+         select s.player_id, g.season_id as season, g.game_date, t.abbrev as team
+         from skater_game_stats s join games g on g.id = s.game_id join teams t on t.id = s.team_id
+         union all
+         select s.player_id, g.season_id, g.game_date, t.abbrev
+         from goalie_game_stats s join games g on g.id = s.game_id join teams t on t.id = s.team_id
+         where coalesce(s.toi_seconds, 0) > 0 or s.decision is not null
+         union all
+         select s.player_id, g.season, g.game_date, t.tri_code
+         from nhl_skater_games s join nhl_games g on g.id = s.game_id join nhl_teams t on t.id = s.team_id
+         where s.played and g.season < '20072008'
+         union all
+         select s.player_id, g.season, g.game_date, t.tri_code
+         from nhl_goalie_games s join nhl_games g on g.id = s.game_id join nhl_teams t on t.id = s.team_id
+         where g.season < '20072008' and (coalesce(s.toi_sec, 1) > 0 or s.decision is not null)),
        stats as (
-         select a.player_id, max(g.season_id) as last_season,
-                (array_agg(t.abbrev order by g.game_date desc))[1] as last_team, count(*)::int as gp,
-                bool_or(t.abbrev = 'BOS') as bos
-         from appearances a join games g on g.id = a.game_id join teams t on t.id = a.team_id
-         group by a.player_id)
+         select player_id, max(season) as last_season,
+                (array_agg(team order by game_date desc))[1] as last_team, count(*)::int as gp,
+                bool_or(team = 'BOS') as bos
+         from appearances group by player_id)
        select p.id, p.full_name, p.position, st.last_team, st.last_season, st.gp, st.bos
        from players p join stats st on st.player_id = p.id`,
     ),

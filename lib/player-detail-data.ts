@@ -182,3 +182,33 @@ export async function getRecentGameLog(playerId: number, isGoalie: boolean, limi
   );
   return rows;
 }
+
+// The team a player is on right now (current_rosters, synced every 30
+// minutes from the NHL), or null: retired, or between teams.
+export async function getCurrentTeam(playerId: number): Promise<string | null> {
+  const { rows } = await pool.query(`select team_abbrev from current_rosters where player_id = $1`, [playerId]);
+  return rows[0]?.team_abbrev ?? null;
+}
+
+// A career that ended before 2007-08: its last games, from the history
+// tables (no ice time then; shots from 1959-60). Same shape as
+// getRecentGameLog so the page renders either. Only games with a page
+// (nhl_games; the 1988 blackout game's stats count but it has none).
+export async function getHistoryFinalGames(playerId: number, isGoalie: boolean, limit = 10) {
+  const games = `join nhl_games g on g.id = s.game_id join nhl_teams t on t.id = s.team_id
+     join nhl_teams ht on ht.id = g.home_team_id join nhl_teams at on at.id = g.away_team_id`;
+  const common = `g.id as game_id, g.game_date, t.tri_code as team_abbrev, (g.home_team_id = s.team_id) as is_home,
+     case when g.home_team_id = s.team_id then at.tri_code else ht.tri_code end as opp_abbrev`;
+  const { rows } = isGoalie
+    ? await pool.query(
+        `select ${common}, s.decision, s.saves, s.shots_against, s.goals_against from nhl_goalie_games s ${games}
+         where s.player_id = $1 and (coalesce(s.toi_sec, 1) > 0 or s.decision is not null) order by g.game_date desc limit $2`,
+        [playerId, limit],
+      )
+    : await pool.query(
+        `select ${common}, s.goals, s.assists, s.goals + s.assists as points, s.sog as shots, null::int as toi_seconds from nhl_skater_games s ${games}
+         where s.player_id = $1 and s.played order by g.game_date desc limit $2`,
+        [playerId, limit],
+      );
+  return rows;
+}
