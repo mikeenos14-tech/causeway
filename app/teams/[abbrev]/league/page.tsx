@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTeam } from "@/lib/homepage-data";
 import { getLeagueComparisonSeason, getLeagueTeamStats, rankTeam, type LeagueTeamStats } from "@/lib/league-data";
+import { LEAGUE_METRICS, ordinal, type LeagueMetric } from "@/lib/league-metrics";
 import { formatSeasonLabel } from "@/lib/format-date";
 import { Masthead, Footer } from "@/components/Masthead";
 import { TeamSubNav } from "@/components/TeamSubNav";
@@ -16,36 +17,9 @@ export async function generateStaticParams() {
   return [];
 }
 
-function ordinal(n: number): string {
-  const rem100 = n % 100;
-  if (rem100 >= 11 && rem100 <= 13) return `${n}th`;
-  switch (n % 10) {
-    case 1:
-      return `${n}st`;
-    case 2:
-      return `${n}nd`;
-    case 3:
-      return `${n}rd`;
-    default:
-      return `${n}th`;
-  }
-}
-
-function RankCard({
-  label,
-  teams,
-  abbrev,
-  metric,
-  higherIsBetter,
-  format,
-}: {
-  label: string;
-  teams: LeagueTeamStats[];
-  abbrev: string;
-  metric: (t: LeagueTeamStats) => number | null;
-  higherIsBetter: boolean;
-  format: (v: number) => string;
-}) {
+// The whole tile links to the stat's full league table.
+function RankCard({ m, teams, abbrev }: { m: LeagueMetric; teams: LeagueTeamStats[]; abbrev: string }) {
+  const { label, value: metric, higherIsBetter, format } = m;
   const rank = rankTeam(teams, abbrev, metric, higherIsBetter);
   if (!rank) return null;
 
@@ -62,7 +36,7 @@ function RankCard({
   const third = rank.rank <= rank.outOf / 3 ? "top" : rank.rank > (2 * rank.outOf) / 3 ? "bottom" : "middle";
 
   return (
-    <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, padding: "1.25rem 1.5rem" }}>
+    <Link href={`/teams/${abbrev}/league/${m.slug}`} className="rank-card" aria-label={`${label}: ${abbrev} ${rank.tied ? "tied " : ""}${ordinal(rank.rank)} of ${rank.outOf}. See every team.`}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
         <span style={{ fontSize: ".78rem", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: ".04em" }}>{label}</span>
         <span style={{ fontFamily: "var(--font-display)", fontSize: "1.3rem" }}>
@@ -101,20 +75,15 @@ function RankCard({
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: ".7rem", color: "var(--text-secondary)" }}>
         <span>
-          {format(worst)} worst ·{" "}
-          <Link href={`/teams/${rank.worstTeam}`} style={{ color: "inherit" }}>
-            {rank.worstTeam}
-          </Link>
+          {format(worst)} worst · {rank.worstTeam}
         </span>
         <span>league avg {format(rank.leagueAvg)}</span>
         <span>
-          <Link href={`/teams/${rank.bestTeam}`} style={{ color: "inherit" }}>
-            {rank.bestTeam}
-          </Link>{" "}
-          · best {format(best)}
+          {rank.bestTeam} · best {format(best)}
         </span>
       </div>
-    </div>
+      <div className="rank-card-more">See all {rank.outOf} teams →</div>
+    </Link>
   );
 }
 
@@ -142,8 +111,6 @@ export default async function TeamLeagueComparison({ params }: { params: Promise
   // the same >=0.99 bar as special teams is still the right one to use.
   const xgReady = (own?.xgCoverage ?? 0) >= 0.99;
 
-  const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
-  const perGame = (v: number) => v.toFixed(2);
 
   return (
     <>
@@ -168,16 +135,12 @@ export default async function TeamLeagueComparison({ params }: { params: Promise
         {own ? (
           <>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14, marginBottom: specialTeamsReady ? 14 : 0 }}>
-              <RankCard label="Points %" teams={teams} abbrev={abbrev} metric={(t) => t.pointsPct} higherIsBetter format={pct} />
-              <RankCard label="Goals For / Game" teams={teams} abbrev={abbrev} metric={(t) => t.goalsForPerGame} higherIsBetter format={perGame} />
-              <RankCard label="Goals Against / Game" teams={teams} abbrev={abbrev} metric={(t) => t.goalsAgainstPerGame} higherIsBetter={false} format={perGame} />
+              {LEAGUE_METRICS.filter((m) => m.group === "results").map((m) => <RankCard key={m.slug} m={m} teams={teams} abbrev={abbrev} />)}
             </div>
 
             {specialTeamsReady ? (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14, marginBottom: xgReady ? 14 : 0 }}>
-                <RankCard label="Power Play %" teams={teams} abbrev={abbrev} metric={(t) => t.ppPct} higherIsBetter format={pct} />
-                <RankCard label="Penalty Kill %" teams={teams} abbrev={abbrev} metric={(t) => t.pkPct} higherIsBetter format={pct} />
-                <RankCard label="Faceoff Win %" teams={teams} abbrev={abbrev} metric={(t) => t.faceoffWinPct} higherIsBetter format={pct} />
+                {LEAGUE_METRICS.filter((m) => m.group === "special").map((m) => <RankCard key={m.slug} m={m} teams={teams} abbrev={abbrev} />)}
               </div>
             ) : (
               <p style={{ fontSize: ".82rem", color: "var(--text-secondary)", marginTop: 14 }}>
@@ -189,8 +152,7 @@ export default async function TeamLeagueComparison({ params }: { params: Promise
             {xgReady ? (
               <>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14 }}>
-                  <RankCard label="Expected Goals For / Game" teams={teams} abbrev={abbrev} metric={(t) => t.xgForPerGame} higherIsBetter format={perGame} />
-                  <RankCard label="Expected Goals Against / Game" teams={teams} abbrev={abbrev} metric={(t) => t.xgAgainstPerGame} higherIsBetter={false} format={perGame} />
+                  {LEAGUE_METRICS.filter((m) => m.group === "xg").map((m) => <RankCard key={m.slug} m={m} teams={teams} abbrev={abbrev} />)}
                 </div>
                 <p style={{ fontSize: ".72rem", color: "var(--text-secondary)", marginTop: 10 }}>Expected goals (xG) data via MoneyPuck.com.</p>
               </>

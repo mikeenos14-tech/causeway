@@ -398,6 +398,12 @@ body {
 .dest-card-teaser { font-size: .85rem; color: var(--text-secondary); line-height: 1.4; }
 @media (prefers-reduced-motion: reduce) { .dest-card, .dest-card-arrow { transition: none; } .dest-card:hover { transform: none; } }
 
+/* League Ranks tiles: the whole tile opens that stat's full league table. */
+.rank-card { display: block; background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem 1.5rem; color: var(--text-primary); text-decoration: none; transition: border-color .15s ease, transform .15s ease; }
+.rank-card:hover, .rank-card:focus-visible { border-color: var(--gold); transform: translateY(-2px); }
+.rank-card-more { margin-top: 10px; font-size: .78rem; font-weight: 600; color: var(--gold); }
+@media (prefers-reduced-motion: reduce) { .rank-card { transition: none; } .rank-card:hover { transform: none; } }
+
 /* Loading placeholders (app/loading.tsx) */
 .skeleton { border-radius: 10px; background: linear-gradient(90deg, var(--surface-1) 0%, rgba(255, 255, 255, .06) 50%, var(--surface-1) 100%); background-size: 200% 100%; animation: skeleton-shimmer 1.2s ease-in-out infinite; }
 @keyframes skeleton-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }

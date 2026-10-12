@@ -14,6 +14,10 @@ export type LeagueTeamStats = {
   ppPct: number | null;
   pkPct: number | null;
   faceoffWinPct: number | null;
+  ppGoals: number;
+  ppOpportunities: number;
+  pkGoalsAgainst: number;
+  pkTimesShorthanded: number;
   specialTeamsCoverage: number; // fraction of this team's games with team_game_stats loaded — lets the UI hide PP/PK until it's trustworthy
   xgForPerGame: number | null;
   xgAgainstPerGame: number | null;
@@ -131,6 +135,10 @@ export async function getLeagueTeamStats(seasonId: string): Promise<LeagueTeamSt
       ppPct: ppOpportunities > 0 ? Number(r.pp_goals) / ppOpportunities : null,
       pkPct: pkTimesShorthanded > 0 ? 1 - Number(r.pk_goals_against) / pkTimesShorthanded : null,
       faceoffWinPct: r.faceoff_win_pct != null ? Number(r.faceoff_win_pct) : null,
+      ppGoals: Number(r.pp_goals ?? 0),
+      ppOpportunities,
+      pkGoalsAgainst: Number(r.pk_goals_against ?? 0),
+      pkTimesShorthanded,
       specialTeamsCoverage: gamesPlayed > 0 ? gamesWithStats / gamesPlayed : 0,
       xgForPerGame: gamesWithXg > 0 ? Number(r.xg_for) / gamesWithXg : null,
       xgAgainstPerGame: gamesWithXg > 0 ? Number(r.xg_against) / gamesWithXg : null,
