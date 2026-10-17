@@ -10,7 +10,7 @@
 // read the printed answer before concluding a real regression happened;
 // wording can legitimately vary between runs.
 //
-// Usage: npx tsx scripts/qa-regression-suite.ts
+// Usage: npx tsx scripts/qa-regression-suite.ts [name filter]
 
 import { answerQuestion, type QAResult } from "../lib/qa-engine";
 import { pool } from "../lib/db";
@@ -168,6 +168,25 @@ const cases: TestCase[] = [
     },
   },
   {
+    name: "power-play goals use the official count, not play-by-play labels (2026-10-17)",
+    question: "How many regular-season power-play goals did Patrice Bergeron score in his career?",
+    check: (r) => {
+      // Ground truth (NHL): 131. Counting goal_events strength gives 129
+      // (two 2019-20 goals are labeled even strength in the play-by-play).
+      const right = /\b131\b/.test(r.answer);
+      return { pass: right, reason: right ? undefined : `expected 131, got: "${r.answer.slice(0, 150)}"` };
+    },
+  },
+  {
+    name: "a rate in the answer comes from a query (2026-10-17: .726 for a .661 record)",
+    question: "What's the Bruins' regular-season record and points percentage against the Los Angeles Kings since 2007-08?",
+    check: (r) => {
+      // Ground truth: 16-6-9 in 31 games, 41 of 62 points = .661.
+      const right = /\b16-6-9\b/.test(r.answer) && /\.661|66\.1\s*%/.test(r.answer);
+      return { pass: right, reason: right ? undefined : `expected 16-6-9 and .661, got: "${r.answer.slice(0, 200)}"` };
+    },
+  },
+  {
     name: "answers power-play % for a season with full team-stat coverage",
     question: "What was the Bruins' power play percentage in the 2023-24 regular season?",
     check: (r) => {
@@ -195,9 +214,19 @@ const cases: TestCase[] = [
     check: (r) => {
       // A negated denial ("it's not that the Bruins haven't retired any")
       // is the right answer, not a claim of none (a false alarm, 2026-10-02).
-      const claimsNone = /(have|has) (not|never) retired|no (retired )?numbers (have been )?retired|haven'?t retired any/i.test(r.answer.replace(/not that[^.]*/gi, ""));
+      // Same for "not a sign that Boston has not retired any" (a correct
+      // decline read as a claim of none, 2026-10-17).
+      // Judged per sentence, skipping any that frames it as what the empty
+      // table does NOT mean ("isn't the same as saying ...", "not a sign
+      // that ...", "doesn't mean ...", "not that ..."): three correct
+      // declines were misread phrasing by phrasing before this.
+      const framesNegation = /\b(isn'?t the same as|is not the same as|not a sign|doesn'?t mean|does not mean|not that|not because|rather than)\b/i;
+      const claimsNone = r.answer
+        .split(/(?<=[.!?])\s+/)
+        .filter((sentence) => !framesNegation.test(sentence))
+        .some((sentence) => /(have|has) (not|never) retired|no (retired )?numbers (have been )?retired|haven'?t retired any/i.test(sentence));
       // "is empty ... I can't answer this" is the same correct decline (seen 2026-10-01).
-      const saysNotLoaded = /isn'?t (loaded|available)|not (loaded|available|in (the|this) (data|database))|don'?t have|no data|hasn'?t been loaded|(table|data) is (simply )?empty|can'?t answer this/i.test(r.answer);
+      const saysNotLoaded = /isn'?t (loaded|available)|not (loaded|available|in (the|this) (data|database))|do(es)?n'?t have|no (\S+ )?data|ha(s|ve)n'?t been loaded|(has|have) been loaded yet|(table|data) is (simply |currently )?empty|can'?t (answer this|tell you)/i.test(r.answer);
       return { pass: !claimsNone && saysNotLoaded, reason: claimsNone ? "treated an empty table as 'no retired numbers'" : !saysNotLoaded ? "expected 'that data isn't loaded'" : undefined };
     },
   },
@@ -488,7 +517,9 @@ async function main() {
 
   let failures = 0;
 
-  for (const c of cases) {
+  // Optional filter: run only the tests whose name contains argv[2].
+  const only = process.argv[2]?.toLowerCase();
+  for (const c of cases.filter((x) => !only || x.name.toLowerCase().includes(only))) {
     process.stdout.write(`\n=== ${c.name} ===\nQ: ${c.question}\n`);
     let result: QAResult;
     try {

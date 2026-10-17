@@ -1,7 +1,6 @@
-// Answers the homepage's question of the day ahead of time, so no visitor
-// waits on (or pays for) the model. Run at the end of every hourly refresh;
-// it only calls the model when today's answer is missing or older than the
-// newest Bruins game — about once a day, twice on a game day.
+// Answers the homepage's question of the day now, by hand (the hourly run
+// is /api/cron/warm-qotd on Vercel). Only calls the model when today's
+// answer is missing or older than the newest Bruins game.
 //
 // Usage: npx tsx --env-file=.env.local scripts/warm-question-of-the-day.ts
 
@@ -28,8 +27,7 @@ async function main() {
 }
 
 main().catch(async (err) => {
-  // Never fail the hourly job over this: the homepage just shows the
-  // question without an answer until the next run.
-  console.error("warm-question-of-the-day failed (non-fatal):", err);
+  console.error("warm-question-of-the-day failed:", err);
   await pool.end().catch(() => {});
+  process.exit(1); // a failure says so (it exited 0 for two weeks while failing)
 });

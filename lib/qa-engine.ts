@@ -60,7 +60,8 @@ play_by_play(id, game_id, period, period_time_seconds, event_type, team_id, prim
   -- see "Data coverage" for whether it has rows. For goals, use goal_events instead.
 goal_events(game_id, period, period_type, time_in_period_seconds, time_elapsed_seconds, team_id, scorer_id, assist1_id, assist2_id, strength, empty_net, score_before_home, score_before_away)
   -- Every goal in every game since 1917-18 (shootout attempts are not goals and aren't here). period_type 'REG' or 'OT'; time_elapsed_seconds from the opening faceoff (20-minute periods). score_before_* is the score just before this goal.
-  -- strength: 'EV' | 'PP' | 'SH' | 'PS' (penalty shot), NULL where that game's records don't say (common before 1940). empty_net: reliable from 2009-10; before that true where recorded, otherwise NULL (unknown, not false).
+  -- strength: 'EV' | 'PP' | 'SH' | 'PS' (penalty shot), NULL where that game's records don't say (common before 1940).
+  -- Power-play goal TOTALS: from 2007-08 on, sum skater_game_stats.pp_goals (the NHL's official count). goal_events.strength is the play-by-play's label and disagrees with the official count for about 3% of player-seasons since 2007-08 (Bergeron's 2019-20: 9 by strength, 11 official). Use goal_events strength = 'PP' only for seasons before 2007-08 (pp_goals is NULL there), combining the two for a career that spans both, and say the pre-2007-08 part comes from game-by-game records. empty_net: reliable from 2009-10; before that true where recorded, otherwise NULL (unknown, not false).
   -- Game-winning goal (NHL rule): in a game the winner won by W to L, it's the winner's goal that made its score L + 1, i.e. score_before (scorer's side) = L. Ties and shootout-decided games have none. Overtime goals: period_type = 'OT'. A goal that "tied the game": score_before (scorer's side) = score_before (opponent's side) - 1.
   -- A few 2009-10 games are missing goals in the NHL's own feed, so a game's goal_events may not add up to its score there; if a question depends on one, check that the goal count matches the final score.
 standings_snapshots(id, team_id, season_id, snapshot_date, division, conference, games_played, wins, losses, ot_losses, ties, points, points_pct, goals_for, goals_against, division_rank, conference_rank, league_rank)
@@ -371,6 +372,36 @@ export async function getCoverageNotes(): Promise<string> {
   return text;
 }
 
+// Every rate in the answer must come from a query: a ".726" or "66.1%"
+// that no result contains was worked out in the model's head. Found
+// 2026-10-17: the question of the day stated the right 16-6-9 record and a
+// ".726 points percentage" (the record works out to .661). A prompt rule
+// doesn't hold a number like that; this check does. ".500" is a phrase
+// ("over .500") and 0%/100% are words more than math, so they pass.
+const RATE = /(?<![\d.])(\d?\.\d{3})(?![\d%])|(?<![\d.])(\d{1,3}(?:\.\d+)?)\s?%/g;
+export function ungroundedRates(text: string, queries: { rows: Record<string, unknown>[] | null }[]): string[] {
+  const values: number[] = [];
+  const visit = (v: unknown) => {
+    if (typeof v === "number" && Number.isFinite(v)) values.push(v);
+    else if (typeof v === "string" && /^-?\d+(\.\d+)?$/.test(v.trim())) values.push(Number(v));
+  };
+  for (const q of queries) for (const r of q.rows ?? []) for (const v of Object.values(r)) visit(v);
+  const out: string[] = [];
+  for (const m of text.matchAll(RATE)) {
+    if (m[1]) {
+      const x = Number(m[1]);
+      if ([0.5, 0, 1].includes(x)) continue;
+      if (!values.some((v) => Math.abs(v - x) < 0.0006 || Math.abs(v / 100 - x) < 0.0006)) out.push(m[0]);
+    } else {
+      const p = Number(m[2]);
+      if (p === 0 || p === 100) continue;
+      const tol = m[2].includes(".") ? 0.051 : 0.51; // the stated precision
+      if (!values.some((v) => Math.abs(v - p) < tol || Math.abs(v * 100 - p) < tol)) out.push(m[0]);
+    }
+  }
+  return out;
+}
+
 export async function answerQuestion(question: string): Promise<QAResult> {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const queries: QueryRecord[] = [];
@@ -388,6 +419,7 @@ export async function answerQuestion(question: string): Promise<QAResult> {
   ];
 
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: question }];
+  let rateRetries = 0;
   const system = `${SYSTEM_PROMPT_BASE}\n\n${await getCoverageNotes()}`;
 
   for (let step = 0; step < MAX_TOOL_STEPS; step++) {
@@ -430,6 +462,16 @@ export async function answerQuestion(question: string): Promise<QAResult> {
       // blank response with no error attached.
       if (text.trim().length === 0) {
         throw new Error(`Model returned no answer text (stop_reason: ${response.stop_reason}) after ${queries.length} quer${queries.length === 1 ? "y" : "ies"}.`);
+      }
+      const unsourced = ungroundedRates(text, queries);
+      if (unsourced.length) {
+        if (rateRetries++ >= 2) throw new Error(`Answer kept stating rates no query returned (${unsourced.join(", ")}).`);
+        messages.push({ role: "assistant", content: response.content });
+        messages.push({
+          role: "user",
+          content: `Your answer states ${unsourced.join(", ")}, which no query result contains. Compute every percentage, rate or average with run_sql and quote the result exactly, then give the full answer again.`,
+        });
+        continue;
       }
       // Best supporting table: among queries that returned more than one
       // row, the one with the highest rows × columns — not simply the most

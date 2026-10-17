@@ -8,34 +8,39 @@ import { normalizeQuestion } from "./qa-cache";
 // (no faceoffs, game-winners, or shorthanded goals — see qa-engine's
 // schema notes) and interesting to argue about.
 //
-// Answered once a day by scripts/warm-question-of-the-day.ts (run by the
-// hourly job), so a homepage view never waits on, or pays for, a model call.
+// Full Bruins history since 1924 (the "since 2007-08" wording predated the
+// history load); Ask says where a stat starts later (save percentage,
+// plus-minus). Answered ahead of time by /api/cron/warm-qotd on Vercel
+// (hourly; it calls the model about once a day), so a homepage view never
+// waits on, or pays for, a model call. It used to run in the hourly GitHub
+// job, which never had Ask's read-only database login and failed quietly
+// every day until 2026-10-17.
 
 export const ROTATION = [
-  "Who has scored the most regular-season goals for the Bruins since 2007-08?",
-  "Which Bruins goalie has the best regular-season save percentage since 2007-08, minimum 100 games?",
-  "What's the longest point streak by a Bruins player since 2007-08?",
-  "Which Bruins player has the most hat tricks since 2007-08?",
-  "What was the Bruins' best regular season by points percentage since 2007-08?",
-  "Which team have the Bruins beaten the most times since 2007-08?",
-  "Which team has beaten the Bruins the most times since 2007-08?",
-  "Who has the most playoff points for the Bruins since 2007-08?",
-  "What's the Bruins' biggest regular-season margin of victory since 2007-08?",
-  "Which Bruins defenseman has scored the most regular-season goals since 2007-08?",
+  "Who has scored the most regular-season goals in Bruins history?",
+  "Which Bruins goalie has the best regular-season save percentage, minimum 100 games?",
+  "What's the longest point streak in Bruins history?",
+  "Which Bruins player has the most hat tricks?",
+  "What was the Bruins' best regular season by points percentage?",
+  "Which team have the Bruins beaten the most times?",
+  "Which team has beaten the Bruins the most times?",
+  "Who has the most playoff points in Bruins history?",
+  "What's the Bruins' biggest regular-season margin of victory?",
+  "Which Bruins defenseman has scored the most regular-season goals?",
   "How many regular-season shutouts did Tuukka Rask record for the Bruins?",
-  "Who has the most power-play goals for the Bruins since 2007-08?",
-  "What's the Bruins' record in games decided in overtime or a shootout since 2007-08?",
-  "Which Bruins player has the most 4-point games since 2007-08?",
-  "Who scored the most goals in a single season for the Bruins since 2007-08?",
-  "What's the most points a Bruins player has scored in one game since 2007-08?",
-  "Which opposing goalie has the most wins against the Bruins since 2007-08?",
-  "Who has scored the most goals against the Bruins since 2007-08?",
-  "How many times have the Bruins scored 7 or more goals in a game since 2007-08?",
-  "Which Bruins player has the most penalty minutes since 2007-08?",
-  "What's the Bruins' all-time playoff series record since 2007-08?",
-  "Which season did the Bruins allow the fewest goals per game since 2007-08?",
-  "Who has played the most regular-season games for the Bruins since 2007-08?",
-  "Which Bruins forward has the best plus-minus in a single season since 2007-08?",
+  "Who has the most power-play goals in Bruins history?",
+  "What's the Bruins' record in shootouts since they began in 2005-06?",
+  "Which Bruins player has the most 4-point games?",
+  "Who scored the most goals in a single season for the Bruins?",
+  "What's the most points a Bruins player has scored in one game?",
+  "Which opposing goalie has the most wins against the Bruins?",
+  "Who has scored the most goals against the Bruins?",
+  "How many times have the Bruins scored 10 or more goals in a game?",
+  "Which Bruins player has the most penalty minutes?",
+  "What's the Bruins' all-time playoff series record?",
+  "Which season did the Bruins allow the fewest goals per game?",
+  "Who has played the most regular-season games for the Bruins?",
+  "Which Bruins player had the best plus-minus in a single season?",
 ];
 
 const ET_DAY = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" });
@@ -46,7 +51,7 @@ export function etDate(at: Date): string {
 
 // tonight: the Bruins' game today (ET), if any — opponent's full name.
 export function questionOfTheDay(at: Date, tonight: { opponentName: string } | null): string {
-  if (tonight) return `What's the Bruins' regular-season record against the ${tonight.opponentName} since 2007-08?`;
+  if (tonight) return `What's the Bruins' all-time regular-season record against the ${tonight.opponentName}?`;
   const day = Math.floor(Date.parse(`${etDate(at)}T00:00:00Z`) / 86_400_000);
   return ROTATION[day % ROTATION.length];
 }

@@ -38,6 +38,12 @@ export async function GET() {
     // on Vercel Pro); until then the loader only runs on final whistles.
     if (process.env.CRON_SECRET && loader !== null && loader > 20) problems.push(`the 5-minute game loader last ran ${Math.round(loader)} min ago`);
     if (beat.get("load-finished")?.ok === false) problems.push(`the game loader's last run failed: ${beat.get("load-finished").detail}`);
+    // The homepage's question of the day (/api/cron/warm-qotd, hourly).
+    const qotd = age("question-of-the-day");
+    if (process.env.CRON_SECRET !== undefined || qotd !== null) {
+      if (qotd !== null && qotd > 180) problems.push(`the question of the day last ran ${Math.round(qotd / 60)} h ago`);
+      if (beat.get("question-of-the-day")?.ok === false) problems.push(`the question of the day failed: ${beat.get("question-of-the-day").detail}`);
+    }
     const hourly = age("hourly-refresh");
     info.hourlyMinutesAgo = hourly === null ? null : Math.round(hourly);
     if (hourly !== null && hourly > 180) problems.push(`the hourly GitHub refresh last ran ${Math.round(hourly / 60)} h ago`);
