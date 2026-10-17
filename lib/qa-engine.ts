@@ -76,7 +76,7 @@ Known gaps, be honest about them rather than silently ignore:
 - Goal timing, scorers, assists, power-play/shorthanded/empty-net goals and score-by-period come from goal_events, for every era. Shot locations and other non-goal events need play_by_play, which may be empty — say so.
 - A table listed as empty under "Data coverage" means the data isn't loaded, NOT that none exists — never answer "the Bruins have no retired numbers" or "no awards" from an empty table; say that data isn't loaded yet.
 - If a question needs a season or column group that "Data coverage" lists as missing or partial, say so plainly; never average over partial coverage as if it were the full season.
-- Coverage varies by team and is actively being expanded — never assume a team only has "games against Boston" loaded. Check directly: count that team's total games (\`select count(*) from games where home_team_id = X or away_team_id = X\`) across its season range. A team with roughly a full season's worth of games per year (~80+) has its own complete schedule loaded; a team with only a handful of games per season has only faced Boston. Base any completeness claim in your answer on that check, never on an assumption — this changes over time as more teams get backfilled.
+- Every team's full schedule is loaded for every season under "Data coverage" (not just games against Boston). Every season before the latest one is finished: its totals are final, so never call it partial, "so far", or possibly "still in progress". Only the latest season can be in progress, and "Data coverage" says whether it is; say "so far" for it then, and only then. (Found 2026-10-17: Ask hedged Pastrnak's finished 2025-26 totals with "the season may still be in progress", from an older version of this line written while teams were still being loaded.)
 `.trim();
 
 const SYSTEM_PROMPT_BASE = `You answer natural-language questions about NHL history using a real Postgres database, by writing and running your own SQL SELECT queries with the run_sql tool.
@@ -363,7 +363,7 @@ export async function getCoverageNotes(): Promise<string> {
   }
   const latest = seasons[seasons.length - 1];
   const text = `Data coverage (computed live from the database — trust this over anything else in this prompt):
-- games, skater_game_stats, goalie_game_stats, standings_snapshots: every NHL regular-season and playoff game, ${seasonLabel(all[0])} through ${seasonLabel(String(latest.season_id))} (latest season ${seasonLabel(String(latest.season_id))} has ${latest.regular_games} regular-season games loaded; nothing before ${seasonLabel(all[0])} is loaded).
+- games, skater_game_stats, goalie_game_stats, standings_snapshots: every NHL regular-season and playoff game, ${seasonLabel(all[0])} through ${seasonLabel(String(latest.season_id))} (latest season ${seasonLabel(String(latest.season_id))} has ${latest.regular_games} regular-season games loaded${Number(latest.regular_games) < 1312 ? ", so it is still IN PROGRESS: its totals are so far" : " (complete)"}; every earlier season is complete and final; nothing before ${seasonLabel(all[0])} is loaded).
 - team_game_stats, NHL boxscore group (shots_on_goal, pp_*, pk_*, hits, faceoff_win_pct): ${group("box_frac")}.
 - team_game_stats, MoneyPuck group (xg_*, corsi_*): ${group("xg_frac")}.
 - Empty tables (no rows at all — the data isn't loaded, which says nothing about whether it exists): ${empty.join(", ") || "none"}.`;
