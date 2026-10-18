@@ -67,8 +67,6 @@ async function nhlCareers(kind: "skater" | "goalie", gameTypeId: 2 | 3): Promise
       notInNhl++;
       return;
     }
-    checked++;
-    if (p.pre2007) pre.n++;
     const diffs: string[] = [];
     const cmp = (label: string, ours: unknown, theirs: unknown) => {
       const a = ours == null ? 0 : Number(ours), b = theirs == null ? 0 : Number(theirs);
@@ -111,13 +109,28 @@ async function nhlCareers(kind: "skater" | "goalie", gameTypeId: 2 | 3): Promise
       const splits = await getGoalieSeasonSplits(p.id);
       cmp("season-table GP", splits.reduce((s, r) => s + Number(r.games), 0), nhlReg?.gamesPlayed);
     }
+    checked++;
+    if (p.pre2007) pre.n++;
     if (diffs.length && PLAYER_DATA_GAPS[p.id]) known.push(`${p.full_name} (${p.id}): ${diffs.join("; ")}`);
     else if (diffs.length) {
       bad.push(`${p.full_name} (${p.id}${p.pre2007 ? ", pre-2007 career" : ""}): ${diffs.join("; ")}`);
       if (p.pre2007) pre.bad++;
     }
   };
-  for (let i = 0; i < todo.length; i += 8) await Promise.all(todo.slice(i, i + 8).map(checkOne));
+  // A dropped database connection (it happened twice, 8 minutes into a
+  // 15-minute run) retries that player instead of ending the whole check.
+  pool.on("error", () => {}); // an idle connection dropping; the next query reconnects
+  const checkWithRetry = async (p: (typeof todo)[number]) => {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await checkOne(p); // counts only after its last query, so a retry never double-counts
+      } catch (e) {
+        if (attempt === 3 || !/Connection terminated|ECONNRESET|connection timeout/i.test(String(e))) throw e;
+        await new Promise((r) => setTimeout(r, 2000 * attempt));
+      }
+    }
+  };
+  for (let i = 0; i < todo.length; i += 8) await Promise.all(todo.slice(i, i + 8).map(checkWithRetry));
   bad.sort();
   console.log(`Checked ${checked} players with pages (${pre.n} with pre-2007 careers); ${notInNhl} not in the NHL's totals (no NHL games yet).`);
   console.log(`Match: ${checked - bad.length} of ${checked}. Pre-2007 careers: ${pre.n - pre.bad} of ${pre.n}.`);
